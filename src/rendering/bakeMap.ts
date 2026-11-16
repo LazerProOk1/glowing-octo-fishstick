@@ -8,7 +8,7 @@ import {
 import { SEA_LEVEL } from '@/simulation/mapGenerator';
 import { hash2D } from '@/simulation/noise';
 import type { Surface, World } from '@/types/world';
-import { FOAM_RGB, PAPER_RGB, SURFACE_RGB, highlandColor, type Rgb } from './palette';
+import { FOAM_RGB, PAPER_RGB, RIVER_RGB, SURFACE_RGB, highlandColor, type Rgb } from './palette';
 
 /** Baked pixels per tile: the resolution of the terrain layer, not its granularity */
 export const PIXELS_PER_TILE = 4;
@@ -16,6 +16,14 @@ export const PIXELS_PER_TILE = 4;
 const FINE_TEXTURE = 0.035;
 const COARSE_TEXTURE = 0.02;
 const WATER_TEXTURE = 0.015;
+
+/** High frequency dither that softens biome thresholds at pixel level */
+const MOISTURE_DITHER = 3.5;
+const TEMPERATURE_DITHER = 0.7;
+
+/** Rivers are baked into the terrain: colour blend plus a carved channel shadow */
+const RIVER_BLEND = 0.86;
+const RIVER_SHADE = 0.8;
 
 const LAND_PAPER_MIX = 0.06;
 const WATER_PAPER_MIX = 0.03;
@@ -92,6 +100,46 @@ function paperMixed(color: Rgb, mix: number): Rgb {
   ];
 }
 
+/** Rasterises the river network into a pixel mask so rivers sit inside the relief. */
+function rasterizeRivers(world: World, width: number, height: number): Uint8Array {
+  const mask = new Uint8Array(width * height);
+  const centre = PIXELS_PER_TILE / 2;
+
+  const plot = (x: number, y: number): void => {
+    if (x < 0 || y < 0 || x >= width || y >= height) {
+      return;
+    }
+    mask[y * width + x] = 1;
+  };
+
+  for (let tileY = 0; tileY < world.height; tileY += 1) {
+    const row = world.tiles[tileY];
+    if (row === undefined) {
+      continue;
+    }
+    for (let tileX = 0; tileX < world.width; tileX += 1) {
+      if (row[tileX]?.river !== true) {
+        continue;
+      }
+      const downstream = world.flowDownstream[tileY * world.width + tileX] ?? -1;
+      if (downstream < 0) {
+        continue;
+      }
+      const x0 = tileX * PIXELS_PER_TILE + centre;
+      const y0 = tileY * PIXELS_PER_TILE + centre;
+      const x1 = (downstream % world.width) * PIXELS_PER_TILE + centre;
+      const y1 = Math.floor(downstream / world.width) * PIXELS_PER_TILE + centre;
+      const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+      for (let step = 0; step <= steps; step += 1) {
+        const t = steps === 0 ? 0 : step / steps;
+        plot(Math.round(x0 + (x1 - x0) * t), Math.round(y0 + (y1 - y0) * t));
+      }
+    }
+  }
+
+  return mask;
+}
+
 export function bakeMap(world: World): BakedMap {
   const width = world.width * PIXELS_PER_TILE;
   const height = world.height * PIXELS_PER_TILE;
@@ -111,6 +159,7 @@ export function bakeMap(world: World): BakedMap {
 
   const shadeField = createHillshadeField(world.reliefMap, world.width, world.height, DEFAULT_HILLSHADE);
   const textureSeed = world.seed * 31 + 977;
+  const riverMask = rasterizeRivers(world, width, height);
 
   // One coarse grain value per tile instead of per pixel keeps baking cheap.
   const tileGrain = new Float32Array(world.width * world.height);
@@ -158,7 +207,13 @@ export function bakeMap(world: World): BakedMap {
           blue = lerp(blue, FOAM_RGB[2], FOAM_MIX);
         }
       } else {
-        const surface = surfaceAt(elevation, moistureValue, temperatureValue);
+        // Dithering the climate inputs turns hard thresholds into grainy organic
+        // edges instead of stair steps at zoom.
+        const surface = surfaceAt(
+          elevation,
+          moistureValue + fineNoise * MOISTURE_DITHER,
+          temperatureValue + fineNoise * TEMPERATURE_DITHER,
+        );
         const base = paperMixed(
           surface === 'hills' || surface === 'mountains' || surface === 'snow'
             ? highlandColor(elevation)
@@ -189,6 +244,15 @@ export function bakeMap(world: World): BakedMap {
 
         if (elevation < SEA_LEVEL + SHORE_DEPTH) {
           factor *= SHORE_DARKEN;
+        }
+
+        if (riverMask[index] === 1) {
+          // Water colour blended in and the light pulled down: the channel reads
+          // as a groove in the relief rather than a line drawn on top.
+          red = lerp(red, RIVER_RGB[0], RIVER_BLEND);
+          green = lerp(green, RIVER_RGB[1], RIVER_BLEND);
+          blue = lerp(blue, RIVER_RGB[2], RIVER_BLEND);
+          factor *= RIVER_SHADE;
         }
       }
 

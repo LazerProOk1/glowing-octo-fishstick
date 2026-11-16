@@ -35,6 +35,17 @@ export interface TileCoord {
   readonly y: number;
 }
 
+export interface Province {
+  readonly id: number;
+  /** Tile where the province grew from */
+  readonly seed: TileCoord;
+  readonly tileCount: number;
+  readonly dominantBiome: Biome;
+  /** Not simulated yet */
+  readonly population: number;
+  readonly ownerId: string | null;
+}
+
 export interface Tile {
   /** 0..100 */
   elevation: number;
@@ -50,6 +61,8 @@ export interface Tile {
   river: boolean;
   resource: ResourceType;
   ownerId: string | null;
+  /** -1 when the tile belongs to no province (open sea) */
+  provinceId: number;
 }
 
 export interface World {
@@ -71,6 +84,8 @@ export interface World {
   flowAccumulation: Float32Array;
   /** Row-major downstream tile index, -1 when the tile drains nowhere */
   flowDownstream: Int32Array;
+  /** Provinces grown from land seeds over terrain cost */
+  provinces: Province[];
 }
 
 export function isWaterSurface(surface: Surface): boolean {

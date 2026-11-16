@@ -1,6 +1,7 @@
 import { clamp, smoothstep } from '@/lib/math';
 import type { Biome, ResourceType, Surface, Tile, World } from '@/types/world';
 import { computeHydrology } from './hydrology';
+import { generateProvinces } from './provinces';
 import { createNoise2D, fbm2D, hash2D, ridgedFbm2D, type FbmConfig } from './noise';
 
 export const DEFAULT_WORLD_WIDTH = 150;
@@ -9,10 +10,10 @@ export const DEFAULT_WORLD_HEIGHT = 100;
 /** Elevation at which land ends and the sea shelf begins */
 export const SEA_LEVEL = 24;
 
-const WARP_AMPLITUDE = 34;
+const WARP_AMPLITUDE = 24;
 
 const WARP_FBM: FbmConfig = { octaves: 3, frequency: 0.0065, lacunarity: 2, gain: 0.55 };
-const CONTINENT_FBM: FbmConfig = { octaves: 5, frequency: 0.011, lacunarity: 2.05, gain: 0.5 };
+const CONTINENT_FBM: FbmConfig = { octaves: 5, frequency: 0.0105, lacunarity: 2.05, gain: 0.5 };
 const MOUNTAIN_FBM: FbmConfig = { octaves: 4, frequency: 0.022, lacunarity: 2.2, gain: 0.42 };
 const MOISTURE_FBM: FbmConfig = { octaves: 3, frequency: 0.022, lacunarity: 2, gain: 0.5 };
 const DETAIL_FBM: FbmConfig = { octaves: 2, frequency: 0.08, lacunarity: 2, gain: 0.5 };
@@ -29,6 +30,10 @@ const VOLCANIC_PEAK_THRESHOLD = 0.94;
 
 const RIVER_MEANDER = 0.8;
 const RIVER_THRESHOLD = 45;
+
+const PROVINCE_TARGET_COUNT = 88;
+const PROVINCE_SEED_SPACING = 6;
+const PROVINCE_MAX_COST = 26;
 
 interface QuantileStop {
   /** Share of tiles at or below this value, 0..1 */
@@ -156,13 +161,6 @@ function applyQuantiles(field: Float32Array, stops: readonly QuantileStop[]): Fl
   return result;
 }
 
-function radialMask(normalizedX: number, normalizedY: number): number {
-  const dx = (normalizedX - 0.5) * 2;
-  const dy = (normalizedY - 0.5) * 2;
-  const distance = Math.min(1, Math.sqrt(dx * dx * 0.9 + dy * dy * 0.9));
-  return 1 - Math.pow(distance, 3);
-}
-
 export function resolveBiome({ elevation, moisture, temperature, peak }: BiomeInput): Biome {
   if (elevation >= VOLCANIC_MIN_ELEVATION && peak >= VOLCANIC_PEAK_THRESHOLD) {
     return 'volcanic';
@@ -286,13 +284,14 @@ export function generateWorld(
       const sampleX = x + warpX;
       const sampleY = y + warpY;
 
+      // No island mask: low frequency noise alone decides where the continents
+      // are, so water runs off the map edges instead of wrapping a single blob.
       const continent = clamp((fbm2D(continentNoise, sampleX, sampleY, CONTINENT_FBM) + 1) / 2, 0, 1);
-      const mask = radialMask(x / width, y / height);
-      const shaped = clamp(continent * (0.15 + 0.85 * mask), 0, 1);
+      const shaped = continent;
 
       // Ridged noise keeps mountain ranges narrow; they only rise inland.
       const ridge = ridgedFbm2D(mountainNoise, sampleX, sampleY, MOUNTAIN_FBM);
-      const inland = smoothstep(0.25, 0.62, shaped);
+      const inland = smoothstep(0.45, 0.75, shaped);
       // Squaring the ridge narrows the crests into chains instead of plateaus.
       rawElevation[index] = shaped * CONTINENT_WEIGHT + ridge * ridge * RIDGE_WEIGHT * inland;
 
@@ -345,6 +344,7 @@ export function generateWorld(
         river: false,
         resource: selectResource(biome, x, y, seed),
         ownerId: null,
+        provinceId: -1,
       });
     }
 
@@ -380,12 +380,23 @@ export function generateWorld(
     }
   }
 
+  const provinces = generateProvinces({
+    tiles,
+    width,
+    height,
+    seed,
+    targetCount: PROVINCE_TARGET_COUNT,
+    minSeedSpacing: PROVINCE_SEED_SPACING,
+    maxCost: PROVINCE_MAX_COST,
+  });
+
   return {
     width,
     height,
     seed,
     tiles,
     tick: 0,
+    provinces,
     elevationMap: elevationField,
     moistureMap: moistureField,
     temperatureMap: temperatureField,

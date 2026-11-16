@@ -13,19 +13,25 @@ function createWorld(seed: number): World {
 interface WorldState {
   world: World;
   seed: number;
+  selectedProvinceId: number | null;
   setSeed: (seed: number) => void;
   generateNewWorld: () => void;
+  selectProvince: (provinceId: number | null) => void;
 }
 
 export const useWorldStore = create<WorldState>((set) => ({
   world: createWorld(INITIAL_SEED),
   seed: INITIAL_SEED,
+  selectedProvinceId: null,
   setSeed: (seed: number) => {
     const normalizedSeed = Math.min(MAX_SEED, Math.max(MIN_SEED, Math.round(seed)));
-    set({ seed: normalizedSeed, world: createWorld(normalizedSeed) });
+    set({ seed: normalizedSeed, world: createWorld(normalizedSeed), selectedProvinceId: null });
   },
   generateNewWorld: () => {
     const seed = Math.floor(Math.random() * (MAX_SEED - MIN_SEED + 1)) + MIN_SEED;
-    set({ seed, world: createWorld(seed) });
+    set({ seed, world: createWorld(seed), selectedProvinceId: null });
+  },
+  selectProvince: (provinceId: number | null) => {
+    set({ selectedProvinceId: provinceId });
   },
 }));

@@ -17,23 +17,31 @@
 ├── .gitignore
 └── src/
     ├── main.tsx                    # bootstrap React
-    ├── App.tsx                     # layout: TopBar + MapCanvas
+    ├── App.tsx                     # layout: MapCanvas + TopBar + ProvincePanel
     ├── index.css                   # @tailwind + CSS-переменные темы
     ├── vite-env.d.ts
     ├── types/
-    │   ├── world.ts                # Biome, ResourceType, Tile, World
+    │   ├── world.ts                # Biome, ResourceType, Tile, Province, World
     │   └── viewport.ts             # Viewport (pan/zoom)
+    ├── lib/
+    │   └── math.ts                 # clamp, lerp, smoothstep
     ├── simulation/
     │   ├── noise.ts                # seeded 2D simplex noise (без зависимостей)
-    │   └── mapGenerator.ts         # generateWorld(seed, width, height)
+    │   ├── mapGenerator.ts         # generateWorld(seed, width, height)
+    │   ├── hydrology.ts            # D8-сток, реки
+    │   ├── hillshade.ts            # поле светотени + bilinear upsample
+    │   └── provinces.ts            # центры + Dijkstra по стоимости рельефа
     ├── rendering/
-    │   ├── palette.ts              # цвета биомов + цвет ресурса
-    │   └── MapRenderer.ts          # Canvas 2D: offscreen tiles, pan, zoom
+    │   ├── palette.ts              # цвета биомов, гипсометрия, реки
+    │   ├── bakeMap.ts              # попиксельный bake 4 px/тайл
+    │   ├── provinceBorders.ts      # контуры провинций + сглаживание Чайкина
+    │   └── MapRenderer.ts          # Canvas 2D: кэш-слой, границы, pan, zoom
     ├── store/
     │   └── worldStore.ts           # Zustand: world, seed, actions
     ├── components/
     │   ├── TopBar.tsx              # кнопка «Новый мир» + ползунок seed
     │   ├── MapCanvas.tsx           # <canvas>, инициализация MapRenderer
+    │   ├── ProvincePanel.tsx       # панель выбранной провинции
     │   └── ui/
     │       ├── button.tsx          # shadcn/ui Button
     │       └── slider.tsx          # shadcn/ui Slider

@@ -37,7 +37,8 @@ export const HIGHLAND_BANDS: readonly HighlandBand[] = [
   { from: 70, color: [0x6c, 0x75, 0x7d] },
   { from: 82, color: [0x66, 0x6f, 0x77] },
   { from: 90, color: [0x8b, 0x94, 0x9a] },
-  { from: 95, color: [0xf8, 0xf9, 0xfa] },
+  { from: 93, color: [0xad, 0xb6, 0xbb] },
+  { from: 96, color: [0xf8, 0xf9, 0xfa] },
 ];
 
 export function highlandColor(elevation: number): Rgb {

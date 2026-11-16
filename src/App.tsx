@@ -1,4 +1,5 @@
 import { MapCanvas } from '@/components/MapCanvas';
+import { ProvincePanel } from '@/components/ProvincePanel';
 import { TopBar } from '@/components/TopBar';
 
 export function App(): JSX.Element {
@@ -6,6 +7,7 @@ export function App(): JSX.Element {
     <div className="relative h-screen w-screen overflow-hidden bg-zinc-100">
       <MapCanvas />
       <TopBar />
+      <ProvincePanel />
     </div>
   );
 }
