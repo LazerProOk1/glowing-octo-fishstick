@@ -61,6 +61,10 @@ export interface World {
   tick: number;
   /** Row-major smooth elevation 0..100, drives surfaces and contours */
   elevationMap: Float32Array;
+  /** Row-major moisture 0..100, interpolated per pixel for smooth biome borders */
+  moistureMap: Float32Array;
+  /** Row-major temperature in °C */
+  temperatureMap: Float32Array;
   /** Row-major elevation with micro relief, drives hillshading and water flow */
   reliefMap: Float32Array;
   /** Row-major D8 flow accumulation: how many tiles drain through this one */

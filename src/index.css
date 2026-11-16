@@ -4,14 +4,14 @@
 
 :root {
   --background: #ffffff;
-  --surface: #f9fafb;
-  --foreground: #111827;
-  --muted: #f3f4f6;
-  --muted-foreground: #6b7280;
-  --border: #e5e7eb;
-  --primary: #2563eb;
+  --surface: #f4f4f5;
+  --foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --border: #e4e4e7;
+  --primary: #18181b;
   --primary-foreground: #ffffff;
-  --ring: #2563eb;
+  --ring: #18181b;
 }
 
 html,
@@ -22,6 +22,7 @@ body,
 
 body {
   margin: 0;
+  overflow: hidden;
   background-color: var(--surface);
   color: var(--foreground);
   font-family:

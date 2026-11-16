@@ -3,11 +3,9 @@ import { TopBar } from '@/components/TopBar';
 
 export function App(): JSX.Element {
   return (
-    <div className="flex h-full flex-col bg-surface">
+    <div className="relative h-screen w-screen overflow-hidden bg-zinc-100">
+      <MapCanvas />
       <TopBar />
-      <main className="relative min-h-0 flex-1">
-        <MapCanvas />
-      </main>
     </div>
   );
 }

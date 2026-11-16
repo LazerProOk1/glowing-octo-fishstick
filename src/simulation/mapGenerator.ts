@@ -316,6 +316,7 @@ export function generateWorld(
   }
 
   const tiles: Tile[][] = [];
+  const temperatureField = new Float32Array(size);
 
   for (let y = 0; y < height; y += 1) {
     const row: Tile[] = [];
@@ -330,6 +331,7 @@ export function generateWorld(
         Math.round(
           (30 - polarCold - elevation * 0.13 + fbm2D(detailNoise, x, y, DETAIL_FBM) * 3.5) * 10,
         ) / 10;
+      temperatureField[index] = temperature;
       const peak = 1 - Math.abs(detailNoise(x * 0.12, y * 0.12));
       const biome = resolveBiome({ elevation, moisture, temperature, peak });
 
@@ -385,6 +387,8 @@ export function generateWorld(
     tiles,
     tick: 0,
     elevationMap: elevationField,
+    moistureMap: moistureField,
+    temperatureMap: temperatureField,
     reliefMap: reliefField,
     flowAccumulation: hydrology.flowAccumulation,
     flowDownstream: hydrology.flowDownstream,

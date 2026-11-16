@@ -17,7 +17,7 @@ export const DEFAULT_HILLSHADE: HillshadeOptions = {
   azimuthDeg: 315,
   altitudeDeg: 45,
   exaggeration: 0.6,
-  strength: 0.55,
+  strength: 0.68,
   minFactor: 0.88,
   maxFactor: 1.1,
 };
@@ -71,12 +71,17 @@ export interface Field {
   readonly height: number;
 }
 
-/** Bilinear upsampling of a tile sized field to pixel resolution. */
+/**
+ * Upsampling of a tile sized field to pixel resolution. With `smoothed` the
+ * bilinear weights get a smoothstep curve, which removes the diamond artefacts
+ * that plain bilinear leaves on diagonal biome borders.
+ */
 export function upsampleField(
   source: Float32Array,
   width: number,
   height: number,
   scale: number,
+  smoothed = false,
 ): Field {
   const outWidth = width * scale;
   const outHeight = height * scale;
@@ -86,13 +91,15 @@ export function upsampleField(
     const sourceY = clamp((py + 0.5) / scale - 0.5, 0, height - 1);
     const y0 = Math.floor(sourceY);
     const y1 = Math.min(height - 1, y0 + 1);
-    const ty = sourceY - y0;
+    const tyRaw = sourceY - y0;
+    const ty = smoothed ? tyRaw * tyRaw * (3 - 2 * tyRaw) : tyRaw;
 
     for (let px = 0; px < outWidth; px += 1) {
       const sourceX = clamp((px + 0.5) / scale - 0.5, 0, width - 1);
       const x0 = Math.floor(sourceX);
       const x1 = Math.min(width - 1, x0 + 1);
-      const tx = sourceX - x0;
+      const txRaw = sourceX - x0;
+      const tx = smoothed ? txRaw * txRaw * (3 - 2 * txRaw) : txRaw;
 
       const topLeft = source[y0 * width + x0] ?? 0;
       const topRight = source[y0 * width + x1] ?? 0;

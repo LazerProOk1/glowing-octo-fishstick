@@ -2,6 +2,8 @@ import { clamp } from '@/lib/math';
 import type { Viewport } from '@/types/viewport';
 import type { World } from '@/types/world';
 import { PIXELS_PER_TILE, bakeMap, type BakedMap } from './bakeMap';
+import { RIVER_HEX } from './palette';
+import { buildRiverPolylines, type RiverPolyline } from './riverLayer';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 12;
@@ -9,7 +11,10 @@ const MAX_FIT_ZOOM = 3;
 const MIN_VISIBLE_PIXELS = 64;
 const FIT_PADDING = 16;
 const WHEEL_ZOOM_SPEED = 0.0015;
-const BACKGROUND_COLOR = '#f9fafb';
+const BACKGROUND_COLOR = '#f4f4f5';
+const TOP_BAR_INSET = 48;
+const MIN_RIVER_SCREEN_WIDTH = 1.1;
+const MAX_RIVER_SCREEN_WIDTH = 3.5;
 
 export class MapRenderer {
   private readonly canvas: HTMLCanvasElement;
@@ -18,6 +23,7 @@ export class MapRenderer {
   private readonly resizeObserver: ResizeObserver;
   private world: World | null = null;
   private baked: BakedMap | null = null;
+  private rivers: readonly RiverPolyline[] = [];
   private viewport: Viewport = { offsetX: 0, offsetY: 0, zoom: 1 };
   private cssWidth = 0;
   private cssHeight = 0;
@@ -57,6 +63,7 @@ export class MapRenderer {
 
     this.world = world;
     this.baked = baked;
+    this.rivers = buildRiverPolylines(world);
     this.layer.width = baked.width;
     this.layer.height = baked.height;
 
@@ -118,10 +125,11 @@ export class MapRenderer {
       return;
     }
 
+    const availableHeight = Math.max(this.cssHeight - TOP_BAR_INSET, 1);
     const zoom = clamp(
       Math.min(
         (this.cssWidth - FIT_PADDING * 2) / this.mapWidth,
-        (this.cssHeight - FIT_PADDING * 2) / this.mapHeight,
+        (availableHeight - FIT_PADDING * 2) / this.mapHeight,
       ),
       MIN_ZOOM,
       MAX_FIT_ZOOM,
@@ -130,7 +138,7 @@ export class MapRenderer {
     this.viewport = {
       zoom,
       offsetX: (this.cssWidth - this.mapWidth * zoom) / 2,
-      offsetY: (this.cssHeight - this.mapHeight * zoom) / 2,
+      offsetY: TOP_BAR_INSET + (availableHeight - this.mapHeight * zoom) / 2,
     };
     this.viewportReady = true;
   }
@@ -244,14 +252,61 @@ export class MapRenderer {
     }
 
     const dpr = this.canvas.width / Math.max(this.cssWidth, 1);
+    const { offsetX, offsetY, zoom } = this.viewport;
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.imageSmoothingEnabled = false;
-    context.drawImage(
-      this.layer,
-      this.viewport.offsetX,
-      this.viewport.offsetY,
-      this.mapWidth * this.viewport.zoom,
-      this.mapHeight * this.viewport.zoom,
-    );
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(this.layer, offsetX, offsetY, this.mapWidth * zoom, this.mapHeight * zoom);
+
+    this.drawRivers(context, offsetX, offsetY, zoom);
   };
+
+  /** Rivers are stroked as vector polylines, so they never look like pixel steps. */
+  private drawRivers(
+    context: CanvasRenderingContext2D,
+    offsetX: number,
+    offsetY: number,
+    zoom: number,
+  ): void {
+    if (this.rivers.length === 0) {
+      return;
+    }
+
+    context.save();
+    context.translate(offsetX, offsetY);
+    context.scale(zoom, zoom);
+    context.strokeStyle = RIVER_HEX;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+
+    for (const river of this.rivers) {
+      const screenWidth = clamp(river.width * zoom, MIN_RIVER_SCREEN_WIDTH, MAX_RIVER_SCREEN_WIDTH);
+      context.lineWidth = screenWidth / zoom;
+      context.beginPath();
+
+      const first = river.points[0];
+      if (first === undefined) {
+        continue;
+      }
+      context.moveTo(first.x, first.y);
+
+      for (let index = 1; index < river.points.length - 1; index += 1) {
+        const point = river.points[index];
+        const next = river.points[index + 1];
+        if (point === undefined || next === undefined) {
+          continue;
+        }
+        context.quadraticCurveTo(point.x, point.y, (point.x + next.x) / 2, (point.y + next.y) / 2);
+      }
+
+      const last = river.points[river.points.length - 1];
+      if (last !== undefined) {
+        context.lineTo(last.x, last.y);
+      }
+
+      context.stroke();
+    }
+
+    context.restore();
+  }
 }
