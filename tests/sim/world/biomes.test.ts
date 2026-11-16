@@ -22,7 +22,7 @@ describe('classifyBiome', () => {
   });
 });
 
-describe.each(['1', 'Áåòà-7'])('world biomes (seed %j)', (seed) => {
+describe.each(['1', 'Ð‘ÐµÑ‚Ð°-7'])('world biomes (seed %j)', (seed) => {
   const w = WORLD_W;
   const h = WORLD_H;
   const height = generateHeight(createRng(seed), w, h);
