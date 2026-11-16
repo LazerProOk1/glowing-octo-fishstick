@@ -22,11 +22,11 @@ describe('classifyBiome', () => {
   });
 });
 
-describe('world biomes (seed "1")', () => {
+describe.each(['1', 'Бета-7'])('world biomes (seed %j)', (seed) => {
   const w = WORLD_W;
   const h = WORLD_H;
-  const height = generateHeight(createRng('1'), w, h);
-  const { temperature, moisture } = computeClimate(createRng('1').fork('climate'), height, w, h);
+  const height = generateHeight(createRng(seed), w, h);
+  const { temperature, moisture } = computeClimate(createRng(seed).fork('climate'), height, w, h);
   const biomes = computeBiomes(height, temperature, moisture);
   const name = (i: number): string => BIOMES[biomes[i] ?? 0] ?? '';
 
@@ -70,5 +70,27 @@ describe('world biomes (seed "1")', () => {
       if (water !== (height[i] ?? 0) <= SEA_LEVEL) wrong++;
     }
     expect(wrong).toBe(0);
+  });
+
+  it('deserts sit in subtropical belts, taiga/tundra at high latitudes', () => {
+    let desert = 0;
+    let desertOk = 0;
+    let cold = 0;
+    let coldOk = 0;
+    for (let i = 0; i < biomes.length; i++) {
+      const b = name(i);
+      const d = Math.abs(Math.floor(i / w) / h - 0.5);
+      if (b === 'desert') {
+        desert++;
+        if (d >= 0.1 && d <= 0.3) desertOk++;
+      } else if (b === 'taiga' || b === 'tundra') {
+        cold++;
+        if (d > 0.25) coldOk++;
+      }
+    }
+    expect(desert).toBeGreaterThan(0);
+    expect(cold).toBeGreaterThan(0);
+    expect(desertOk / desert).toBeGreaterThanOrEqual(0.7);
+    expect(coldOk / cold).toBeGreaterThanOrEqual(0.7);
   });
 });

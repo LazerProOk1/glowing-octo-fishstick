@@ -8,10 +8,10 @@ export function classifyBiome(height: number, temperature: number, moisture: num
   if (temperature < -10) return 'glacier';
   if (temperature < -2) return 'tundra';
   if (temperature > 24 && moisture > 0.7) return 'jungle';
-  if ((temperature > 20 && moisture < 0.2) || (temperature > 8 && moisture < 0.1)) return 'desert';
+  if (temperature > 20 && moisture < 0.2) return 'desert';
   if (temperature < 5) return moisture > 0.3 ? 'taiga' : 'steppe';
   if (moisture < 0.35) return 'steppe';
-  if (moisture > 0.88 && temperature > 8 && height < 0.6) return 'swamp';
+  if (moisture > 0.72 && temperature > 8 && height < 0.6) return 'swamp';
   if (moisture > 0.5) return 'forest';
   return 'plains';
 }

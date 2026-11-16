@@ -5,7 +5,27 @@ import { HILL_LEVEL, SEA_LEVEL } from './types';
 const EQUATOR_TEMP = 28;
 const POLE_TEMP = -25;
 const LAPSE = 30; // °C lost between sea level and height 1
-const MOISTURE_SCALE = 90; // cells: e-folding distance of coastal humidity
+const MOISTURE_SCALE = 220; // cells: e-folding distance of coastal humidity
+/** Zonal moisture by latitude (0 equator .. 1 pole): wet equator, dry subtropics, wet mid-latitudes, dry poles. */
+const LAT_WET: readonly (readonly [number, number])[] = [
+  [0, 0.85],
+  [0.33, 0.08],
+  [0.7, 0.62],
+  [1, 0.25],
+];
+
+function zonalWetness(lat: number): number {
+  for (let k = 1; k < LAT_WET.length; k++) {
+    const a = LAT_WET[k - 1] ?? [0, 0];
+    const b = LAT_WET[k] ?? [1, 0];
+    if (lat <= b[0]) {
+      const t = (lat - a[0]) / (b[0] - a[0]);
+      const e = t * t * (3 - 2 * t);
+      return a[1] + (b[1] - a[1]) * e;
+    }
+  }
+  return LAT_WET[LAT_WET.length - 1]?.[1] ?? 0;
+}
 const STEP = 4;
 
 /** Fill `out` by bilinearly upsampling fn(u, v) evaluated on a coarse STEP-spaced grid. */
@@ -94,7 +114,7 @@ export function computeClimate(
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       const alt = Math.max(0, ((height[i] ?? 0) - SEA_LEVEL) / (1 - SEA_LEVEL));
-      temperature[i] = base - LAPSE * alt + (tJit[i] ?? 0) * 3;
+      temperature[i] = base - LAPSE * alt * alt + (tJit[i] ?? 0) * 3;
     }
   }
 
@@ -110,7 +130,7 @@ export function computeClimate(
       if (hh <= SEA_LEVEL) {
         s *= 0.97;
       } else {
-        s *= 0.994;
+        s *= 0.985;
         if (hh > HILL_LEVEL) {
           const block = 0.25 + 0.75 * Math.min(1, (hh - HILL_LEVEL) / (1 - HILL_LEVEL));
           if (block > s) s = block;
@@ -123,8 +143,7 @@ export function computeClimate(
   const dist = distanceToSea(height, w, h);
   const moisture = new Float32Array(n);
   for (let y = 0; y < h; y++) {
-    // wet equator and mid-latitudes, dry subtropics and poles
-    const band = 0.6 * Math.cos((lats[y] ?? 0) * Math.PI * 3);
+        const zonal = zonalWetness(lats[y] ?? 0);
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       if ((height[i] ?? 0) <= SEA_LEVEL) {
@@ -132,7 +151,7 @@ export function computeClimate(
         continue;
       }
       const coast = Math.exp(-(dist[i] ?? 0) / MOISTURE_SCALE);
-      const m = (0.2 + 0.6 * coast) * (1 + band) + (mJit[i] ?? 0) * 0.4 - (shadow[i] ?? 0) * 0.5;
+      const m = zonal * (0.6 + 0.4 * coast) + 0.1 * coast + (mJit[i] ?? 0) * 0.25 - (shadow[i] ?? 0) * 0.25;
       moisture[i] = m < 0 ? 0 : m > 1 ? 1 : m;
     }
   }
