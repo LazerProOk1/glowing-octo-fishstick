@@ -6,7 +6,9 @@ export const DEFAULT_WORLD_HEIGHT = 100;
 
 const ELEVATION_FREQUENCY = 0.014;
 const MOISTURE_FREQUENCY = 0.026;
+const COASTLINE_FREQUENCY = 0.009;
 const DETAIL_FREQUENCY = 0.09;
+const COASTLINE_WARP = 0.3;
 
 const VOLCANIC_MIN_ELEVATION = 88;
 const VOLCANIC_PEAK_THRESHOLD = 0.94;
@@ -20,6 +22,7 @@ interface FbmConfig {
 
 const ELEVATION_FBM: FbmConfig = { octaves: 4, frequency: ELEVATION_FREQUENCY, lacunarity: 2, gain: 0.5 };
 const MOISTURE_FBM: FbmConfig = { octaves: 3, frequency: MOISTURE_FREQUENCY, lacunarity: 2, gain: 0.5 };
+const COASTLINE_FBM: FbmConfig = { octaves: 3, frequency: COASTLINE_FREQUENCY, lacunarity: 2, gain: 0.55 };
 
 interface QuantileStop {
   /** Share of tiles at or below this value, 0..1 */
@@ -111,11 +114,11 @@ function fbm2D(noise: Noise2D, x: number, y: number, config: FbmConfig): number 
   return total / normalization;
 }
 
-function continentMask(normalizedX: number, normalizedY: number): number {
+function continentMask(normalizedX: number, normalizedY: number, warp: number): number {
   const dx = (normalizedX - 0.5) * 2;
   const dy = (normalizedY - 0.5) * 2;
-  const distance = Math.min(1, Math.sqrt(dx * dx * 0.85 + dy * dy * 0.85));
-  return 1 - Math.pow(distance, 2.6);
+  const distance = Math.min(1.2, Math.sqrt(dx * dx * 0.9 + dy * dy * 0.9) + warp);
+  return clamp(1 - Math.pow(distance, 2.2), 0, 1);
 }
 
 function interpolateStops(stops: readonly QuantileStop[], quantile: number): number {
@@ -234,6 +237,7 @@ export function generateWorld(
   const elevationNoise = createNoise2D(seed);
   const moistureNoise = createNoise2D(seed * 2 + 7919);
   const detailNoise = createNoise2D(seed * 3 + 104729);
+  const coastlineNoise = createNoise2D(seed * 5 + 2654435761);
 
   const size = width * height;
   const rawElevation = new Float32Array(size);
@@ -242,7 +246,8 @@ export function generateWorld(
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
-      const continent = continentMask(x / width, y / height);
+      const warp = fbm2D(coastlineNoise, x, y, COASTLINE_FBM) * COASTLINE_WARP;
+      const continent = continentMask(x / width, y / height, warp);
       const land = (fbm2D(elevationNoise, x, y, ELEVATION_FBM) + 1) / 2;
       rawElevation[index] = land * continent;
       rawMoisture[index] = (fbm2D(moistureNoise, x, y, MOISTURE_FBM) + 1) / 2;
