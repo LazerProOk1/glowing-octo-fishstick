@@ -5,19 +5,17 @@ const DX = [1, 1, 0, -1, -1, -1, 0, 1];
 const DY = [0, 1, 1, 1, 0, -1, -1, -1];
 /** Tiny slope added while flooding so flat areas and filled pits still drain. */
 const EPS = 1e-6;
-const MAX_SOURCES = 170;
-const MIN_RIVER_CELLS = 5;
+const MAX_SOURCES = 110;
+const MIN_RIVER_CELLS = 30;
 
 interface Flow {
   /** Receiver cell index, -1 for sea cells. */
   recv: Int32Array;
   /** Accumulated moisture-weighted flow. */
   acc: Float32Array;
-  /** 1 if the downstream path of the cell crosses a filled depression (it would climb uphill on raw terrain). */
-  tainted: Uint8Array;
+  /** Height after priority-flood depression filling (with epsilon slope). */
+  filled: Float32Array;
 }
-/** Fill depth above which a cell counts as sitting in a depression. */
-const DEPRESSION_DEPTH = 4e-4;
 
 /** Binary min-heap on (key, index); ties broken by index for determinism. */
 class MinHeap {
@@ -76,11 +74,21 @@ function computeFlow(height: Float32Array, moisture: Float32Array, w: number, h:
   const seen = new Uint8Array(n);
   const order = new Int32Array(n);
   const heap = new MinHeap(n);
-  const tainted = new Uint8Array(n);
+  const filled = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     if (height[i]! < SEA_LEVEL) {
       seen[i] = 1;
-      heap.push(height[i]!, i);
+      filled[i] = height[i]!;
+      // Only coastal water cells can seed the flood; open sea never receives from land.
+      const x = i % w;
+      const y = (i - x) / w;
+      let coastal = false;
+      for (let d = 0; d < 8 && !coastal; d++) {
+        const nx = x + DX[d]!;
+        const ny = y + DY[d]!;
+        if (nx >= 0 && ny >= 0 && nx < w && ny < h && height[ny * w + nx]! >= SEA_LEVEL) coastal = true;
+      }
+      if (coastal) heap.push(height[i]!, i);
     }
   }
   let count = 0;
@@ -88,8 +96,7 @@ function computeFlow(height: Float32Array, moisture: Float32Array, w: number, h:
     const c = heap.pop();
     const level = heap.lastKey;
     order[count++] = c;
-    const r0 = recv[c]!;
-    if (r0 >= 0 && (tainted[r0] || level - height[c]! > DEPRESSION_DEPTH)) tainted[c] = 1;
+    filled[c] = level;
     const cx = c % w;
     const cy = (c - cx) / w;
     for (let d = 0; d < 8; d++) {
@@ -115,21 +122,26 @@ function computeFlow(height: Float32Array, moisture: Float32Array, w: number, h:
     const r = recv[c]!;
     if (r >= 0 && height[r]! >= SEA_LEVEL) acc[r] = acc[r]! + acc[c]!;
   }
-  return { recv, acc, tainted };
+  return { recv, acc, filled };
+}
+
+/** Fills depressions (priority-flood from water, epsilon slope so flats drain). */
+export function fillDepressions(height: Float32Array, w: number, h: number): Float32Array {
+  return computeFlow(height, new Float32Array(w * h), w, h).filled;
 }
 
 /** Land cells at/above threshold with no upstream neighbour at/above it. */
 function findSources(flow: Flow, height: Float32Array, w: number, h: number, t: number): number[] {
-  const { recv, acc, tainted } = flow;
+  const { recv, acc } = flow;
   const n = w * h;
   const hasUp = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
     const r = recv[i]!;
-    if (r >= 0 && !tainted[i] && acc[i]! >= t && height[i]! >= SEA_LEVEL) hasUp[r] = 1;
+    if (r >= 0 && acc[i]! >= t && height[i]! >= SEA_LEVEL) hasUp[r] = 1;
   }
   const out: number[] = [];
   for (let i = 0; i < n; i++) {
-    if (!tainted[i] && acc[i]! >= t && height[i]! >= SEA_LEVEL && !hasUp[i]) out.push(i);
+    if (acc[i]! >= t && height[i]! >= SEA_LEVEL && !hasUp[i]) out.push(i);
   }
   void h;
   return out;
@@ -150,12 +162,26 @@ export function computeRivers(
   const n = w * h;
 
   // Choose the smallest threshold that keeps the number of headwaters bounded.
-  let t = 6;
+  let t = 40;
   let sources = findSources(flow, height, w, h, t);
   while (sources.length > MAX_SOURCES && t < 1e7) {
-    t *= 1.4;
+    t *= 1.5;
     sources = findSources(flow, height, w, h, t);
   }
+
+  // Extend every headwater uphill along its largest tributary, up to the watershed crest.
+  const bestUp = new Int32Array(n).fill(-1);
+  for (let i = 0; i < n; i++) {
+    const r = recv[i]!;
+    if (r < 0 || height[i]! < SEA_LEVEL) continue;
+    const b = bestUp[r]!;
+    if (b < 0 || acc[i]! > acc[b]!) bestUp[r] = i;
+  }
+  sources = sources.map((s0) => {
+    let c = s0;
+    while (bestUp[c]! >= 0) c = bestUp[c]!;
+    return c;
+  });
 
   // Trace long rivers first so that short tributaries end by joining them.
   const traced = sources.map((s) => {
