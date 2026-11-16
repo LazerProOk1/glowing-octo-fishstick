@@ -2,7 +2,12 @@ import { clamp } from '@/lib/math';
 import type { Viewport } from '@/types/viewport';
 import type { World } from '@/types/world';
 import { PIXELS_PER_TILE, bakeMap, type BakedMap } from './bakeMap';
-import { buildProvinceBorderSegments } from './provinceBorders';
+import {
+  buildLandOutline,
+  buildProvinceBorders,
+  buildProvinceOutline,
+  type BoundaryCurve,
+} from './provinceBorders';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 12;
@@ -11,10 +16,9 @@ const WHEEL_ZOOM_SPEED = 0.0015;
 const BACKGROUND_COLOR = '#1B4965';
 const CLICK_TOLERANCE = 4;
 
-/** Screen width of a province line: 0.5 px, never thicker than 1.5 px */
-const BORDER_SCREEN_WIDTH = 0.5;
-const BORDER_SCREEN_WIDTH_MAX = 1.5;
-const BORDER_COLOR = 'rgba(0, 0, 0, 0.25)';
+/** Screen width of a province line, in CSS pixels: 0.8 / zoom */
+const BORDER_SCREEN_WIDTH = 0.8;
+const BORDER_COLOR = 'rgba(0, 0, 0, 0.35)';
 const HIGHLIGHT_COLOR = 'rgba(255, 255, 255, 0.2)';
 
 export interface MapRendererOptions {
@@ -30,7 +34,9 @@ export class MapRenderer {
   private world: World | null = null;
   private baked: BakedMap | null = null;
   private borderPath: Path2D | null = null;
+  private landPath: Path2D | null = null;
   private highlightPath: Path2D | null = null;
+  private readonly provincePaths = new Map<number, Path2D>();
   private viewport: Viewport = { offsetX: 0, offsetY: 0, zoom: 1 };
   private cssWidth = 0;
   private cssHeight = 0;
@@ -85,6 +91,8 @@ export class MapRenderer {
     }
 
     this.borderPath = this.buildBorderPath(world);
+    this.landPath = this.buildLandClipPath(world);
+    this.provincePaths.clear();
     this.highlightPath = null;
 
     if (this.viewportReady) {
@@ -121,43 +129,63 @@ export class MapRenderer {
     return this.world === null ? 0 : this.world.height * PIXELS_PER_TILE;
   }
 
-  /**
-   * Province borders as a raw tile grid: one segment per shared tile edge.
-   * No smoothing — at this cell size the honest tile lattice reads as a
-   * topographic survey grid, while curves turn the cells into soap bubbles.
-   */
-  private buildBorderPath(world: World): Path2D {
-    const path = new Path2D();
+  /** Appends smoothed splines to a path, scaled from tiles to baked pixels. */
+  private appendCurves(path: Path2D, curves: readonly BoundaryCurve[]): void {
     const scale = PIXELS_PER_TILE;
 
-    for (const segment of buildProvinceBorderSegments(world)) {
-      path.moveTo(segment.x1 * scale, segment.y1 * scale);
-      path.lineTo(segment.x2 * scale, segment.y2 * scale);
+    for (const curve of curves) {
+      path.moveTo(curve.start.x * scale, curve.start.y * scale);
+      for (const segment of curve.segments) {
+        if (segment.kind === 'line') {
+          path.lineTo(segment.to.x * scale, segment.to.y * scale);
+        } else {
+          path.bezierCurveTo(
+            segment.control1.x * scale,
+            segment.control1.y * scale,
+            segment.control2.x * scale,
+            segment.control2.y * scale,
+            segment.to.x * scale,
+            segment.to.y * scale,
+          );
+        }
+      }
+      if (curve.closed) {
+        path.closePath();
+      }
     }
+  }
 
+  /** Smooth political borders: vertex jitter plus centripetal Catmull-Rom. */
+  private buildBorderPath(world: World): Path2D {
+    const path = new Path2D();
+    this.appendCurves(path, buildProvinceBorders(world));
     return path;
   }
 
-  private buildHighlightPath(provinceId: number): Path2D {
+  /**
+   * Smooth land silhouette used as a clip. Province geometry may overshoot the
+   * coast, so every border and highlight is clipped by this path and can never
+   * spill into the sea.
+   */
+  private buildLandClipPath(world: World): Path2D {
     const path = new Path2D();
+    this.appendCurves(path, buildLandOutline(world));
+    return path;
+  }
+
+  /** Highlight polygon built from the same smoothed spline as the border. */
+  private buildHighlightPath(provinceId: number): Path2D {
+    const cached = this.provincePaths.get(provinceId);
+    if (cached !== undefined) {
+      return cached;
+    }
+
     const world = this.world;
-    if (world === null) {
-      return path;
+    const path = new Path2D();
+    if (world !== null) {
+      this.appendCurves(path, buildProvinceOutline(world, provinceId));
+      this.provincePaths.set(provinceId, path);
     }
-    const step = PIXELS_PER_TILE;
-
-    for (let y = 0; y < world.height; y += 1) {
-      const row = world.tiles[y];
-      if (row === undefined) {
-        continue;
-      }
-      for (let x = 0; x < world.width; x += 1) {
-        if (row[x]?.provinceId === provinceId) {
-          path.rect(x * step, y * step, step, step);
-        }
-      }
-    }
-
     return path;
   }
 
@@ -353,20 +381,26 @@ export class MapRenderer {
     context.translate(offsetX, offsetY);
     context.scale(zoom, zoom);
 
-    if (this.highlightPath !== null) {
-      context.fillStyle = HIGHLIGHT_COLOR;
-      context.fill(this.highlightPath);
-    }
+    if (this.landPath !== null) {
+      // Everything political is clipped to the coastline: an overshooting spline
+      // is cut exactly at the smooth shore instead of bleeding into the water.
+      context.save();
+      context.clip(this.landPath, 'evenodd');
 
-    if (this.borderPath !== null) {
-      // Width is measured in screen pixels and converted back to map units, so
-      // zooming never bloats the political grid.
-      const screenWidth = clamp(BORDER_SCREEN_WIDTH * Math.sqrt(zoom), BORDER_SCREEN_WIDTH, BORDER_SCREEN_WIDTH_MAX);
-      context.lineWidth = screenWidth / zoom;
-      context.strokeStyle = BORDER_COLOR;
-      context.lineCap = 'butt';
-      context.lineJoin = 'miter';
-      context.stroke(this.borderPath);
+      if (this.highlightPath !== null) {
+        context.fillStyle = HIGHLIGHT_COLOR;
+        context.fill(this.highlightPath);
+      }
+
+      if (this.borderPath !== null) {
+        context.lineWidth = BORDER_SCREEN_WIDTH / zoom;
+        context.strokeStyle = BORDER_COLOR;
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.stroke(this.borderPath);
+      }
+
+      context.restore();
     }
 
     context.restore();
