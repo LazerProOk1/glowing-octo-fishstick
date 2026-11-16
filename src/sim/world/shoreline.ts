@@ -1,0 +1,87 @@
+import { labelComponents } from './provinceSeeds';
+import { BIOMES, SEA_LEVEL } from './types';
+
+/** Land components (4-connected) smaller than this sink into shallow water. */
+export const MIN_ISLAND_CELLS = 6;
+/** Enclosed water components (not touching the map border) smaller than this are filled with land. */
+export const MIN_LAKE_CELLS = 30;
+/** Offset from SEA_LEVEL given to reclassified cells. */
+const SHORE_DELTA = 0.005;
+
+const COAST = BIOMES.indexOf('coast');
+
+/**
+ * Removes specks: islands under MIN_ISLAND_CELLS become 'coast' water just below SEA_LEVEL, then
+ * enclosed lakes under MIN_LAKE_CELLS become land just above SEA_LEVEL with the most frequent land
+ * biome of their 4-neighbours (ties: lowest code). Land is `height > SEA_LEVEL` everywhere.
+ * Returns new arrays; inputs are not modified.
+ */
+export function normalizeShoreline(
+  height: Float32Array,
+  biomes: Uint8Array,
+  w: number,
+  h: number,
+): { height: Float32Array; biomes: Uint8Array } {
+  const n = w * h;
+  const outH = new Float32Array(height);
+  const outB = new Uint8Array(biomes);
+  const isLand = (i: number): boolean => outH[i]! > SEA_LEVEL;
+
+  // 1. Tiny islands -> shallow water.
+  {
+    const { comp, sizes } = labelComponents(n, w, h, (a, b) => isLand(a) === isLand(b));
+    for (let i = 0; i < n; i++) {
+      if (isLand(i) && sizes[comp[i]!]! < MIN_ISLAND_CELLS) {
+        outH[i] = SEA_LEVEL - SHORE_DELTA;
+        outB[i] = COAST;
+      }
+    }
+  }
+
+  // 2. Small enclosed lakes -> land (labelled after step 1, so sunk islands join their water body).
+  const { comp, sizes } = labelComponents(n, w, h, (a, b) => isLand(a) === isLand(b));
+  const touchesBorder = new Uint8Array(sizes.length);
+  for (let x = 0; x < w; x++) {
+    touchesBorder[comp[x]!] = 1;
+    touchesBorder[comp[(h - 1) * w + x]!] = 1;
+  }
+  for (let y = 0; y < h; y++) {
+    touchesBorder[comp[y * w]!] = 1;
+    touchesBorder[comp[y * w + w - 1]!] = 1;
+  }
+  const fill = (k: number): boolean => sizes[k]! < MIN_LAKE_CELLS && !touchesBorder[k];
+  // Collect cells of each lake to fill.
+  const lakes = new Map<number, number[]>();
+  for (let i = 0; i < n; i++) {
+    if (isLand(i)) continue;
+    const k = comp[i]!;
+    if (!fill(k)) continue;
+    let cells = lakes.get(k);
+    if (!cells) lakes.set(k, (cells = []));
+    cells.push(i);
+  }
+  const seen = new Int32Array(n).fill(-1);
+  const counts = new Int32Array(BIOMES.length);
+  for (const [k, cells] of lakes) {
+    counts.fill(0);
+    for (const c of cells) {
+      const x = c % w;
+      const nb = [x > 0 ? c - 1 : -1, x < w - 1 ? c + 1 : -1, c - w, c + w];
+      for (const d of nb) {
+        if (d < 0 || d >= n || comp[d] === k || seen[d] === k) continue;
+        seen[d] = k;
+        counts[outB[d]!]!++;
+      }
+    }
+    let best = -1;
+    for (let b = 0; b < BIOMES.length; b++) {
+      if (b === COAST || BIOMES[b] === 'ocean') continue;
+      if (best < 0 || counts[b]! > counts[best]!) best = b;
+    }
+    for (const c of cells) {
+      outH[c] = SEA_LEVEL + SHORE_DELTA;
+      outB[c] = best;
+    }
+  }
+  return { height: outH, biomes: outB };
+}

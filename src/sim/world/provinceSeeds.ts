@@ -1,9 +1,6 @@
 import type { Rng } from '../rng';
 import { SEA_LEVEL } from './types';
 
-/** Islands (4-connected) smaller than this become shallow water before partitioning. */
-export const MIN_ISLAND_CELLS = 6;
-
 /**
  * Labels 4-connected components of cells for which `same(a, b)` holds between neighbours.
  * Returns per-cell component id and per-component sizes.
@@ -50,15 +47,11 @@ export function labelComponents(
   return { comp, sizes };
 }
 
-/** 1 = land (height > SEA_LEVEL), with islands under MIN_ISLAND_CELLS cells turned into water. */
-export function effectiveLand(height: Float32Array, w: number, h: number): Uint8Array {
+/** 1 = land (height > SEA_LEVEL). Expects input already passed through `normalizeShoreline`. */
+export function landMask(height: Float32Array, w: number, h: number): Uint8Array {
   const n = w * h;
   const land = new Uint8Array(n);
   for (let i = 0; i < n; i++) land[i] = height[i]! > SEA_LEVEL ? 1 : 0;
-  const { comp, sizes } = labelComponents(n, w, h, (a, b) => land[a] === land[b]);
-  for (let i = 0; i < n; i++) {
-    if (land[i] && sizes[comp[i]!]! < MIN_ISLAND_CELLS) land[i] = 0;
-  }
   return land;
 }
 

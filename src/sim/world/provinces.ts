@@ -1,5 +1,5 @@
 import type { Rng } from '../rng';
-import { effectiveLand, labelComponents, poissonSeeds, valueNoise } from './provinceSeeds';
+import { landMask, labelComponents, poissonSeeds, valueNoise } from './provinceSeeds';
 import { BIOMES, HILL_LEVEL, MOUNTAIN_LEVEL, type Province } from './types';
 
 /** Poisson-disk radius on land, tuned so the average land province is ~260 cells. */
@@ -40,7 +40,7 @@ export function computeProvinces(
   w: number,
   h: number,
 ): { provinceOf: Uint16Array; provinces: Province[] } {
-  const land = effectiveLand(height, w, h);
+  const land = landMask(height, w, h);
   const seeds = poissonSeeds(rng.fork('seeds'), land, w, h, LAND_RADIUS, SEA_RADIUS);
   const noiseRng = rng.fork('noise');
   // Each province mixes two shared noise layers at its own angle, so neighbours see different noise.
@@ -271,6 +271,7 @@ function fixFragments(owner: Int32Array, land: Uint8Array, count: number, w: num
       if (t !== undefined) owner[i] = t;
     }
   }
+  throw new Error('fixFragments did not converge');
 }
 
 /** For each group g (component or province) with interest(g), counts shared 4-edges with same-kind foreign provinces. */
@@ -347,6 +348,7 @@ function mergeSmall(owner: Int32Array, land: Uint8Array, isLand: number[], w: nu
       if (t >= 0) owner[i] = t;
     }
   }
+  throw new Error('mergeSmall did not converge');
 }
 
 /** Compacts ids and computes per-province attributes. */

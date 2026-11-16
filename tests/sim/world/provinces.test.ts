@@ -5,6 +5,7 @@ import { computeClimate } from '../../../src/sim/world/climate';
 import { computeBiomes } from '../../../src/sim/world/biomes';
 import { computeRivers } from '../../../src/sim/world/rivers';
 import { computeProvinces } from '../../../src/sim/world/provinces';
+import { normalizeShoreline } from '../../../src/sim/world/shoreline';
 import { BIOMES, SEA_LEVEL, WORLD_H, WORLD_W, type Province } from '../../../src/sim/world/types';
 
 const W = WORLD_W;
@@ -16,49 +17,26 @@ interface Fixture {
   riverMask: Uint8Array;
   provinceOf: Uint16Array;
   provinces: Province[];
-  /** 1 = land after islands smaller than 6 cells become shallow water. */
+  /** 1 = land (height > SEA_LEVEL). */
   land: Uint8Array;
 }
 
-/** Land mask with 4-connected islands of fewer than 6 cells turned into water. */
-function effectiveLand(height: Float32Array): Uint8Array {
-  const n = W * H;
-  const land = new Uint8Array(n);
-  for (let i = 0; i < n; i++) land[i] = height[i]! > SEA_LEVEL ? 1 : 0;
-  const seen = new Uint8Array(n);
-  const stack: number[] = [];
-  const comp: number[] = [];
-  for (let s = 0; s < n; s++) {
-    if (!land[s] || seen[s]) continue;
-    seen[s] = 1;
-    stack.push(s);
-    comp.length = 0;
-    while (stack.length) {
-      const c = stack.pop()!;
-      comp.push(c);
-      const x = c % W;
-      const y = (c - x) / W;
-      const nb = [x > 0 ? c - 1 : -1, x < W - 1 ? c + 1 : -1, y > 0 ? c - W : -1, y < H - 1 ? c + W : -1];
-      for (const d of nb) {
-        if (d >= 0 && land[d] && !seen[d]) {
-          seen[d] = 1;
-          stack.push(d);
-        }
-      }
-    }
-    if (comp.length < 6) for (const c of comp) land[c] = 0;
-  }
+/** Land mask: the one predicate used everywhere, height > SEA_LEVEL (after normalizeShoreline). */
+function landOf(height: Float32Array): Uint8Array {
+  const land = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) land[i] = height[i]! > SEA_LEVEL ? 1 : 0;
   return land;
 }
 
 function build(seed: string): Fixture {
   const rng = createRng(seed);
-  const height = generateHeight(rng.fork('height'), W, H);
-  const { temperature, moisture } = computeClimate(rng.fork('climate'), height, W, H);
-  const biomes = computeBiomes(height, temperature, moisture);
+  const height0 = generateHeight(rng.fork('height'), W, H);
+  const { temperature, moisture } = computeClimate(rng.fork('climate'), height0, W, H);
+  const shore = normalizeShoreline(height0, computeBiomes(height0, temperature, moisture), W, H);
+  const { height, biomes } = shore;
   const { riverMask } = computeRivers(height, moisture, W, H);
   const { provinceOf, provinces } = computeProvinces(rng.fork('provinces'), height, biomes, riverMask, W, H);
-  return { height, biomes, riverMask, provinceOf, provinces, land: effectiveLand(height) };
+  return { height, biomes, riverMask, provinceOf, provinces, land: landOf(height) };
 }
 
 /** Real 4-adjacency between provinces, as sorted id lists. */
@@ -88,7 +66,7 @@ function realNeighbors(f: Fixture): number[][] {
   return sets.map((s) => [...s].sort((a, b) => a - b));
 }
 
-describe.each(['1', 'Бета-7', 'tiny-islands'])('provinces (seed %j)', (seed) => {
+describe.each(['1', 'Бета-7', 'tiny-islands', 'lakes-check'])('provinces (seed %j)', (seed) => {
   let f: Fixture;
   beforeAll(() => {
     f = build(seed);
@@ -100,7 +78,7 @@ describe.each(['1', 'Бета-7', 'tiny-islands'])('provinces (seed %j)', (seed)
     expect(land).toBeGreaterThanOrEqual(2000);
     expect(land).toBeLessThanOrEqual(4000);
     expect(sea).toBeGreaterThanOrEqual(150);
-    expect(sea).toBeLessThanOrEqual(600);
+    expect(sea).toBeLessThanOrEqual(560);
     expect(f.provinces.length).toBeLessThanOrEqual(65535);
     f.provinces.forEach((p, i) => expect(p.id).toBe(i));
   });
