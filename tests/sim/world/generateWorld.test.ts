@@ -13,12 +13,13 @@ describe('generateWorld', () => {
   let a: World;
   let b: World;
   let ms = 0;
+  let c: World;
   beforeAll(() => {
     const t = performance.now();
     a = generateWorld('Бета-7');
     ms = performance.now() - t;
     b = generateWorld('Бета-7');
-    console.log(`generateWorld ms: ${ms.toFixed(0)}`);
+    c = generateWorld('другое-зерно');
   }, 60000);
 
   it('размеры и согласованность', () => {
@@ -43,6 +44,17 @@ describe('generateWorld', () => {
     expect(eq(a.provinceOf, b.provinceOf)).toBe(true);
     expect(JSON.stringify(a.rivers)).toBe(JSON.stringify(b.rivers));
     expect(JSON.stringify(a.provinces)).toBe(JSON.stringify(b.provinces));
+  });
+
+  it('согласованность provinces и provinceOf', () => {
+    a.provinces.forEach((p, i) => expect(p.id).toBe(i));
+    let max = 0;
+    for (const v of a.provinceOf) if (v > max) max = v;
+    expect(max).toBeLessThan(a.provinces.length);
+  });
+
+  it('другое зерно даёт другой мир', () => {
+    expect(Buffer.from(c.provinceOf.buffer).equals(Buffer.from(a.provinceOf.buffer))).toBe(false);
   });
 
   it('генерация меньше 8 с', () => {

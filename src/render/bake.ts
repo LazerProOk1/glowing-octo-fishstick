@@ -1,4 +1,4 @@
-import { SEA_LEVEL, type World } from '../sim/world/types';
+import type { World } from '../sim/world/types';
 import { borderDistance } from './distanceField';
 
 export function encodeProvinceId(id: number): [r: number, g: number] {
@@ -18,6 +18,10 @@ export interface BakedTextures {
   border: Uint8Array;
 }
 
+function clampByte(v: number): number {
+  return v < 0 ? 0 : v > 255 ? 255 : v;
+}
+
 export function bakeTextures(world: World): BakedTextures {
   const { w, h, provinceOf, provinces, height, biome, moisture, riverMask } = world;
   const n = w * h;
@@ -31,12 +35,13 @@ export function bakeTextures(world: World): BakedTextures {
     const [r, g] = encodeProvinceId(id);
     provinceRG[o] = r;
     provinceRG[o + 1] = g;
-    const land = provinces[id]?.isLand ?? (height[i] as number) > SEA_LEVEL;
-    provinceRG[o + 2] = land ? 255 : 0;
+    const province = provinces[id];
+    if (!province) throw new Error(`нет провинции с id ${id} (клетка ${i})`);
+    provinceRG[o + 2] = province.isLand ? 255 : 0;
     provinceRG[o + 3] = 255;
-    terrain[o] = Math.round((height[i] as number) * 255);
+    terrain[o] = clampByte(Math.round((height[i] as number) * 255));
     terrain[o + 1] = biome[i] as number;
-    terrain[o + 2] = Math.round((moisture[i] as number) * 255);
+    terrain[o + 2] = clampByte(Math.round((moisture[i] as number) * 255));
     terrain[o + 3] = Math.min(252, (riverMask[i] as number) * 63);
     border[o] = Math.min(255, Math.round((dist[i] as number) * 32));
     border[o + 3] = 255;

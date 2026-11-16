@@ -16,8 +16,20 @@ describe('borderDistance', () => {
     }
   });
 
+  it('горизонтальное разбиение: строки 3 и 4 дают 0.5, строка 0 дает 3.5', () => {
+    const w = 8;
+    const h = 8;
+    const p = new Uint16Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) p[y * w + x] = y < 4 ? 0 : 1;
+    const d = borderDistance(p, w, h);
+    expect(d[3 * w + 2]).toBeCloseTo(0.5, 5);
+    expect(d[4 * w + 2]).toBeCloseTo(0.5, 5);
+    expect(d[2]).toBeCloseTo(3.5, 5);
+  });
+
   it('одна провинция: расстояние большое и конечное по размеру', () => {
     const d = borderDistance(new Uint16Array(16), 4, 4);
+    expect(Number.isFinite(d[0])).toBe(true);
     expect(d[0]).toBeGreaterThanOrEqual(4);
   });
 

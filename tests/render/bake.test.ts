@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { bakeTextures, decodeProvinceId, encodeProvinceId } from '../../src/render/bake';
-import type { World } from '../../src/sim/world/types';
+import type { Province, World } from '../../src/sim/world/types';
 
 describe('encodeProvinceId', () => {
   it('круговое преобразование', () => {
@@ -10,6 +10,14 @@ describe('encodeProvinceId', () => {
     expect(encodeProvinceId(258)).toEqual([2, 1]);
   });
 });
+
+function mkProvinces(): Province[] {
+  const ps: Province[] = [];
+  for (let id = 0; id <= 300; id++) {
+    ps.push({ id, isLand: id === 0, cellCount: 1, center: { x: 0, y: 0 }, biome: 'plains', neighbors: [], coastal: false });
+  }
+  return ps;
+}
 
 describe('bakeTextures', () => {
   const w = 8;
@@ -34,16 +42,16 @@ describe('bakeTextures', () => {
       riverMask,
       rivers: [],
       provinceOf,
-      provinces: [],
+      provinces: mkProvinces(),
     };
   });
 
   it('раскладка provinceRG, terrain, border', () => {
     const t = bakeTextures(world);
     expect(t.provinceRG.length).toBe(w * h * 4);
-    expect(Array.from(t.provinceRG.subarray(0, 4))).toEqual([0, 0, 0, 255]);
+    expect(Array.from(t.provinceRG.subarray(0, 4))).toEqual([0, 0, 255, 255]);
     const i = 4 * 4; // x = 4
-    expect(Array.from(t.provinceRG.subarray(i, i + 4))).toEqual([300 & 255, 300 >> 8, 255, 255]);
+    expect(Array.from(t.provinceRG.subarray(i, i + 4))).toEqual([300 & 255, 300 >> 8, 0, 255]);
     expect(t.terrain[0]).toBe(Math.round(0.2 * 255));
     expect(t.terrain[1]).toBe(5);
     expect(t.terrain[2]).toBe(255);
@@ -53,5 +61,9 @@ describe('bakeTextures', () => {
     expect(t.border[3 * 4 + 1]).toBe(0);
     expect(t.border[3]).toBe(255);
     expect(t.border[0]).toBe(Math.min(255, Math.round(3.5 * 32)));
+  });
+
+  it('бросает при отсутствующей провинции', () => {
+    expect(() => bakeTextures({ ...world, provinces: [] })).toThrow();
   });
 });
