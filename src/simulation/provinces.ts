@@ -1,41 +1,54 @@
 import type { Biome, Province, Tile, TileCoord } from '@/types/world';
-import { hash2D } from './noise';
+import { createNoise2D, hash2D } from './noise';
+
+/** Must match SEA_LEVEL in mapGenerator: land starts here, water stays unowned */
+const SEA_LEVEL = 24;
 
 export interface ProvinceOptions {
   readonly tiles: Tile[][];
   readonly width: number;
   readonly height: number;
   readonly seed: number;
-  /** How many provinces to try to grow */
+  /** How many provinces to grow: small HoI4-style cells need several hundred */
   readonly targetCount: number;
-  /** Chebyshev distance between province seeds in tiles */
+  /** Highest Chebyshev distance between seeds, relaxed until targetCount is met */
   readonly minSeedSpacing: number;
-  /** Cost at which growth stops, keeping open sea unclaimed */
-  readonly maxCost: number;
 }
 
-const SEA_LEVEL = 24;
+/** Terrain cost of entering a tile; plains are the cheap baseline */
+const PLAINS_COST = 1;
+const HILL_COST = 2.5;
+const MOUNTAIN_COST = 6;
+const WATER_COST = 0;
 
-const WATER_COST = 9;
-const MOUNTAIN_COST = 7;
-const HILL_COST = 3;
 const DIAGONAL_COST = 1.4142;
+
+/** Jagged borders come from noise on top of the terrain cost */
+const COST_NOISE_AMPLITUDE = 1.5;
+const COST_NOISE_FREQUENCY = 0.17;
+const MIN_STEP_COST = 0.25;
+const MAX_COST = 40;
 
 const BIOME_COST: Record<Biome, number> = {
   ocean: WATER_COST,
   coast: WATER_COST,
-  plains: 1,
-  forest: 1.8,
+  plains: PLAINS_COST,
+  forest: 1.4,
   mountains: HILL_COST,
-  desert: 1.7,
-  tundra: 2,
-  swamp: 3,
-  volcanic: 6,
+  desert: 1.3,
+  tundra: 1.6,
+  swamp: 2.2,
+  volcanic: 4,
 };
 
-/** Terrain cost of entering a tile: ridges and water are expensive on purpose. */
+/** True for tiles a province may claim: land only, water is never owned. */
+export function isLandTile(tile: Tile): boolean {
+  return tile.elevation >= SEA_LEVEL;
+}
+
+/** Terrain cost of entering a tile: ridges and wetlands are expensive on purpose. */
 export function terrainCost(tile: Tile): number {
-  if (tile.elevation <= SEA_LEVEL) {
+  if (!isLandTile(tile)) {
     return WATER_COST;
   }
   if (tile.elevation >= 70) {
@@ -78,58 +91,70 @@ class CostQueue {
 
   pop(): QueueNode | undefined {
     const top = this.nodes[0];
-    const last = this.nodes.pop();
-    if (top === undefined || last === undefined) {
+    const lastNode = this.nodes.pop();
+    if (top === undefined || lastNode === undefined) {
       return top;
     }
-    if (this.nodes.length > 0) {
-      this.nodes[0] = last;
-      let parent = 0;
-      for (;;) {
-        const left = parent * 2 + 1;
-        const right = left + 1;
-        let smallest = parent;
-        const smallestNode = this.nodes[smallest];
-        const leftNode = this.nodes[left];
-        const rightNode = this.nodes[right];
-        if (leftNode !== undefined && smallestNode !== undefined && leftNode.cost < smallestNode.cost) {
-          smallest = left;
-        }
-        const currentSmallest = this.nodes[smallest];
-        if (rightNode !== undefined && currentSmallest !== undefined && rightNode.cost < currentSmallest.cost) {
-          smallest = right;
-        }
-        if (smallest === parent) {
-          break;
-        }
-        const a = this.nodes[parent];
-        const b = this.nodes[smallest];
-        if (a === undefined || b === undefined) {
-          break;
-        }
-        this.nodes[parent] = b;
-        this.nodes[smallest] = a;
-        parent = smallest;
+    if (this.nodes.length === 0) {
+      return top;
+    }
+    this.nodes[0] = lastNode;
+    let parent = 0;
+    for (;;) {
+      const left = parent * 2 + 1;
+      const right = left + 1;
+      let smallest = parent;
+      const smallestNode = this.nodes[smallest];
+      const leftNode = this.nodes[left];
+      const rightNode = this.nodes[right];
+      if (leftNode !== undefined && smallestNode !== undefined && leftNode.cost < smallestNode.cost) {
+        smallest = left;
       }
+      const smallestAfterLeft = this.nodes[smallest];
+      if (
+        rightNode !== undefined &&
+        smallestAfterLeft !== undefined &&
+        rightNode.cost < smallestAfterLeft.cost
+      ) {
+        smallest = right;
+      }
+      if (smallest === parent) {
+        break;
+      }
+      const swapA = this.nodes[parent];
+      const swapB = this.nodes[smallest];
+      if (swapA === undefined || swapB === undefined) {
+        break;
+      }
+      this.nodes[parent] = swapB;
+      this.nodes[smallest] = swapA;
+      parent = smallest;
     }
     return top;
   }
 }
 
-interface SeedCandidate {
-  readonly x: number;
-  readonly y: number;
+interface SeedCandidate extends TileCoord {
   readonly priority: number;
 }
 
+/**
+ * Picks province seeds over land only, using hashed priority instead of a grid.
+ * Spacing starts wide and is relaxed step by step, so the cells stay as even as
+ * the coastline allows while still reaching the target count.
+ */
 function pickSeeds(options: ProvinceOptions): TileCoord[] {
   const { tiles, width, height, seed, targetCount, minSeedSpacing } = options;
   const candidates: SeedCandidate[] = [];
 
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const tile = tiles[y]?.[x];
-      if (tile === undefined || tile.elevation <= SEA_LEVEL + 1) {
+  for (let y = 0; y < height; y += 1) {
+    const row = tiles[y];
+    if (row === undefined) {
+      continue;
+    }
+    for (let x = 0; x < width; x += 1) {
+      const tile = row[x];
+      if (tile === undefined || !isLandTile(tile)) {
         continue;
       }
       candidates.push({ x, y, priority: hash2D(x, y, seed + 8123) });
@@ -139,31 +164,51 @@ function pickSeeds(options: ProvinceOptions): TileCoord[] {
   candidates.sort((a, b) => a.priority - b.priority);
 
   const seeds: TileCoord[] = [];
-  for (const candidate of candidates) {
-    if (seeds.length >= targetCount) {
-      break;
+  const seeded = new Uint8Array(width * height);
+
+  const isFree = (x: number, y: number, spacing: number): boolean => {
+    for (let dy = -spacing; dy <= spacing; dy += 1) {
+      for (let dx = -spacing; dx <= spacing; dx += 1) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
+          continue;
+        }
+        if (seeded[ny * width + nx] === 1) {
+          return false;
+        }
+      }
     }
-    const tooClose = seeds.some(
-      (seedTile) =>
-        Math.abs(seedTile.x - candidate.x) <= minSeedSpacing &&
-        Math.abs(seedTile.y - candidate.y) <= minSeedSpacing,
-    );
-    if (tooClose) {
-      continue;
+    return true;
+  };
+
+  for (let spacing = minSeedSpacing; spacing >= 1 && seeds.length < targetCount; spacing -= 1) {
+    for (const candidate of candidates) {
+      if (seeds.length >= targetCount) {
+        break;
+      }
+      if (seeded[candidate.y * width + candidate.x] === 1) {
+        continue;
+      }
+      if (!isFree(candidate.x, candidate.y, spacing)) {
+        continue;
+      }
+      seeded[candidate.y * width + candidate.x] = 1;
+      seeds.push({ x: candidate.x, y: candidate.y });
     }
-    seeds.push({ x: candidate.x, y: candidate.y });
   }
 
   return seeds;
 }
 
 /**
- * Grows provinces with a multi-source Dijkstra. Because mountain and water tiles
- * are 5-10x more expensive than plains, borders settle on ridges and coastlines
- * instead of cutting across them.
+ * Grows provinces with a multi-source Dijkstra restricted to land. Water tiles
+ * are never claimed, so the coastline itself is the province border; high
+ * frequency noise on the step cost keeps the inland borders ragged instead of
+ * straight squares.
  */
 export function generateProvinces(options: ProvinceOptions): Province[] {
-  const { tiles, width, height, maxCost } = options;
+  const { tiles, width, height, seed } = options;
   const size = width * height;
   const seeds = pickSeeds(options);
 
@@ -171,17 +216,34 @@ export function generateProvinces(options: ProvinceOptions): Province[] {
     return [];
   }
 
+  const noise = createNoise2D(seed * 31 + 6151);
   const provinceByIndex = new Int32Array(size);
   provinceByIndex.fill(-1);
   const bestCost = new Float64Array(size);
   bestCost.fill(Number.POSITIVE_INFINITY);
 
-  const queue = new CostQueue();
   const costCache = new Float32Array(size);
-  for (let index = 0; index < size; index += 1) {
-    const tile = tiles[Math.floor(index / width)]?.[index % width];
-    costCache[index] = tile === undefined ? WATER_COST : terrainCost(tile);
+  const land = new Uint8Array(size);
+
+  for (let y = 0; y < height; y += 1) {
+    const row = tiles[y];
+    if (row === undefined) {
+      continue;
+    }
+    for (let x = 0; x < width; x += 1) {
+      const tile = row[x];
+      if (tile === undefined) {
+        continue;
+      }
+      const index = y * width + x;
+      const terrain = terrainCost(tile);
+      const noiseCost = noise(x * COST_NOISE_FREQUENCY, y * COST_NOISE_FREQUENCY) * COST_NOISE_AMPLITUDE;
+      costCache[index] = Math.min(MAX_COST, Math.max(MIN_STEP_COST, terrain + noiseCost));
+      land[index] = isLandTile(tile) ? 1 : 0;
+    }
   }
+
+  const queue = new CostQueue();
 
   seeds.forEach((seedTile, provinceId) => {
     const index = seedTile.y * width + seedTile.x;
@@ -224,8 +286,11 @@ export function generateProvinces(options: ProvinceOptions): Province[] {
         continue;
       }
       const neighbourIndex = ny * width + nx;
-      const nextCost = node.cost + (costCache[neighbourIndex] ?? WATER_COST) * distance;
-      if (nextCost > maxCost || nextCost >= (bestCost[neighbourIndex] ?? Number.POSITIVE_INFINITY)) {
+      if (land[neighbourIndex] !== 1) {
+        continue;
+      }
+      const nextCost = node.cost + (costCache[neighbourIndex] ?? PLAINS_COST) * distance;
+      if (nextCost >= (bestCost[neighbourIndex] ?? Number.POSITIVE_INFINITY)) {
         continue;
       }
       bestCost[neighbourIndex] = nextCost;
@@ -247,7 +312,7 @@ export function generateProvinces(options: ProvinceOptions): Province[] {
       if (tile === undefined) {
         continue;
       }
-      const provinceId = provinceByIndex[y * width + x] ?? -1;
+      const provinceId = land[y * width + x] === 1 ? (provinceByIndex[y * width + x] ?? -1) : -1;
       tile.provinceId = provinceId;
       if (provinceId < 0) {
         continue;

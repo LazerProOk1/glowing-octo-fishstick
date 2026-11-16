@@ -5,6 +5,7 @@
 :root {
   --background: #ffffff;
   --surface: #f4f4f5;
+  --ocean: #1b4965;
   --foreground: #18181b;
   --muted: #f4f4f5;
   --muted-foreground: #71717a;
@@ -18,12 +19,14 @@ html,
 body,
 #root {
   height: 100%;
+  padding: 0;
+  margin: 0;
 }
 
 body {
   margin: 0;
   overflow: hidden;
-  background-color: var(--surface);
+  background-color: var(--ocean);
   color: var(--foreground);
   font-family:
     -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, 'Helvetica Neue', sans-serif;

@@ -13,7 +13,7 @@ export const SEA_LEVEL = 24;
 const WARP_AMPLITUDE = 24;
 
 const WARP_FBM: FbmConfig = { octaves: 3, frequency: 0.0065, lacunarity: 2, gain: 0.55 };
-const CONTINENT_FBM: FbmConfig = { octaves: 5, frequency: 0.0105, lacunarity: 2.05, gain: 0.5 };
+const CONTINENT_FBM: FbmConfig = { octaves: 5, frequency: 0.0155, lacunarity: 2.05, gain: 0.5 };
 const MOUNTAIN_FBM: FbmConfig = { octaves: 4, frequency: 0.022, lacunarity: 2.2, gain: 0.42 };
 const MOISTURE_FBM: FbmConfig = { octaves: 3, frequency: 0.022, lacunarity: 2, gain: 0.5 };
 const DETAIL_FBM: FbmConfig = { octaves: 2, frequency: 0.08, lacunarity: 2, gain: 0.5 };
@@ -25,15 +25,25 @@ const MICRO_RELIEF = 1;
 const RIDGE_WEIGHT = 1.6;
 const CONTINENT_WEIGHT = 0.6;
 
+/**
+ * Soft edge vignette: the middle of the map keeps its full continental height,
+ * the rim is pushed down to negative values so the map always ends in deep
+ * ocean instead of cutting land off at the border.
+ */
+const EDGE_MASK_START = 0.76;
+const EDGE_MASK_END = 1.04;
+const EDGE_MASK_EXPONENT = 3;
+const EDGE_MASK_NOISE = 0.1;
+const EDGE_DEPTH = 46;
+
 const VOLCANIC_MIN_ELEVATION = 88;
 const VOLCANIC_PEAK_THRESHOLD = 0.94;
 
 const RIVER_MEANDER = 0.8;
 const RIVER_THRESHOLD = 45;
 
-const PROVINCE_TARGET_COUNT = 88;
-const PROVINCE_SEED_SPACING = 6;
-const PROVINCE_MAX_COST = 26;
+const PROVINCE_TARGET_COUNT = 720;
+const PROVINCE_SEED_SPACING = 5;
 
 interface QuantileStop {
   /** Share of tiles at or below this value, 0..1 */
@@ -48,14 +58,14 @@ interface QuantileStop {
  */
 const ELEVATION_STOPS: readonly QuantileStop[] = [
   { at: 0, value: 0 },
-  { at: 0.3, value: 12 },
-  { at: 0.38, value: 22 },
-  { at: 0.4, value: 24 },
-  { at: 0.425, value: 27 },
-  { at: 0.62, value: 40 },
-  { at: 0.86, value: 50 },
-  { at: 0.95, value: 70 },
-  { at: 0.985, value: 82 },
+  { at: 0.225, value: 12 },
+  { at: 0.285, value: 22 },
+  { at: 0.3, value: 24 },
+  { at: 0.325, value: 27 },
+  { at: 0.554, value: 40 },
+  { at: 0.835, value: 50 },
+  { at: 0.941, value: 70 },
+  { at: 0.982, value: 82 },
   { at: 1, value: 100 },
 ];
 
@@ -159,6 +169,29 @@ function applyQuantiles(field: Float32Array, stops: readonly QuantileStop[]): Fl
   }
 
   return result;
+}
+
+/**
+ * Soft edge vignette: 1 inside the safe inner frame, falling to 0 at the rim.
+ * A superellipse (not a circle) keeps the falloff parallel to the map frame, so
+ * the ocean band reads as the open sea around a globe rather than a round island.
+ */
+function resolveEdgeMask(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  noiseValue: number,
+): number {
+  const nx = (x / Math.max(width - 1, 1)) * 2 - 1;
+  const ny = (y / Math.max(height - 1, 1)) * 2 - 1;
+  const base = Math.pow(
+    Math.pow(Math.abs(nx), EDGE_MASK_EXPONENT) + Math.pow(Math.abs(ny), EDGE_MASK_EXPONENT),
+    1 / EDGE_MASK_EXPONENT,
+  );
+  // The noise keeps the vignette contour from reading as a drawn oval.
+  const radius = base + noiseValue * EDGE_MASK_NOISE;
+  return 1 - smoothstep(EDGE_MASK_START, EDGE_MASK_END, radius);
 }
 
 export function resolveBiome({ elevation, moisture, temperature, peak }: BiomeInput): Biome {
@@ -271,6 +304,7 @@ export function generateWorld(
   const size = width * height;
   const rawElevation = new Float32Array(size);
   const rawMoisture = new Float32Array(size);
+  const edgeMask = new Float32Array(size);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
@@ -284,10 +318,19 @@ export function generateWorld(
       const sampleX = x + warpX;
       const sampleY = y + warpY;
 
-      // No island mask: low frequency noise alone decides where the continents
-      // are, so water runs off the map edges instead of wrapping a single blob.
       const continent = clamp((fbm2D(continentNoise, sampleX, sampleY, CONTINENT_FBM) + 1) / 2, 0, 1);
+
+      // Soft edge vignette, not a hard disc: smoothstep from the inner 58% of the
+      // map radius down to zero at the rim, then continue into negative height so
+      // the border band is guaranteed to be deep sea.
       const shaped = continent;
+      edgeMask[index] = resolveEdgeMask(
+        x,
+        y,
+        width,
+        height,
+        fbm2D(detailNoise, sampleX, sampleY, MESO_FBM),
+      );
 
       // Ridged noise keeps mountain ranges narrow; they only rise inland.
       const ridge = ridgedFbm2D(mountainNoise, sampleX, sampleY, MOUNTAIN_FBM);
@@ -301,6 +344,16 @@ export function generateWorld(
 
   const elevationField = applyQuantiles(rawElevation, ELEVATION_STOPS);
   const moistureField = applyQuantiles(rawMoisture, MOISTURE_STOPS);
+
+  // The vignette is applied after the quantile pass, not before it: the water
+  // budget stays with the continent noise, so inland seas and straits survive,
+  // and the frame is only drowned afterwards. Multiplying the value and then
+  // pushing it below zero guarantees deep ocean at the rim.
+  for (let index = 0; index < size; index += 1) {
+    const mask = edgeMask[index] ?? 1;
+    const elevation = elevationField[index] ?? 0;
+    elevationField[index] = clamp(elevation * mask - (1 - mask) * EDGE_DEPTH, 0, 100);
+  }
 
   // Micro relief is render-only: it feeds hillshading and flow routing but never
   // surface classification, so beaches stay clean bands instead of speckles.
@@ -387,7 +440,6 @@ export function generateWorld(
     seed,
     targetCount: PROVINCE_TARGET_COUNT,
     minSeedSpacing: PROVINCE_SEED_SPACING,
-    maxCost: PROVINCE_MAX_COST,
   });
 
   return {

@@ -2,20 +2,19 @@ import { clamp } from '@/lib/math';
 import type { Viewport } from '@/types/viewport';
 import type { World } from '@/types/world';
 import { PIXELS_PER_TILE, bakeMap, type BakedMap } from './bakeMap';
-import { buildProvinceBorderLoops } from './provinceBorders';
+import { buildProvinceBorderSegments } from './provinceBorders';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 12;
-const MAX_FIT_ZOOM = 3;
-const MIN_VISIBLE_PIXELS = 64;
-const FIT_PADDING = 16;
+const MAX_FIT_ZOOM = 4;
 const WHEEL_ZOOM_SPEED = 0.0015;
-const BACKGROUND_COLOR = '#f4f4f5';
-const TOP_BAR_INSET = 48;
+const BACKGROUND_COLOR = '#1B4965';
 const CLICK_TOLERANCE = 4;
 
-const BORDER_COLOR = 'rgba(0, 0, 0, 0.4)';
-const BORDER_WIDTH = 1;
+/** Screen width of a province line: 0.5 px, never thicker than 1.5 px */
+const BORDER_SCREEN_WIDTH = 0.5;
+const BORDER_SCREEN_WIDTH_MAX = 1.5;
+const BORDER_COLOR = 'rgba(0, 0, 0, 0.25)';
 const HIGHLIGHT_COLOR = 'rgba(255, 255, 255, 0.2)';
 
 export interface MapRendererOptions {
@@ -122,27 +121,18 @@ export class MapRenderer {
     return this.world === null ? 0 : this.world.height * PIXELS_PER_TILE;
   }
 
-  /** Smoothed province boundaries, one stroked path for the whole world. */
+  /**
+   * Province borders as a raw tile grid: one segment per shared tile edge.
+   * No smoothing — at this cell size the honest tile lattice reads as a
+   * topographic survey grid, while curves turn the cells into soap bubbles.
+   */
   private buildBorderPath(world: World): Path2D {
     const path = new Path2D();
     const scale = PIXELS_PER_TILE;
 
-    for (const loop of buildProvinceBorderLoops(world)) {
-      const first = loop.points[0];
-      if (first === undefined) {
-        continue;
-      }
-      path.moveTo(first.x * scale, first.y * scale);
-      for (let index = 1; index < loop.points.length; index += 1) {
-        const point = loop.points[index];
-        if (point === undefined) {
-          continue;
-        }
-        path.lineTo(point.x * scale, point.y * scale);
-      }
-      if (loop.closed) {
-        path.closePath();
-      }
+    for (const segment of buildProvinceBorderSegments(world)) {
+      path.moveTo(segment.x1 * scale, segment.y1 * scale);
+      path.lineTo(segment.x2 * scale, segment.y2 * scale);
     }
 
     return path;
@@ -188,17 +178,14 @@ export class MapRenderer {
     this.requestRender();
   };
 
+  /** Cover, not contain: the map always fills the viewport, edge to edge. */
   private fitToView(): void {
     if (this.world === null) {
       return;
     }
 
-    const availableHeight = Math.max(this.cssHeight - TOP_BAR_INSET, 1);
     const zoom = clamp(
-      Math.min(
-        (this.cssWidth - FIT_PADDING * 2) / this.mapWidth,
-        (availableHeight - FIT_PADDING * 2) / this.mapHeight,
-      ),
+      Math.max(this.cssWidth / this.mapWidth, this.cssHeight / this.mapHeight),
       MIN_ZOOM,
       MAX_FIT_ZOOM,
     );
@@ -206,7 +193,7 @@ export class MapRenderer {
     this.viewport = {
       zoom,
       offsetX: (this.cssWidth - this.mapWidth * zoom) / 2,
-      offsetY: TOP_BAR_INSET + (availableHeight - this.mapHeight * zoom) / 2,
+      offsetY: (this.cssHeight - this.mapHeight * zoom) / 2,
     };
     this.viewportReady = true;
   }
@@ -222,11 +209,11 @@ export class MapRenderer {
     const offsetX =
       drawWidth <= this.cssWidth
         ? (this.cssWidth - drawWidth) / 2
-        : clamp(this.viewport.offsetX, this.cssWidth - drawWidth - MIN_VISIBLE_PIXELS, MIN_VISIBLE_PIXELS);
+        : clamp(this.viewport.offsetX, this.cssWidth - drawWidth, 0);
     const offsetY =
       drawHeight <= this.cssHeight
         ? (this.cssHeight - drawHeight) / 2
-        : clamp(this.viewport.offsetY, this.cssHeight - drawHeight - MIN_VISIBLE_PIXELS, MIN_VISIBLE_PIXELS);
+        : clamp(this.viewport.offsetY, this.cssHeight - drawHeight, 0);
 
     this.viewport = { zoom: this.viewport.zoom, offsetX, offsetY };
   }
@@ -365,7 +352,6 @@ export class MapRenderer {
     context.save();
     context.translate(offsetX, offsetY);
     context.scale(zoom, zoom);
-    context.lineWidth = BORDER_WIDTH / zoom;
 
     if (this.highlightPath !== null) {
       context.fillStyle = HIGHLIGHT_COLOR;
@@ -373,8 +359,13 @@ export class MapRenderer {
     }
 
     if (this.borderPath !== null) {
+      // Width is measured in screen pixels and converted back to map units, so
+      // zooming never bloats the political grid.
+      const screenWidth = clamp(BORDER_SCREEN_WIDTH * Math.sqrt(zoom), BORDER_SCREEN_WIDTH, BORDER_SCREEN_WIDTH_MAX);
+      context.lineWidth = screenWidth / zoom;
       context.strokeStyle = BORDER_COLOR;
-      context.lineCap = 'round';
+      context.lineCap = 'butt';
+      context.lineJoin = 'miter';
       context.stroke(this.borderPath);
     }
 

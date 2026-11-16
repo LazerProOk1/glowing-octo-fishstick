@@ -11,7 +11,7 @@ import type { Surface, World } from '@/types/world';
 import { FOAM_RGB, PAPER_RGB, RIVER_RGB, SURFACE_RGB, highlandColor, type Rgb } from './palette';
 
 /** Baked pixels per tile: the resolution of the terrain layer, not its granularity */
-export const PIXELS_PER_TILE = 4;
+export const PIXELS_PER_TILE = 6;
 
 const FINE_TEXTURE = 0.035;
 const COARSE_TEXTURE = 0.02;

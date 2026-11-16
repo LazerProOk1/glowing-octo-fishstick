@@ -4,7 +4,7 @@ import { TopBar } from '@/components/TopBar';
 
 export function App(): JSX.Element {
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-zinc-100">
+    <div className="relative h-[100dvh] w-screen overflow-hidden bg-[#1B4965]">
       <MapCanvas />
       <TopBar />
       <ProvincePanel />
