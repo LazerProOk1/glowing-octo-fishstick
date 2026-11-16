@@ -1,32 +1,82 @@
-import type { Biome } from '../types/world';
+import type { Surface } from '@/types/world';
 
 export type Rgb = readonly [number, number, number];
 
-export const BIOME_HEX: Record<Biome, string> = {
-  ocean: '#4A90B8',
-  coast: '#C2B280',
-  plains: '#8FBC6B',
-  forest: '#4A7C3F',
-  mountains: '#8B8680',
-  desert: '#D4B87A',
-  tundra: '#C8D8E0',
-  swamp: '#6B7F5A',
-  volcanic: '#5C4033',
+/**
+ * Muted cartographic palette. `plains` is the grass base tinted by texture,
+ * `hills` and `mountains` are desaturated so hillshading reads as relief.
+ */
+export const SURFACE_HEX: Record<Surface, string> = {
+  deepOcean: '#1B4965',
+  shallowWater: '#62B6CB',
+  beach: '#E8D8B0',
+  plains: '#76A035',
+  tundra: '#A9B3A2',
+  forest: '#386641',
+  taiga: '#2A4836',
+  hills: '#8F9A6C',
+  mountains: '#6C757D',
+  snow: '#F8F9FA',
+  desert: '#DCC79B',
+  swamp: '#5F7A5C',
+  volcanic: '#635B55',
 };
+
+export interface HighlandBand {
+  readonly from: number;
+  readonly color: Rgb;
+}
+
+/**
+ * Hypsometric tints for land above 50: discrete elevation steps, so hills,
+ * bare rock and snow read as cartographic bands instead of a smooth blur.
+ */
+export const HIGHLAND_BANDS: readonly HighlandBand[] = [
+  { from: 50, color: [0x8f, 0x9a, 0x6c] },
+  { from: 58, color: [0x82, 0x8b, 0x73] },
+  { from: 66, color: [0x74, 0x7d, 0x79] },
+  { from: 74, color: [0x6c, 0x75, 0x7d] },
+  { from: 82, color: [0x77, 0x80, 0x89] },
+  { from: 88, color: [0x93, 0x9c, 0xa2] },
+  { from: 94, color: [0xf8, 0xf9, 0xfa] },
+];
+
+export function highlandColor(elevation: number): Rgb {
+  let color: Rgb = HIGHLAND_BANDS[0]?.color ?? SURFACE_RGB.hills;
+  for (const band of HIGHLAND_BANDS) {
+    if (elevation >= band.from) {
+      color = band.color;
+    }
+  }
+  return color;
+}
+
+/** Warm paper tint that unifies the terrain the way a printed map does */
+export const PAPER_HEX = '#EFEEE7';
+export const RIVER_HEX = '#5FA8D3';
+export const FOAM_HEX = '#93CFE0';
 
 function hexToRgb(hex: string): Rgb {
   const value = Number.parseInt(hex.slice(1), 16);
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 }
 
-export const BIOME_RGB: Record<Biome, Rgb> = {
-  ocean: hexToRgb(BIOME_HEX.ocean),
-  coast: hexToRgb(BIOME_HEX.coast),
-  plains: hexToRgb(BIOME_HEX.plains),
-  forest: hexToRgb(BIOME_HEX.forest),
-  mountains: hexToRgb(BIOME_HEX.mountains),
-  desert: hexToRgb(BIOME_HEX.desert),
-  tundra: hexToRgb(BIOME_HEX.tundra),
-  swamp: hexToRgb(BIOME_HEX.swamp),
-  volcanic: hexToRgb(BIOME_HEX.volcanic),
+export const SURFACE_RGB: Record<Surface, Rgb> = {
+  deepOcean: hexToRgb(SURFACE_HEX.deepOcean),
+  shallowWater: hexToRgb(SURFACE_HEX.shallowWater),
+  beach: hexToRgb(SURFACE_HEX.beach),
+  plains: hexToRgb(SURFACE_HEX.plains),
+  tundra: hexToRgb(SURFACE_HEX.tundra),
+  forest: hexToRgb(SURFACE_HEX.forest),
+  taiga: hexToRgb(SURFACE_HEX.taiga),
+  hills: hexToRgb(SURFACE_HEX.hills),
+  mountains: hexToRgb(SURFACE_HEX.mountains),
+  snow: hexToRgb(SURFACE_HEX.snow),
+  desert: hexToRgb(SURFACE_HEX.desert),
+  swamp: hexToRgb(SURFACE_HEX.swamp),
+  volcanic: hexToRgb(SURFACE_HEX.volcanic),
 };
+
+export const RIVER_RGB = hexToRgb(RIVER_HEX);
+export const FOAM_RGB = hexToRgb(FOAM_HEX);
+export const PAPER_RGB = hexToRgb(PAPER_HEX);

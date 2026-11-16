@@ -97,3 +97,52 @@ export function hash2D(x: number, y: number, seed: number): number {
   hash = Math.imul(hash ^ (hash >>> 13), 1274126177) >>> 0;
   return ((hash ^ (hash >>> 16)) >>> 0) / 4294967296;
 }
+
+export interface FbmConfig {
+  readonly octaves: number;
+  readonly frequency: number;
+  readonly lacunarity: number;
+  readonly gain: number;
+}
+
+/** Fractal brownian motion, output in [-1, 1]. */
+export function fbm2D(noise: Noise2D, x: number, y: number, config: FbmConfig): number {
+  let amplitude = 1;
+  let frequency = config.frequency;
+  let total = 0;
+  let normalization = 0;
+
+  for (let octave = 0; octave < config.octaves; octave += 1) {
+    total += noise(x * frequency, y * frequency) * amplitude;
+    normalization += amplitude;
+    amplitude *= config.gain;
+    frequency *= config.lacunarity;
+  }
+
+  return total / normalization;
+}
+
+/**
+ * Ridged noise: 1 - |noise| squared per octave gives narrow crests instead of
+ * round blobs, which is what turns mountains into ranges.
+ * Output in [0, 1].
+ */
+export function ridgedFbm2D(noise: Noise2D, x: number, y: number, config: FbmConfig): number {
+  let amplitude = 0.5;
+  let frequency = config.frequency;
+  let total = 0;
+  let normalization = 0;
+  let weight = 1;
+
+  for (let octave = 0; octave < config.octaves; octave += 1) {
+    const ridge = 1 - Math.abs(noise(x * frequency, y * frequency));
+    const shaped = ridge * ridge * weight;
+    total += shaped * amplitude;
+    normalization += amplitude;
+    weight = Math.min(1, shaped * 2);
+    amplitude *= config.gain;
+    frequency *= config.lacunarity;
+  }
+
+  return total / normalization;
+}

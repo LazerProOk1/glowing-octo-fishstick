@@ -1,8 +1,7 @@
-import type { Viewport } from '../types/viewport';
-import type { World } from '../types/world';
-import { BIOME_RGB } from './palette';
-
-export const TILE_PIXELS = 4;
+import { clamp } from '@/lib/math';
+import type { Viewport } from '@/types/viewport';
+import type { World } from '@/types/world';
+import { PIXELS_PER_TILE, bakeMap, type BakedMap } from './bakeMap';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 12;
@@ -12,16 +11,13 @@ const FIT_PADDING = 16;
 const WHEEL_ZOOM_SPEED = 0.0015;
 const BACKGROUND_COLOR = '#f9fafb';
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
 export class MapRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly context: CanvasRenderingContext2D;
-  private readonly tileCanvas: HTMLCanvasElement;
+  private readonly layer: HTMLCanvasElement;
   private readonly resizeObserver: ResizeObserver;
   private world: World | null = null;
+  private baked: BakedMap | null = null;
   private viewport: Viewport = { offsetX: 0, offsetY: 0, zoom: 1 };
   private cssWidth = 0;
   private cssHeight = 0;
@@ -39,7 +35,7 @@ export class MapRenderer {
       throw new Error('Canvas 2D context is not available');
     }
     this.context = context;
-    this.tileCanvas = document.createElement('canvas');
+    this.layer = document.createElement('canvas');
     this.resizeObserver = new ResizeObserver(() => {
       this.handleResize();
     });
@@ -52,9 +48,25 @@ export class MapRenderer {
     this.handleResize();
   }
 
+  /**
+   * Rebuilds the cached RGBA layer once per world; every frame after that is a
+   * single drawImage, so pan and zoom never touch the noise or hillshade code.
+   */
   setWorld(world: World): void {
+    const baked = bakeMap(world);
+
     this.world = world;
-    this.buildTileLayer(world);
+    this.baked = baked;
+    this.layer.width = baked.width;
+    this.layer.height = baked.height;
+
+    const layerContext = this.layer.getContext('2d');
+    if (layerContext !== null) {
+      const image = layerContext.createImageData(baked.width, baked.height);
+      image.data.set(baked.pixels);
+      layerContext.putImageData(image, 0, 0);
+    }
+
     if (this.viewportReady) {
       this.clampViewport();
     } else {
@@ -76,38 +88,12 @@ export class MapRenderer {
     }
   }
 
-  private buildTileLayer(world: World): void {
-    this.tileCanvas.width = world.width;
-    this.tileCanvas.height = world.height;
+  private get mapWidth(): number {
+    return this.world === null ? 0 : this.world.width * PIXELS_PER_TILE;
+  }
 
-    const context = this.tileCanvas.getContext('2d');
-    if (context === null) {
-      return;
-    }
-
-    const image = context.createImageData(world.width, world.height);
-    const pixels = image.data;
-
-    for (let y = 0; y < world.height; y += 1) {
-      const row = world.tiles[y];
-      if (row === undefined) {
-        continue;
-      }
-      for (let x = 0; x < world.width; x += 1) {
-        const tile = row[x];
-        if (tile === undefined) {
-          continue;
-        }
-        const color = BIOME_RGB[tile.biome];
-        const offset = (y * world.width + x) * 4;
-        pixels[offset] = color[0];
-        pixels[offset + 1] = color[1];
-        pixels[offset + 2] = color[2];
-        pixels[offset + 3] = 255;
-      }
-    }
-
-    context.putImageData(image, 0, 0);
+  private get mapHeight(): number {
+    return this.world === null ? 0 : this.world.height * PIXELS_PER_TILE;
   }
 
   private handleResize = (): void => {
@@ -132,12 +118,10 @@ export class MapRenderer {
       return;
     }
 
-    const mapWidth = this.world.width * TILE_PIXELS;
-    const mapHeight = this.world.height * TILE_PIXELS;
     const zoom = clamp(
       Math.min(
-        (this.cssWidth - FIT_PADDING * 2) / mapWidth,
-        (this.cssHeight - FIT_PADDING * 2) / mapHeight,
+        (this.cssWidth - FIT_PADDING * 2) / this.mapWidth,
+        (this.cssHeight - FIT_PADDING * 2) / this.mapHeight,
       ),
       MIN_ZOOM,
       MAX_FIT_ZOOM,
@@ -145,8 +129,8 @@ export class MapRenderer {
 
     this.viewport = {
       zoom,
-      offsetX: (this.cssWidth - mapWidth * zoom) / 2,
-      offsetY: (this.cssHeight - mapHeight * zoom) / 2,
+      offsetX: (this.cssWidth - this.mapWidth * zoom) / 2,
+      offsetY: (this.cssHeight - this.mapHeight * zoom) / 2,
     };
     this.viewportReady = true;
   }
@@ -156,8 +140,8 @@ export class MapRenderer {
       return;
     }
 
-    const drawWidth = this.world.width * TILE_PIXELS * this.viewport.zoom;
-    const drawHeight = this.world.height * TILE_PIXELS * this.viewport.zoom;
+    const drawWidth = this.mapWidth * this.viewport.zoom;
+    const drawHeight = this.mapHeight * this.viewport.zoom;
 
     const offsetX =
       drawWidth <= this.cssWidth
@@ -252,11 +236,10 @@ export class MapRenderer {
     const { context } = this;
 
     context.setTransform(1, 0, 0, 1, 0, 0);
-    context.imageSmoothingEnabled = false;
     context.fillStyle = BACKGROUND_COLOR;
     context.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    if (this.world === null) {
+    if (this.world === null || this.baked === null) {
       return;
     }
 
@@ -264,11 +247,11 @@ export class MapRenderer {
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
     context.imageSmoothingEnabled = false;
     context.drawImage(
-      this.tileCanvas,
+      this.layer,
       this.viewport.offsetX,
       this.viewport.offsetY,
-      this.world.width * TILE_PIXELS * this.viewport.zoom,
-      this.world.height * TILE_PIXELS * this.viewport.zoom,
+      this.mapWidth * this.viewport.zoom,
+      this.mapHeight * this.viewport.zoom,
     );
   };
 }
