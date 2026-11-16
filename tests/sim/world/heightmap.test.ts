@@ -59,6 +59,28 @@ describe('generateHeight', () => {
   }, 30000);
 });
 
+describe('elevation distribution', () => {
+  it.each(['1', 'Бета-7'])('seed %j: ranges, not domes or plateaus', (seed) => {
+    const hm = generateHeight(createRng(seed), WORLD_W, WORLD_H);
+    let land = 0;
+    let mtn = 0;
+    let hills = 0;
+    let low = 0;
+    for (const v of hm) {
+      if (v <= SEA_LEVEL) continue;
+      land++;
+      if (v > 0.85) mtn++;
+      else if (v > 0.72) hills++;
+      if (v < 0.55) low++;
+    }
+    expect(mtn / land).toBeGreaterThanOrEqual(0.015);
+    expect(mtn / land).toBeLessThanOrEqual(0.05);
+    expect(hills / land).toBeGreaterThanOrEqual(0.08);
+    expect(hills / land).toBeLessThanOrEqual(0.18);
+    expect(low / land).toBeLessThan(0.25);
+  }, 30000);
+});
+
 describe('countLandmasses', () => {
   it('counts 4-connected components above minCells', () => {
     const w = 8;

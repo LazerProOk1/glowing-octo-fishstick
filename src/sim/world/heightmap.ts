@@ -50,12 +50,14 @@ export function generateHeight(rng: Rng, w: number, h: number): Float32Array {
   const warpY = createNoise2D(rng.fork('warpY'));
   const shape = createNoise2D(rng.fork('shape'));
   const detail = createNoise2D(rng.fork('detail'));
+  const ridgeN = createNoise2D(rng.fork('ridge'));
 
   // Expensive noise is evaluated on a half-resolution grid and bilinearly upsampled.
   const STEP = 2;
   const cw = Math.ceil(w / STEP) + 1;
   const ch = Math.ceil(h / STEP) + 1;
   const coarse = new Float32Array(cw * ch);
+  const coarseE = new Float32Array(cw * ch); // land elevation (ridges), ranked later
   for (let cy = 0; cy < ch; cy++) {
     const v = (cy * STEP) / h;
     for (let cx = 0; cx < cw; cx++) {
@@ -77,10 +79,26 @@ export function generateHeight(rng: Rng, w: number, h: number): Float32Array {
       const relief = fbm(shape, u * 8, v * 4, 6);
       const fine = fbm(detail, u * 24 + 50, v * 12 + 50, 3);
       coarse[cy * cw + cx] = base + relief * 0.3 + fine * 0.06;
+      // Mountain chains: ridged noise, only inland; domes only shape the land mask.
+      let ridge = 0;
+      let amp = 1;
+      let freq = 1;
+      let norm = 0;
+      for (let o = 0; o < 4; o++) {
+        const n = 1 - Math.abs(ridgeN(u * 5 * freq + 31.7, v * 2.5 * freq + 5.3));
+        ridge += n * n * amp;
+        norm += amp;
+        amp *= 0.5;
+        freq *= 2;
+      }
+      ridge /= norm;
+      const inland = smooth(base / 0.7);
+      coarseE[cy * cw + cx] = ridge * inland * 0.8 + base * 0.2 + relief * 0.1 + fine * 0.04;
     }
   }
 
   const field = new Float32Array(w * h);
+  const elev = new Float32Array(w * h);
   let lo = Infinity;
   let hi = -Infinity;
   const edgeBand = 0.09; // fraction of height where the field fades to deep water
@@ -100,6 +118,9 @@ export function generateHeight(rng: Rng, w: number, h: number): Float32Array {
       const m = smooth(ed / edgeBand);
       f = f * m - (1 - m) * 0.5;
       field[y * w + x] = f;
+      const te = (coarseE[i] ?? 0) * (1 - tx) + (coarseE[i + 1] ?? 0) * tx;
+      const be = (coarseE[i + cw] ?? 0) * (1 - tx) + (coarseE[i + cw + 1] ?? 0) * tx;
+      elev[y * w + x] = te * (1 - ty) + be * ty;
       if (f < lo) lo = f;
       if (f > hi) hi = f;
     }
@@ -124,13 +145,47 @@ export function generateHeight(rng: Rng, w: number, h: number): Float32Array {
   }
   const thr = lo + (tBin / BINS) * span;
 
-  // Piecewise-linear remap: [lo,thr] -> [0,SEA_LEVEL], [thr,hi] -> [SEA_LEVEL,1].
+  // Water: [lo,thr] -> [0,SEA_LEVEL] linearly. Land: rank by elevation, then shape the
+  // quantile curve so lowlands form a gradient, hills ~12% and mountains ~3% of land.
   const out = new Float32Array(w * h);
   const loSpan = thr - lo || 1;
-  const hiSpan = hi - thr || 1;
+  let eLo = Infinity;
+  let eHi = -Infinity;
+  let landCount = 0;
+  for (let i = 0; i < field.length; i++) {
+    if ((field[i] ?? 0) <= thr) continue;
+    landCount++;
+    const e = elev[i] ?? 0;
+    if (e < eLo) eLo = e;
+    if (e > eHi) eHi = e;
+  }
+  const eSpan = eHi - eLo || 1;
+  const eHist = new Uint32Array(BINS);
+  for (let i = 0; i < field.length; i++) {
+    if ((field[i] ?? 0) <= thr) continue;
+    const b = Math.min(BINS - 1, Math.floor((((elev[i] ?? 0) - eLo) / eSpan) * BINS));
+    eHist[b] = (eHist[b] ?? 0) + 1;
+  }
+  const cdf = new Float64Array(BINS + 1); // cells strictly below bin b
+  for (let b = 0; b < BINS; b++) cdf[b + 1] = (cdf[b] ?? 0) + (eHist[b] ?? 0);
+  const total = landCount || 1;
+  const shape01 = (q: number): number => {
+    if (q < 0.85) return 0.5 + 0.22 * (q / 0.85);
+    if (q < 0.97) return 0.72 + 0.13 * ((q - 0.85) / 0.12);
+    return 0.85 + 0.15 * ((q - 0.97) / 0.03);
+  };
   for (let i = 0; i < field.length; i++) {
     const f = field[i] ?? 0;
-    const r = f <= thr ? ((f - lo) / loSpan) * SEA_LEVEL : SEA_LEVEL + ((f - thr) / hiSpan) * (1 - SEA_LEVEL);
+    let r: number;
+    if (f <= thr) {
+      r = ((f - lo) / loSpan) * SEA_LEVEL;
+    } else {
+      const pos = (((elev[i] ?? 0) - eLo) / eSpan) * BINS;
+      const b = Math.min(BINS - 1, Math.floor(pos));
+      const frac = Math.min(1, pos - b);
+      const q = ((cdf[b] ?? 0) + (eHist[b] ?? 0) * frac) / total;
+      r = Math.max(shape01(q), SEA_LEVEL + 1e-6);
+    }
     out[i] = r < 0 ? 0 : r > 1 ? 1 : r;
   }
   return out;
