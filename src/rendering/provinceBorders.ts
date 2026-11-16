@@ -7,19 +7,12 @@ export interface CurvePoint {
   readonly y: number;
 }
 
-export type CurveSegment =
-  | { readonly kind: 'line'; readonly to: CurvePoint }
-  | {
-      readonly kind: 'cubic';
-      readonly control1: CurvePoint;
-      readonly control2: CurvePoint;
-      readonly to: CurvePoint;
-    };
-
-/** A continuous run of boundary, already smoothed into line/bezier segments. */
-export interface BoundaryCurve {
-  readonly start: CurvePoint;
-  readonly segments: readonly CurveSegment[];
+/**
+ * Raw boundary polyline in tile coordinates. Smoothing happens in the renderer:
+ * a midpoint quadratic curve through these vertices has no corners at all.
+ */
+export interface BoundaryPolyline {
+  readonly points: readonly CurvePoint[];
   readonly closed: boolean;
 }
 
@@ -39,16 +32,13 @@ interface Chain {
 }
 
 /** Douglas-Peucker tolerance in tiles: collapses the tile staircase into runs */
-const SIMPLIFY_TOLERANCE = 1.1;
+const SIMPLIFY_TOLERANCE = 1;
 /** Deterministic vertex jitter in tiles: breaks the square grid of the lattice */
-const VERTEX_JITTER = 0.36;
+const VERTEX_JITTER = 0.3;
 
 /** The coastline is clipped geometry, so it follows the bake more closely */
 const COAST_SIMPLIFY_TOLERANCE = 0.4;
-const COAST_JITTER = 0.12;
-
-/** Centripetal Catmull-Rom: no cusps and no loops on sharp turns */
-const SPLINE_ALPHA = 0.5;
+const COAST_JITTER = 0.08;
 
 const JITTER_SEED_X = 1297;
 const JITTER_SEED_Y = 2699;
@@ -139,85 +129,13 @@ function jitterPoint(point: LatticePoint, seed: number, amplitude: number): Curv
   };
 }
 
-function prepare(points: readonly LatticePoint[], seed: number, tolerance: number, amplitude: number): CurvePoint[] {
+function prepare(
+  points: readonly LatticePoint[],
+  seed: number,
+  tolerance: number,
+  amplitude: number,
+): CurvePoint[] {
   return simplify(points, tolerance).map((point) => jitterPoint(point, seed, amplitude));
-}
-
-/**
- * Catmull-Rom tangents with centripetal parameterisation (Barry-Goldman),
- * converted to cubic Bezier control points.
- */
-function splineControls(
-  p0: CurvePoint,
-  p1: CurvePoint,
-  p2: CurvePoint,
-  p3: CurvePoint,
-): readonly [CurvePoint, CurvePoint] {
-  const d1 = Math.pow(Math.max(distance(p0, p1), 1e-6), SPLINE_ALPHA);
-  const d2 = Math.pow(Math.max(distance(p1, p2), 1e-6), SPLINE_ALPHA);
-  const d3 = Math.pow(Math.max(distance(p2, p3), 1e-6), SPLINE_ALPHA);
-
-  const t0 = 0;
-  const t1 = t0 + d1;
-  const t2 = t1 + d2;
-  const t3 = t2 + d3;
-
-  const tangent1 = {
-    x:
-      (t2 - t1) *
-      ((p1.x - p0.x) / (t1 - t0) - (p2.x - p0.x) / (t2 - t0) + (p2.x - p1.x) / (t2 - t1)),
-    y:
-      (t2 - t1) *
-      ((p1.y - p0.y) / (t1 - t0) - (p2.y - p0.y) / (t2 - t0) + (p2.y - p1.y) / (t2 - t1)),
-  };
-  const tangent2 = {
-    x:
-      (t2 - t1) *
-      ((p2.x - p1.x) / (t2 - t1) - (p3.x - p1.x) / (t3 - t1) + (p3.x - p2.x) / (t3 - t2)),
-    y:
-      (t2 - t1) *
-      ((p2.y - p1.y) / (t2 - t1) - (p3.y - p1.y) / (t3 - t1) + (p3.y - p2.y) / (t3 - t2)),
-  };
-
-  return [
-    { x: p1.x + tangent1.x / 3, y: p1.y + tangent1.y / 3 },
-    { x: p2.x - tangent2.x / 3, y: p2.y - tangent2.y / 3 },
-  ];
-}
-
-function buildCurve(points: readonly CurvePoint[], closed: boolean): BoundaryCurve | null {
-  const count = points.length;
-  if (count < 2) {
-    return null;
-  }
-
-  const start = points[0];
-  if (start === undefined) {
-    return null;
-  }
-
-  const at = (index: number): CurvePoint => {
-    if (closed) {
-      const wrapped = ((index % count) + count) % count;
-      return points[wrapped] ?? start;
-    }
-    return points[Math.min(Math.max(index, 0), count - 1)] ?? start;
-  };
-
-  const segments: CurveSegment[] = [];
-  const lastIndex = closed ? count - 1 : count - 2;
-
-  for (let index = 0; index <= lastIndex; index += 1) {
-    const [control1, control2] = splineControls(
-      at(index - 1),
-      at(index),
-      at(index + 1),
-      at(index + 2),
-    );
-    segments.push({ kind: 'cubic', control1, control2, to: at(index + 1) });
-  }
-
-  return { start, segments, closed };
 }
 
 function latticeKey(x: number, y: number, latticeWidth: number): number {
@@ -254,11 +172,20 @@ function linkChains(edges: readonly BorderEdge[], latticeWidth: number): Chain[]
 
   const chains: Chain[] = [];
 
-  const extend = (startEdge: number, startNode: number): Chain => {
-    used[startEdge] = 1;
-    const nodes: number[] = [startNode];
-    let current = startNode;
-    let edgeIndex = startEdge;
+  for (let startIndex = 0; startIndex < edges.length; startIndex += 1) {
+    if (used[startIndex] === 1) {
+      continue;
+    }
+    const startEdge = edges[startIndex];
+    if (startEdge === undefined) {
+      continue;
+    }
+
+    used[startIndex] = 1;
+    const nodes: number[] = [startEdge.from];
+    let current = startEdge.from;
+    let edgeIndex = startIndex;
+    let closed = false;
 
     for (;;) {
       const edge = edges[edgeIndex];
@@ -268,7 +195,8 @@ function linkChains(edges: readonly BorderEdge[], latticeWidth: number): Chain[]
       const next = edge.from === current ? edge.to : edge.from;
       if (next === nodes[0]) {
         nodes.push(next);
-        return { points: nodes.map((key) => latticePoint(key, latticeWidth)), closed: true };
+        closed = true;
+        break;
       }
       nodes.push(next);
 
@@ -288,28 +216,17 @@ function linkChains(edges: readonly BorderEdge[], latticeWidth: number): Chain[]
       edgeIndex = nextEdgeIndex;
     }
 
-    return { points: nodes.map((key) => latticePoint(key, latticeWidth)), closed: false };
-  };
-
-  for (let index = 0; index < edges.length; index += 1) {
-    if (used[index] === 1) {
-      continue;
-    }
-    const edge = edges[index];
-    if (edge === undefined) {
-      continue;
-    }
-    chains.push(extend(index, edge.from));
+    chains.push({ points: nodes.map((key) => latticePoint(key, latticeWidth)), closed });
   }
 
   return chains;
 }
 
 /**
- * Splits an interior border graph into elementary chains: a chain starts and ends
- * at a junction (three or more provinces) and never passes through one, so the
- * province on the other side of a chain is constant. Versions of the same chain
- * therefore produce identical geometry for the stroke and for the fill.
+ * Splits the interior border graph into elementary chains: a chain starts and
+ * ends at a junction (three or more provinces) or where the boundary meets the
+ * coast, so the province on the other side of a chain is constant. The fill and
+ * the stroke therefore share exactly the same polyline.
  */
 function splitBorderChains(
   edges: readonly BorderEdge[],
@@ -338,16 +255,12 @@ function splitBorderChains(
     }
   });
 
-  // A chain has to stop wherever the province boundary may turn onto the coast,
-  // otherwise a province would traverse only part of the chain and the highlight
-  // polygon would no longer match the stroked line.
   const isJunction = (node: number): boolean => {
     if ((adjacency.get(node)?.length ?? 0) !== 2) {
       return true;
     }
     return isCoastNode(node % latticeWidth, Math.floor(node / latticeWidth));
   };
-  const chains: Chain[] = [];
 
   const walk = (startEdge: number, startNode: number): Chain => {
     used[startEdge] = 1;
@@ -371,9 +284,8 @@ function splitBorderChains(
         break;
       }
 
-      const candidates = adjacency.get(next) ?? [];
       let nextEdgeIndex = -1;
-      for (const candidate of candidates) {
+      for (const candidate of adjacency.get(next) ?? []) {
         if (used[candidate] === 1) {
           continue;
         }
@@ -391,15 +303,14 @@ function splitBorderChains(
     return { points: nodes.map((key) => latticePoint(key, latticeWidth)), closed: false };
   };
 
+  const chains: Chain[] = [];
+
   for (const edgeIndex of edges.keys()) {
     if (used[edgeIndex] === 1) {
       continue;
     }
     const edge = edges[edgeIndex];
-    if (edge === undefined) {
-      continue;
-    }
-    if (!isJunction(edge.from)) {
+    if (edge === undefined || !isJunction(edge.from)) {
       continue;
     }
     chains.push(walk(edgeIndex, edge.from));
@@ -428,8 +339,8 @@ function unorderedEdgeKey(a: LatticePoint, b: LatticePoint, latticeWidth: number
 
 interface BorderGraph {
   readonly chains: readonly Chain[];
-  /** Canonical edge key -> chain that contains it and its direction */
-  readonly edgeChains: Map<string, { readonly chain: number; readonly forward: boolean }>;
+  /** Canonical edge key -> chain that contains it */
+  readonly edgeChains: Map<string, { readonly chain: number }>;
 }
 
 /** Interior political borders: land province against a different land province. */
@@ -487,7 +398,7 @@ function buildBorderGraph(world: World): BorderGraph {
   };
 
   const chains = splitBorderChains(edges, latticeWidth, isCoastNode);
-  const edgeChains = new Map<string, { chain: number; forward: boolean }>();
+  const edgeChains = new Map<string, { chain: number }>();
 
   chains.forEach((chain, chainIndex) => {
     for (let index = 0; index < chain.points.length - 1; index += 1) {
@@ -496,10 +407,7 @@ function buildBorderGraph(world: World): BorderGraph {
       if (first === undefined || second === undefined) {
         continue;
       }
-      edgeChains.set(unorderedEdgeKey(first, second, latticeWidth), {
-        chain: chainIndex,
-        forward: true,
-      });
+      edgeChains.set(unorderedEdgeKey(first, second, latticeWidth), { chain: chainIndex });
     }
   });
 
@@ -507,27 +415,26 @@ function buildBorderGraph(world: World): BorderGraph {
 }
 
 /** Smoothed political borders, ready to be stroked. */
-export function buildProvinceBorders(world: World): BoundaryCurve[] {
+export function buildProvinceBorders(world: World): BoundaryPolyline[] {
   const { chains } = buildBorderGraph(world);
-  const curves: BoundaryCurve[] = [];
+  const polylines: BoundaryPolyline[] = [];
 
   for (const chain of chains) {
     const points = prepare(chain.points, world.seed, SIMPLIFY_TOLERANCE, VERTEX_JITTER);
-    const curve = buildCurve(points, chain.closed);
-    if (curve !== null) {
-      curves.push(curve);
+    if (points.length >= 2) {
+      polylines.push({ points, closed: chain.closed });
     }
   }
 
-  return curves;
+  return polylines;
 }
 
 /**
  * Closed boundary of one province. Shared borders reuse the prepared points of
  * the border chains, so the highlight polygon and the stroked line are the very
- * same curve; only the coastline is generated separately.
+ * same polyline; only the coastline is generated separately.
  */
-export function buildProvinceOutline(world: World, provinceId: number): BoundaryCurve[] {
+export function buildProvinceOutline(world: World, provinceId: number): BoundaryPolyline[] {
   const { width, height, tiles } = world;
   const latticeWidth = width + 1;
   const { chains, edgeChains } = buildBorderGraph(world);
@@ -571,7 +478,7 @@ export function buildProvinceOutline(world: World, provinceId: number): Boundary
   }
 
   const loops = linkChains(edges, latticeWidth);
-  const curves: BoundaryCurve[] = [];
+  const polylines: BoundaryPolyline[] = [];
   const preparedChains = new Map<number, CurvePoint[]>();
 
   const preparedChain = (chainIndex: number): CurvePoint[] => {
@@ -658,20 +565,19 @@ export function buildProvinceOutline(world: World, provinceId: number): Boundary
       }
     }
 
-    const curve = buildCurve(prepared, true);
-    if (curve !== null) {
-      curves.push(curve);
+    if (prepared.length >= 3) {
+      polylines.push({ points: prepared, closed: true });
     }
   }
 
-  return curves;
+  return polylines;
 }
 
 /**
  * Land silhouette from the elevation field by marching squares, so the clip
  * follows the interpolated coastline of the bake instead of the tile blocks.
  */
-export function buildLandOutline(world: World): BoundaryCurve[] {
+export function buildLandOutline(world: World): BoundaryPolyline[] {
   const { width, height, elevationMap } = world;
   const latticeWidth = width + 1;
   const segments: Array<readonly [number, number]> = [];
@@ -692,9 +598,7 @@ export function buildLandOutline(world: World): BoundaryCurve[] {
     if (first === second) {
       return null;
     }
-    const above1 = first > SEA_LEVEL;
-    const above2 = second > SEA_LEVEL;
-    if (above1 === above2) {
+    if (first > SEA_LEVEL === second > SEA_LEVEL) {
       return null;
     }
     return (SEA_LEVEL - first) / (second - first);
@@ -813,7 +717,6 @@ export function buildLandOutline(world: World): BoundaryCurve[] {
     used[startIndex] = 1;
     const nodes: number[] = [start[0], start[1]];
     let current = start[1];
-    let closed = false;
 
     for (let step = 0; step < segments.length; step += 1) {
       let nextEdge = -1;
@@ -835,7 +738,6 @@ export function buildLandOutline(world: World): BoundaryCurve[] {
       const next = edge[0] === current ? edge[1] : edge[0];
       current = next;
       if (current === nodes[0]) {
-        closed = true;
         break;
       }
       nodes.push(current);
@@ -844,33 +746,25 @@ export function buildLandOutline(world: World): BoundaryCurve[] {
     if (nodes.length > 2) {
       loops.push(nodes);
     }
-    if (closed) {
-      continue;
-    }
   }
 
-  const curves: BoundaryCurve[] = [];
+  const polylines: BoundaryPolyline[] = [];
 
   for (const loop of loops) {
-    const raw: CurvePoint[] = loop
+    const raw: LatticePoint[] = loop
       .map((key) => points.get(key))
-      .filter((point): point is CurvePoint => point !== undefined);
+      .filter((point): point is CurvePoint => point !== undefined)
+      .map((point) => ({ x: point.x, y: point.y }));
 
     if (raw.length < 3) {
       continue;
     }
 
-    const prepared = prepare(
-      raw.map((point) => ({ x: point.x, y: point.y })),
-      world.seed,
-      COAST_SIMPLIFY_TOLERANCE,
-      COAST_JITTER,
-    );
-    const curve = buildCurve(prepared, true);
-    if (curve !== null) {
-      curves.push(curve);
+    const prepared = prepare(raw, world.seed, COAST_SIMPLIFY_TOLERANCE, COAST_JITTER);
+    if (prepared.length >= 3) {
+      polylines.push({ points: prepared, closed: true });
     }
   }
 
-  return curves;
+  return polylines;
 }

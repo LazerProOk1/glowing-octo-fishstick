@@ -11,7 +11,7 @@ export interface ProvinceOptions {
   readonly seed: number;
   /** How many provinces to grow: small HoI4-style cells need several hundred */
   readonly targetCount: number;
-  /** Highest Chebyshev distance between seeds, relaxed until targetCount is met */
+  /** Highest Chebyshev distance between seeds */
   readonly minSeedSpacing: number;
 }
 
@@ -23,11 +23,15 @@ const WATER_COST = 0;
 
 const DIAGONAL_COST = 1.4142;
 
-/** Jagged borders come from noise on top of the terrain cost */
-const COST_NOISE_AMPLITUDE = 1.5;
+/** Slight noise on the step cost keeps the cells from being perfect hexagons */
+const COST_NOISE_AMPLITUDE = 1;
 const COST_NOISE_FREQUENCY = 0.17;
 const MIN_STEP_COST = 0.25;
 const MAX_COST = 40;
+
+/** Lloyd relaxation passes: seeds move to the centroid of their own territory */
+const RELAXATION_ITERATIONS = 3;
+const RELAXATION_SEARCH_RADIUS = 8;
 
 const BIOME_COST: Record<Biome, number> = {
   ocean: WATER_COST,
@@ -202,46 +206,21 @@ function pickSeeds(options: ProvinceOptions): TileCoord[] {
 }
 
 /**
- * Grows provinces with a multi-source Dijkstra restricted to land. Water tiles
- * are never claimed, so the coastline itself is the province border; high
- * frequency noise on the step cost keeps the inland borders ragged instead of
- * straight squares.
+ * Multi-source Dijkstra over land only: water is never claimed, so the coastline
+ * itself is the province border.
  */
-export function generateProvinces(options: ProvinceOptions): Province[] {
-  const { tiles, width, height, seed } = options;
+function assignProvinces(
+  seeds: readonly TileCoord[],
+  costCache: Float32Array,
+  land: Uint8Array,
+  width: number,
+  height: number,
+): Int32Array {
   const size = width * height;
-  const seeds = pickSeeds(options);
-
-  if (seeds.length === 0) {
-    return [];
-  }
-
-  const noise = createNoise2D(seed * 31 + 6151);
   const provinceByIndex = new Int32Array(size);
   provinceByIndex.fill(-1);
   const bestCost = new Float64Array(size);
   bestCost.fill(Number.POSITIVE_INFINITY);
-
-  const costCache = new Float32Array(size);
-  const land = new Uint8Array(size);
-
-  for (let y = 0; y < height; y += 1) {
-    const row = tiles[y];
-    if (row === undefined) {
-      continue;
-    }
-    for (let x = 0; x < width; x += 1) {
-      const tile = row[x];
-      if (tile === undefined) {
-        continue;
-      }
-      const index = y * width + x;
-      const terrain = terrainCost(tile);
-      const noiseCost = noise(x * COST_NOISE_FREQUENCY, y * COST_NOISE_FREQUENCY) * COST_NOISE_AMPLITUDE;
-      costCache[index] = Math.min(MAX_COST, Math.max(MIN_STEP_COST, terrain + noiseCost));
-      land[index] = isLandTile(tile) ? 1 : 0;
-    }
-  }
 
   const queue = new CostQueue();
 
@@ -299,6 +278,132 @@ export function generateProvinces(options: ProvinceOptions): Province[] {
     }
   }
 
+  return provinceByIndex;
+}
+
+/** Nearest land tile that is not already a seed, searched ring by ring. */
+function nearestFreeLand(
+  centreX: number,
+  centreY: number,
+  land: Uint8Array,
+  occupied: Uint8Array,
+  width: number,
+  height: number,
+): TileCoord | null {
+  for (let radius = 0; radius <= RELAXATION_SEARCH_RADIUS; radius += 1) {
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) {
+          continue;
+        }
+        const x = centreX + dx;
+        const y = centreY + dy;
+        if (x < 0 || y < 0 || x >= width || y >= height) {
+          continue;
+        }
+        const index = y * width + x;
+        if (land[index] !== 1 || occupied[index] === 1) {
+          continue;
+        }
+        return { x, y };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Lloyd relaxation: every seed moves to the centroid of the territory it owns.
+ * A few passes turn a random scatter into an even honeycomb of provinces.
+ */
+function relaxSeeds(
+  seeds: readonly TileCoord[],
+  assignment: Int32Array,
+  land: Uint8Array,
+  width: number,
+  height: number,
+): TileCoord[] {
+  const sumX = new Float64Array(seeds.length);
+  const sumY = new Float64Array(seeds.length);
+  const counts = new Int32Array(seeds.length);
+
+  for (let index = 0; index < assignment.length; index += 1) {
+    const provinceId = assignment[index] ?? -1;
+    if (provinceId < 0) {
+      continue;
+    }
+    sumX[provinceId] = (sumX[provinceId] ?? 0) + (index % width);
+    sumY[provinceId] = (sumY[provinceId] ?? 0) + Math.floor(index / width);
+    counts[provinceId] = (counts[provinceId] ?? 0) + 1;
+  }
+
+  const occupied = new Uint8Array(land.length);
+
+  return seeds.map((seed, provinceId) => {
+    const count = counts[provinceId] ?? 0;
+    if (count === 0) {
+      const index = seed.y * width + seed.x;
+      occupied[index] = 1;
+      return seed;
+    }
+    const centreX = Math.round((sumX[provinceId] ?? 0) / count);
+    const centreY = Math.round((sumY[provinceId] ?? 0) / count);
+    const snapped = nearestFreeLand(centreX, centreY, land, occupied, width, height);
+    if (snapped === null) {
+      const index = seed.y * width + seed.x;
+      occupied[index] = 1;
+      return seed;
+    }
+    occupied[snapped.y * width + snapped.x] = 1;
+    return snapped;
+  });
+}
+
+/**
+ * Grows provinces with a multi-source Dijkstra restricted to land, relaxing the
+ * seeds between passes. High frequency noise on the step cost keeps the inland
+ * borders ragged instead of geometrically perfect.
+ */
+export function generateProvinces(options: ProvinceOptions): Province[] {
+  const { tiles, width, height, seed } = options;
+  const size = width * height;
+  const initialSeeds = pickSeeds(options);
+
+  if (initialSeeds.length === 0) {
+    return [];
+  }
+
+  const noise = createNoise2D(seed * 31 + 6151);
+  const costCache = new Float32Array(size);
+  const land = new Uint8Array(size);
+
+  for (let y = 0; y < height; y += 1) {
+    const row = tiles[y];
+    if (row === undefined) {
+      continue;
+    }
+    for (let x = 0; x < width; x += 1) {
+      const tile = row[x];
+      if (tile === undefined) {
+        continue;
+      }
+      const index = y * width + x;
+      const terrain = terrainCost(tile);
+      const noiseCost =
+        noise(x * COST_NOISE_FREQUENCY, y * COST_NOISE_FREQUENCY) * COST_NOISE_AMPLITUDE;
+      costCache[index] = Math.min(MAX_COST, Math.max(MIN_STEP_COST, terrain + noiseCost));
+      land[index] = isLandTile(tile) ? 1 : 0;
+    }
+  }
+
+  let seeds = initialSeeds;
+  let assignment = assignProvinces(seeds, costCache, land, width, height);
+
+  for (let iteration = 0; iteration < RELAXATION_ITERATIONS; iteration += 1) {
+    seeds = relaxSeeds(seeds, assignment, land, width, height);
+    assignment = assignProvinces(seeds, costCache, land, width, height);
+  }
+
   const biomeCounts = seeds.map(() => new Map<Biome, number>());
   const tileCounts = seeds.map(() => 0);
 
@@ -312,7 +417,8 @@ export function generateProvinces(options: ProvinceOptions): Province[] {
       if (tile === undefined) {
         continue;
       }
-      const provinceId = land[y * width + x] === 1 ? (provinceByIndex[y * width + x] ?? -1) : -1;
+      const index = y * width + x;
+      const provinceId = land[index] === 1 ? (assignment[index] ?? -1) : -1;
       tile.provinceId = provinceId;
       if (provinceId < 0) {
         continue;

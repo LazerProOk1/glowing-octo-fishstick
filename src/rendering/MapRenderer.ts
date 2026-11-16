@@ -6,8 +6,9 @@ import {
   buildLandOutline,
   buildProvinceBorders,
   buildProvinceOutline,
-  type BoundaryCurve,
+  type BoundaryPolyline,
 } from './provinceBorders';
+import { buildRiverPolylines } from './riverPaths';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 12;
@@ -20,6 +21,7 @@ const CLICK_TOLERANCE = 4;
 const BORDER_SCREEN_WIDTH = 0.8;
 const BORDER_COLOR = 'rgba(0, 0, 0, 0.35)';
 const HIGHLIGHT_COLOR = 'rgba(255, 255, 255, 0.2)';
+const RIVER_COLOR = '#5FA8D3';
 
 export interface MapRendererOptions {
   readonly onProvinceSelect?: (provinceId: number | null) => void;
@@ -37,6 +39,7 @@ export class MapRenderer {
   private landPath: Path2D | null = null;
   private highlightPath: Path2D | null = null;
   private readonly provincePaths = new Map<number, Path2D>();
+  private riverPaths: ReadonlyArray<{ readonly path: Path2D; readonly width: number }> = [];
   private viewport: Viewport = { offsetX: 0, offsetY: 0, zoom: 1 };
   private cssWidth = 0;
   private cssHeight = 0;
@@ -92,6 +95,7 @@ export class MapRenderer {
 
     this.borderPath = this.buildBorderPath(world);
     this.landPath = this.buildLandClipPath(world);
+    this.riverPaths = this.buildRiverPaths(world);
     this.provincePaths.clear();
     this.highlightPath = null;
 
@@ -129,36 +133,71 @@ export class MapRenderer {
     return this.world === null ? 0 : this.world.height * PIXELS_PER_TILE;
   }
 
-  /** Appends smoothed splines to a path, scaled from tiles to baked pixels. */
-  private appendCurves(path: Path2D, curves: readonly BoundaryCurve[]): void {
+  /**
+   * Appends a boundary as a midpoint quadratic curve: every vertex becomes a
+   * control point and the curve runs through the midpoints of the edges, which
+   * removes all corners without any spline maths.
+   */
+  private appendPolyline(path: Path2D, polyline: BoundaryPolyline): void {
     const scale = PIXELS_PER_TILE;
-
-    for (const curve of curves) {
-      path.moveTo(curve.start.x * scale, curve.start.y * scale);
-      for (const segment of curve.segments) {
-        if (segment.kind === 'line') {
-          path.lineTo(segment.to.x * scale, segment.to.y * scale);
-        } else {
-          path.bezierCurveTo(
-            segment.control1.x * scale,
-            segment.control1.y * scale,
-            segment.control2.x * scale,
-            segment.control2.y * scale,
-            segment.to.x * scale,
-            segment.to.y * scale,
-          );
-        }
-      }
-      if (curve.closed) {
-        path.closePath();
-      }
+    const points = polyline.points;
+    const count = points.length;
+    if (count === 0) {
+      return;
     }
+
+    const first = points[0];
+    if (first === undefined) {
+      return;
+    }
+    if (count === 1) {
+      path.moveTo(first.x * scale, first.y * scale);
+      return;
+    }
+
+    if (polyline.closed) {
+      const last = points[count - 1] ?? first;
+      path.moveTo(((first.x + last.x) / 2) * scale, ((first.y + last.y) / 2) * scale);
+      for (let index = 0; index < count; index += 1) {
+        const point = points[index];
+        const next = points[(index + 1) % count];
+        if (point === undefined || next === undefined) {
+          continue;
+        }
+        path.quadraticCurveTo(
+          point.x * scale,
+          point.y * scale,
+          ((point.x + next.x) / 2) * scale,
+          ((point.y + next.y) / 2) * scale,
+        );
+      }
+      path.closePath();
+      return;
+    }
+
+    path.moveTo(first.x * scale, first.y * scale);
+    for (let index = 0; index < count - 1; index += 1) {
+      const point = points[index];
+      const next = points[index + 1];
+      if (point === undefined || next === undefined) {
+        continue;
+      }
+      path.quadraticCurveTo(
+        point.x * scale,
+        point.y * scale,
+        ((point.x + next.x) / 2) * scale,
+        ((point.y + next.y) / 2) * scale,
+      );
+    }
+    const last = points[count - 1] ?? first;
+    path.lineTo(last.x * scale, last.y * scale);
   }
 
-  /** Smooth political borders: vertex jitter plus centripetal Catmull-Rom. */
   private buildBorderPath(world: World): Path2D {
     const path = new Path2D();
-    this.appendCurves(path, buildProvinceBorders(world));
+    for (const polyline of buildProvinceBorders(world)) {
+      this.appendPolyline(path, polyline);
+    }
     return path;
   }
 
@@ -169,11 +208,26 @@ export class MapRenderer {
    */
   private buildLandClipPath(world: World): Path2D {
     const path = new Path2D();
-    this.appendCurves(path, buildLandOutline(world));
+    for (const polyline of buildLandOutline(world)) {
+      this.appendPolyline(path, polyline);
+    }
     return path;
   }
 
-  /** Highlight polygon built from the same smoothed spline as the border. */
+  /** Rivers as smoothed vectors, one path per stroke width. */
+  private buildRiverPaths(world: World): Array<{ path: Path2D; width: number }> {
+    const rivers: Array<{ path: Path2D; width: number }> = [];
+
+    for (const river of buildRiverPolylines(world)) {
+      const path = new Path2D();
+      this.appendPolyline(path, { points: river.points, closed: false });
+      rivers.push({ path, width: river.width });
+    }
+
+    return rivers;
+  }
+
+  /** Highlight polygon built from the same polyline as the border stroke. */
   private buildHighlightPath(provinceId: number): Path2D {
     const cached = this.provincePaths.get(provinceId);
     if (cached !== undefined) {
@@ -183,7 +237,9 @@ export class MapRenderer {
     const world = this.world;
     const path = new Path2D();
     if (world !== null) {
-      this.appendCurves(path, buildProvinceOutline(world, provinceId));
+      for (const polyline of buildProvinceOutline(world, provinceId)) {
+        this.appendPolyline(path, polyline);
+      }
       this.provincePaths.set(provinceId, path);
     }
     return path;
@@ -390,6 +446,16 @@ export class MapRenderer {
       if (this.highlightPath !== null) {
         context.fillStyle = HIGHLIGHT_COLOR;
         context.fill(this.highlightPath);
+      }
+
+      if (this.riverPaths.length > 0) {
+        context.strokeStyle = RIVER_COLOR;
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        for (const river of this.riverPaths) {
+          context.lineWidth = river.width / zoom;
+          context.stroke(river.path);
+        }
       }
 
       if (this.borderPath !== null) {

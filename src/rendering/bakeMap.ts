@@ -6,24 +6,17 @@ import {
   upsampleField,
 } from '@/simulation/hillshade';
 import { SEA_LEVEL } from '@/simulation/mapGenerator';
-import { hash2D } from '@/simulation/noise';
 import type { Surface, World } from '@/types/world';
-import { FOAM_RGB, PAPER_RGB, RIVER_RGB, SURFACE_RGB, highlandColor, type Rgb } from './palette';
+import { FOAM_RGB, PAPER_RGB, SURFACE_RGB, highlandColor, type Rgb } from './palette';
 
-/** Baked pixels per tile: the resolution of the terrain layer, not its granularity */
-export const PIXELS_PER_TILE = 6;
-
-const FINE_TEXTURE = 0.035;
-const COARSE_TEXTURE = 0.02;
-const WATER_TEXTURE = 0.015;
-
-/** High frequency dither that softens biome thresholds at pixel level */
-const MOISTURE_DITHER = 3.5;
-const TEMPERATURE_DITHER = 0.7;
-
-/** Rivers are baked into the terrain: colour blend plus a carved channel shadow */
-const RIVER_BLEND = 0.86;
-const RIVER_SHADE = 0.8;
+/**
+ * Baked pixels per tile. The layer is drawn 1:1 at the fit zoom, so a higher
+ * value means a sharper map; biome fills are flat, therefore no dithering or
+ * per-pixel texture is added anywhere.
+ */
+export const PIXELS_PER_TILE = 10;
+const MIN_PIXELS_PER_TILE = 4;
+const MAX_PIXELS_PER_TILE = 16;
 
 const LAND_PAPER_MIX = 0.06;
 const WATER_PAPER_MIX = 0.03;
@@ -32,13 +25,13 @@ const FOAM_DEPTH = 0.8;
 const FOAM_MIX = 0.42;
 
 const SHORE_DEPTH = 0.9;
-const SHORE_DARKEN = 0.84;
+const SHORE_DARKEN = 0.86;
 
 const CONTOUR_STEP = 5;
-const CONTOUR_WIDTH = 0.32;
-const CONTOUR_DARKEN = 0.87;
+const CONTOUR_WIDTH = 0.22;
+const CONTOUR_DARKEN = 0.93;
 const INDEX_CONTOUR_EVERY = 5;
-const INDEX_CONTOUR_DARKEN = 0.8;
+const INDEX_CONTOUR_DARKEN = 0.87;
 
 const SAND_LIMIT = SEA_LEVEL + 3;
 const SNOW_LINE = 94;
@@ -51,6 +44,11 @@ export interface BakedMap {
   readonly height: number;
   /** RGBA, row-major */
   readonly pixels: Uint8ClampedArray;
+}
+
+export interface BakeOptions {
+  /** Baked pixels per tile; defaults to PIXELS_PER_TILE */
+  readonly pixelsPerTile?: number;
 }
 
 /**
@@ -100,97 +98,47 @@ function paperMixed(color: Rgb, mix: number): Rgb {
   ];
 }
 
-/** Rasterises the river network into a pixel mask so rivers sit inside the relief. */
-function rasterizeRivers(world: World, width: number, height: number): Uint8Array {
-  const mask = new Uint8Array(width * height);
-  const centre = PIXELS_PER_TILE / 2;
-
-  const plot = (x: number, y: number): void => {
-    if (x < 0 || y < 0 || x >= width || y >= height) {
-      return;
-    }
-    mask[y * width + x] = 1;
-  };
-
-  for (let tileY = 0; tileY < world.height; tileY += 1) {
-    const row = world.tiles[tileY];
-    if (row === undefined) {
-      continue;
-    }
-    for (let tileX = 0; tileX < world.width; tileX += 1) {
-      if (row[tileX]?.river !== true) {
-        continue;
-      }
-      const downstream = world.flowDownstream[tileY * world.width + tileX] ?? -1;
-      if (downstream < 0) {
-        continue;
-      }
-      const x0 = tileX * PIXELS_PER_TILE + centre;
-      const y0 = tileY * PIXELS_PER_TILE + centre;
-      const x1 = (downstream % world.width) * PIXELS_PER_TILE + centre;
-      const y1 = Math.floor(downstream / world.width) * PIXELS_PER_TILE + centre;
-      const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
-      for (let step = 0; step <= steps; step += 1) {
-        const t = steps === 0 ? 0 : step / steps;
-        plot(Math.round(x0 + (x1 - x0) * t), Math.round(y0 + (y1 - y0) * t));
-      }
-    }
-  }
-
-  return mask;
-}
-
-export function bakeMap(world: World): BakedMap {
-  const width = world.width * PIXELS_PER_TILE;
-  const height = world.height * PIXELS_PER_TILE;
+/**
+ * Flat political-map bake: solid biome fills, a soft bathymetry gradient and
+ * hillshading for relief. No noise, no dithering, no pixel texture — the only
+ * variation comes from the interpolated climate fields and the light.
+ */
+export function bakeMap(world: World, options: BakeOptions = {}): BakedMap {
+  const scale = clamp(
+    Math.round(options.pixelsPerTile ?? PIXELS_PER_TILE),
+    MIN_PIXELS_PER_TILE,
+    MAX_PIXELS_PER_TILE,
+  );
+  const width = world.width * scale;
+  const height = world.height * scale;
   const pixels = new Uint8ClampedArray(width * height * 4);
 
   // Every field is lifted to pixel resolution once, with smoothstep weights, so
   // the same pixel can be classified from continuous values.
-  const heights = upsampleField(world.elevationMap, world.width, world.height, PIXELS_PER_TILE, true);
-  const moisture = upsampleField(world.moistureMap, world.width, world.height, PIXELS_PER_TILE, true);
-  const temperature = upsampleField(
-    world.temperatureMap,
-    world.width,
-    world.height,
-    PIXELS_PER_TILE,
-    true,
-  );
+  const heights = upsampleField(world.elevationMap, world.width, world.height, scale, true);
+  const moisture = upsampleField(world.moistureMap, world.width, world.height, scale, true);
+  const temperature = upsampleField(world.temperatureMap, world.width, world.height, scale, true);
 
   const shadeField = createHillshadeField(world.reliefMap, world.width, world.height, DEFAULT_HILLSHADE);
-  const textureSeed = world.seed * 31 + 977;
-  const riverMask = rasterizeRivers(world, width, height);
-
-  // One coarse grain value per tile instead of per pixel keeps baking cheap.
-  const tileGrain = new Float32Array(world.width * world.height);
-  for (let tileY = 0; tileY < world.height; tileY += 1) {
-    for (let tileX = 0; tileX < world.width; tileX += 1) {
-      tileGrain[tileY * world.width + tileX] = (hash2D(tileX, tileY, textureSeed + 131) - 0.5) * 2;
-    }
-  }
 
   const deep = SURFACE_RGB.deepOcean;
   const shallow = SURFACE_RGB.shallowWater;
+  const half = 0.5 / scale;
 
   for (let y = 0; y < height; y += 1) {
-    const tileY = Math.floor(y / PIXELS_PER_TILE);
-    const sampleY = (y + 0.5) / PIXELS_PER_TILE - 0.5;
+    const sampleY = (y + 0.5) / scale - 0.5;
 
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
-      const tileX = Math.floor(x / PIXELS_PER_TILE);
 
       const elevation = heights.data[index] ?? 0;
       const moistureValue = moisture.data[index] ?? 0;
       const temperatureValue = temperature.data[index] ?? 0;
 
-      const fineNoise = (hash2D(x, y, textureSeed) - 0.5) * 2;
-      const coarseNoise = tileGrain[tileY * world.width + tileX] ?? 0;
-
       let red: number;
       let green: number;
       let blue: number;
-      let factor: number;
+      let factor = 1;
 
       if (elevation < SEA_LEVEL) {
         // Bathymetry: dark open water fading into the light shelf.
@@ -199,7 +147,6 @@ export function bakeMap(world: World): BakedMap {
         red = lerp(lerp(deep[0], shallow[0], depth), PAPER_RGB[0], WATER_PAPER_MIX);
         green = lerp(lerp(deep[1], shallow[1], depth), PAPER_RGB[1], WATER_PAPER_MIX);
         blue = lerp(lerp(deep[2], shallow[2], depth), PAPER_RGB[2], WATER_PAPER_MIX);
-        factor = 1 + fineNoise * WATER_TEXTURE + coarseNoise * WATER_TEXTURE * 0.6;
 
         if (elevation > SEA_LEVEL - FOAM_DEPTH) {
           red = lerp(red, FOAM_RGB[0], FOAM_MIX);
@@ -207,13 +154,7 @@ export function bakeMap(world: World): BakedMap {
           blue = lerp(blue, FOAM_RGB[2], FOAM_MIX);
         }
       } else {
-        // Dithering the climate inputs turns hard thresholds into grainy organic
-        // edges instead of stair steps at zoom.
-        const surface = surfaceAt(
-          elevation,
-          moistureValue + fineNoise * MOISTURE_DITHER,
-          temperatureValue + fineNoise * TEMPERATURE_DITHER,
-        );
+        const surface = surfaceAt(elevation, moistureValue, temperatureValue);
         const base = paperMixed(
           surface === 'hills' || surface === 'mountains' || surface === 'snow'
             ? highlandColor(elevation)
@@ -225,12 +166,12 @@ export function bakeMap(world: World): BakedMap {
         green = base[1];
         blue = base[2];
 
-        factor = 1 + fineNoise * FINE_TEXTURE + coarseNoise * COARSE_TEXTURE;
-        factor *= sampleField(
+        // Relief volume comes from the hillshade only.
+        factor = sampleField(
           shadeField,
           world.width,
           world.height,
-          (x + 0.5) / PIXELS_PER_TILE - 0.5,
+          (x + 0.5) / scale - 0.5 + half,
           sampleY,
         );
 
@@ -244,15 +185,6 @@ export function bakeMap(world: World): BakedMap {
 
         if (elevation < SEA_LEVEL + SHORE_DEPTH) {
           factor *= SHORE_DARKEN;
-        }
-
-        if (riverMask[index] === 1) {
-          // Water colour blended in and the light pulled down: the channel reads
-          // as a groove in the relief rather than a line drawn on top.
-          red = lerp(red, RIVER_RGB[0], RIVER_BLEND);
-          green = lerp(green, RIVER_RGB[1], RIVER_BLEND);
-          blue = lerp(blue, RIVER_RGB[2], RIVER_BLEND);
-          factor *= RIVER_SHADE;
         }
       }
 
