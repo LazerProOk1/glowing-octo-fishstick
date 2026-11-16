@@ -58,3 +58,18 @@ export interface Province {
   /** Land province bordering a sea province. */
   coastal: boolean;
 }
+
+export interface World {
+  seed: string;
+  w: number;
+  h: number;
+  height: Float32Array;
+  temperature: Float32Array;
+  moisture: Float32Array;
+  /** Biome codes, index in BIOMES. */
+  biome: Uint8Array;
+  riverMask: Uint8Array;
+  rivers: RiverPath[];
+  provinceOf: Uint16Array;
+  provinces: Province[];
+}
