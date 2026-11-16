@@ -9,9 +9,14 @@ export interface Camera {
 
 export const MAX_ZOOM = 16;
 
+/** Размер вьюпорта не меньше 1 пикселя (свёрнутое окно даёт 0 или NaN). */
+function safeView(v: number): number {
+  return Number.isFinite(v) ? Math.max(v, 1) : 1;
+}
+
 /** Минимальный зум: вся карта помещается в экран. */
 export function minZoom(viewW: number, viewH: number): number {
-  return Math.min(viewW / WORLD_W, viewH / WORLD_H);
+  return Math.min(safeView(viewW) / WORLD_W, safeView(viewH) / WORLD_H);
 }
 
 export function screenToWorld(
@@ -27,18 +32,24 @@ export function screenToWorld(
   };
 }
 
-/** Ограничивает центр так, чтобы на каждой оси не было больше четверти экрана пустоты. */
+/**
+ * Ограничивает центр так, чтобы на каждой оси не было больше четверти экрана пустоты:
+ * центр в [span/4, size − span/4]. Интервал схлопывается в середину карты только при
+ * span ≥ 2·size, поэтому переход непрерывен.
+ */
 function clampAxis(center: number, span: number, mapSize: number): number {
-  if (span >= mapSize) return mapSize / 2;
+  if (span >= 2 * mapSize) return mapSize / 2;
   const margin = span / 4;
   return Math.min(Math.max(center, margin), mapSize - margin);
 }
 
 export function clampCamera(cam: Camera, viewW: number, viewH: number): Camera {
-  const zoom = Math.min(Math.max(cam.zoom, minZoom(viewW, viewH)), MAX_ZOOM);
+  const vw = safeView(viewW);
+  const vh = safeView(viewH);
+  const zoom = Math.min(Math.max(cam.zoom, minZoom(vw, vh)), MAX_ZOOM);
   return {
-    x: clampAxis(cam.x, viewW / zoom, WORLD_W),
-    y: clampAxis(cam.y, viewH / zoom, WORLD_H),
+    x: clampAxis(cam.x, vw / zoom, WORLD_W),
+    y: clampAxis(cam.y, vh / zoom, WORLD_H),
     zoom,
   };
 }
@@ -52,12 +63,16 @@ export function zoomAt(
   viewW: number,
   viewH: number,
 ): Camera {
-  const zoom = Math.min(Math.max(cam.zoom * factor, minZoom(viewW, viewH)), MAX_ZOOM);
-  const under = screenToWorld(cam, sx, sy, viewW, viewH);
+  const vw = safeView(viewW);
+  const vh = safeView(viewH);
+  // Точка под курсором берётся из уже ограниченной камеры, т.е. той, что видна на экране.
+  const base = clampCamera(cam, vw, vh);
+  const zoom = Math.min(Math.max(base.zoom * factor, minZoom(vw, vh)), MAX_ZOOM);
+  const under = screenToWorld(base, sx, sy, vw, vh);
   const next: Camera = {
-    x: under.x - (sx - viewW / 2) / zoom,
-    y: under.y - (sy - viewH / 2) / zoom,
+    x: under.x - (sx - vw / 2) / zoom,
+    y: under.y - (sy - vh / 2) / zoom,
     zoom,
   };
-  return clampCamera(next, viewW, viewH);
+  return clampCamera(next, vw, vh);
 }
