@@ -1,5 +1,6 @@
 import { SEA_LEVEL } from './types';
 import type { RiverPath } from './types';
+import { MinHeap } from './minHeap';
 
 const DX = [1, 1, 0, -1, -1, -1, 0, 1];
 const DY = [0, 1, 1, 1, 0, -1, -1, -1];
@@ -15,56 +16,6 @@ interface Flow {
   acc: Float32Array;
   /** Height after priority-flood depression filling (with epsilon slope). */
   filled: Float32Array;
-}
-
-/** Binary min-heap on (key, index); ties broken by index for determinism. */
-class MinHeap {
-  private keys: Float64Array;
-  private ids: Int32Array;
-  size = 0;
-  constructor(cap: number) {
-    this.keys = new Float64Array(cap);
-    this.ids = new Int32Array(cap);
-  }
-  private less(ka: number, ia: number, kb: number, ib: number): boolean {
-    return ka < kb || (ka === kb && ia < ib);
-  }
-  push(key: number, id: number): void {
-    const { keys, ids } = this;
-    let i = this.size++;
-    while (i > 0) {
-      const p = (i - 1) >> 1;
-      if (!this.less(key, id, keys[p]!, ids[p]!)) break;
-      keys[i] = keys[p]!;
-      ids[i] = ids[p]!;
-      i = p;
-    }
-    keys[i] = key;
-    ids[i] = id;
-  }
-  /** Pops the minimum; returns its id, key available via `lastKey`. */
-  lastKey = 0;
-  pop(): number {
-    const { keys, ids } = this;
-    const topId = ids[0]!;
-    this.lastKey = keys[0]!;
-    const key = keys[--this.size]!;
-    const id = ids[this.size]!;
-    let i = 0;
-    const n = this.size;
-    for (;;) {
-      let c = 2 * i + 1;
-      if (c >= n) break;
-      if (c + 1 < n && this.less(keys[c + 1]!, ids[c + 1]!, keys[c]!, ids[c]!)) c++;
-      if (!this.less(keys[c]!, ids[c]!, key, id)) break;
-      keys[i] = keys[c]!;
-      ids[i] = ids[c]!;
-      i = c;
-    }
-    keys[i] = key;
-    ids[i] = id;
-    return topId;
-  }
 }
 
 /** Priority-flood from all water cells; fills depressions and yields D8 receivers + flow accumulation. */

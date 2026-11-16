@@ -43,3 +43,18 @@ export interface RiverPath {
   /** Width per point, 1..4. */
   width: number[];
 }
+
+export interface Province {
+  /** Equals the index in the provinces array and the value in `provinceOf`. */
+  id: number;
+  isLand: boolean;
+  cellCount: number;
+  /** A cell of the province near its centroid (integer cell coordinates). */
+  center: { x: number; y: number };
+  /** Most frequent biome among the province cells. */
+  biome: Biome;
+  /** Ids of 4-adjacent provinces (land and sea), ascending. */
+  neighbors: number[];
+  /** Land province bordering a sea province. */
+  coastal: boolean;
+}
