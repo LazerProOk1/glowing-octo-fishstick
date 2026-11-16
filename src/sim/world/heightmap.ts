@@ -1,6 +1,6 @@
 import type { Rng } from '../rng';
 import { createNoise2D, fbm } from '../noise';
-import { SEA_LEVEL } from './types';
+import { SEA_LEVEL, MOUNTAIN_LEVEL, HILL_LEVEL } from './types';
 
 const TARGET_LAND = 0.38;
 const BINS = 4096;
@@ -170,9 +170,9 @@ export function generateHeight(rng: Rng, w: number, h: number): Float32Array {
   for (let b = 0; b < BINS; b++) cdf[b + 1] = (cdf[b] ?? 0) + (eHist[b] ?? 0);
   const total = landCount || 1;
   const shape01 = (q: number): number => {
-    if (q < 0.85) return 0.5 + 0.22 * (q / 0.85);
-    if (q < 0.97) return 0.72 + 0.13 * ((q - 0.85) / 0.12);
-    return 0.85 + 0.15 * ((q - 0.97) / 0.03);
+    if (q < 0.85) return SEA_LEVEL + (HILL_LEVEL - SEA_LEVEL) * (q / 0.85);
+    if (q < 0.97) return HILL_LEVEL + (MOUNTAIN_LEVEL - HILL_LEVEL) * ((q - 0.85) / 0.12);
+    return MOUNTAIN_LEVEL + (1 - MOUNTAIN_LEVEL) * ((q - 0.97) / 0.03);
   };
   for (let i = 0; i < field.length; i++) {
     const f = field[i] ?? 0;

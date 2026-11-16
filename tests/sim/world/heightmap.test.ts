@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../../../src/sim/rng';
 import { generateHeight, countLandmasses } from '../../../src/sim/world/heightmap';
-import { SEA_LEVEL, WORLD_W, WORLD_H, BIOMES } from '../../../src/sim/world/types';
+import { SEA_LEVEL, MOUNTAIN_LEVEL, HILL_LEVEL, WORLD_W, WORLD_H, BIOMES } from '../../../src/sim/world/types';
 
 const SEEDS = [...Array.from({ length: 17 }, (_, i) => String(i + 1)), '', 'Бета-7', 'worldbox'];
 
@@ -69,8 +69,8 @@ describe('elevation distribution', () => {
     for (const v of hm) {
       if (v <= SEA_LEVEL) continue;
       land++;
-      if (v > 0.85) mtn++;
-      else if (v > 0.72) hills++;
+      if (v > MOUNTAIN_LEVEL) mtn++;
+      else if (v > HILL_LEVEL) hills++;
       if (v < 0.55) low++;
     }
     expect(mtn / land).toBeGreaterThanOrEqual(0.015);
