@@ -22,14 +22,6 @@ const config: Config = {
           foreground: 'var(--primary-foreground)',
         },
       },
-      spacing: {
-        1: '4px',
-        2: '8px',
-        3: '12px',
-        4: '16px',
-        5: '20px',
-        6: '24px',
-      },
       borderRadius: {
         sm: '4px',
         md: '6px',
