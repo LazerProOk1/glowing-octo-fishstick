@@ -37,3 +37,9 @@ export const BIOMES: readonly Biome[] = [
   'mountains',
   'jungle',
 ];
+
+export interface RiverPath {
+  points: Array<{ x: number; y: number }>;
+  /** Width per point, 1..4. */
+  width: number[];
+}
