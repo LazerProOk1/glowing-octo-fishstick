@@ -89,19 +89,8 @@ export function strayMountainCells(biomes: Uint8Array, provinceOf: Uint16Array, 
   return bad;
 }
 
-/**
- * Longest perfectly straight border run: consecutive border edges on one grid line (0/90 degrees)
- * or the exact 45-degree staircase, in cells. Edges touching a cell near the coast or a major river
- * (within one cell, 8-neighbourhood) are ignored.
- */
-export function longestStraightBorder(
-  height: Float32Array,
-  riverMask: Uint8Array,
-  provinceOf: Uint16Array,
-  w: number,
-  h: number,
-  long?: Array<{ at: number; kind: string }>,
-): { axis: number; diagonal: number; at: number } {
+/** 1 for cells within one cell (8-neighbourhood) of the coast or of a major river cell. */
+export function nearCoastOrRiver(height: Float32Array, riverMask: Uint8Array, w: number, h: number): Uint8Array {
   const n = w * h;
   const land = (i: number): boolean => height[i]! > SEA_LEVEL;
   const major = (i: number): boolean => land(i) && riverMask[i]! >= MAJOR_RIVER;
@@ -122,6 +111,56 @@ export function longestStraightBorder(
       near[i] = bad ? 1 : 0;
     }
   }
+  return near;
+}
+
+/**
+ * Cell-scale border noise: among border cells (a 4-neighbour in another province) away from the
+ * coast and major rivers, the share with at least 3 foreign 4-neighbours (1-cell bumps and notches).
+ */
+export function bumpShare(
+  height: Float32Array,
+  riverMask: Uint8Array,
+  provinceOf: Uint16Array,
+  w: number,
+  h: number,
+): { share: number; bumps: number; border: number } {
+  const near = nearCoastOrRiver(height, riverMask, w, h);
+  let border = 0;
+  let bumps = 0;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      if (near[i]) continue;
+      const p = provinceOf[i];
+      const foreign =
+        (provinceOf[i - 1] !== p ? 1 : 0) +
+        (provinceOf[i + 1] !== p ? 1 : 0) +
+        (provinceOf[i - w] !== p ? 1 : 0) +
+        (provinceOf[i + w] !== p ? 1 : 0);
+      if (foreign === 0) continue;
+      border++;
+      if (foreign >= 3) bumps++;
+    }
+  }
+  return { share: border ? bumps / border : 0, bumps, border };
+}
+
+/**
+ * Longest perfectly straight border run: consecutive border edges on one grid line (0/90 degrees)
+ * or the exact 45-degree staircase, in cells. Edges touching a cell near the coast or a major river
+ * (within one cell, 8-neighbourhood) are ignored.
+ */
+export function longestStraightBorder(
+  height: Float32Array,
+  riverMask: Uint8Array,
+  provinceOf: Uint16Array,
+  w: number,
+  h: number,
+  long?: Array<{ at: number; kind: string }>,
+): { axis: number; diagonal: number; at: number; longCells: number } {
+  const n = w * h;
+  const near = nearCoastOrRiver(height, riverMask, w, h);
   // R: border edge between (x,y) and (x+1,y); D: between (x,y) and (x,y+1); both valid (not near).
   const R = new Uint8Array(n);
   const D = new Uint8Array(n);
@@ -135,6 +174,16 @@ export function longestStraightBorder(
   let axis = 0;
   let diagonal = 0;
   let at = -1;
+  // Cells (edges or staircase steps) in maximal runs longer than 12, counted at each run's end.
+  let longCells = 0;
+  const countEnds = (run: Int32Array, next: (i: number) => number): void => {
+    for (let i = 0; i < n; i++) {
+      const r = run[i]!;
+      if (r <= 12) continue;
+      const j = next(i);
+      if (j < 0 || run[j] !== r + 1) longCells += r;
+    }
+  };
   const run = new Int32Array(n);
   // Horizontal lines (D edges along x), vertical lines (R edges along y).
   for (const [edge, prev] of [
@@ -152,6 +201,7 @@ export function longestStraightBorder(
         at = i;
       }
     }
+    countEnds(run, prev === 1 ? (i) => (i % w < w - 1 ? i + 1 : -1) : (i) => (i + w < n ? i + w : -1));
   }
   // Staircases: down-right (R at a, D at a+1, next a+w+1) and up-right (R at a, D at a+1-w, next a+1-w).
   for (const dir of [1, -1]) {
@@ -172,6 +222,40 @@ export function longestStraightBorder(
         }
       }
     }
+    countEnds(run, (a) => {
+      const x = a % w;
+      const j = dir === 1 ? a + w + 1 : a - w + 1;
+      return x < w - 2 && j >= 0 && j < n ? j : -1;
+    });
   }
-  return { axis, diagonal, at };
+  return { axis, diagonal, at, longCells };
+}
+
+/**
+ * True for a lone island that could be split: it has a 4-connected patch of a non-majority biome
+ * with at least 40 cells, and at least 40 cells remain outside it.
+ */
+export function splittableIsland(biomes: Uint8Array, provinceOf: Uint16Array, p: Province, w: number): boolean {
+  const cells: number[] = [];
+  for (let i = 0; i < provinceOf.length; i++) if (provinceOf[i] === p.id) cells.push(i);
+  const counts = new Map<number, number>();
+  for (const c of cells) counts.set(biomes[c]!, (counts.get(biomes[c]!) ?? 0) + 1);
+  const major = [...counts].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]![0];
+  const inP = new Set(cells);
+  const seen = new Set<number>();
+  for (const s of cells) {
+    if (seen.has(s) || biomes[s] === major) continue;
+    const comp = [s];
+    seen.add(s);
+    for (let k = 0; k < comp.length; k++) {
+      const c = comp[k]!;
+      for (const d of [c % w > 0 ? c - 1 : -1, c % w < w - 1 ? c + 1 : -1, c - w, c + w]) {
+        if (d < 0 || !inP.has(d) || seen.has(d) || biomes[d] !== biomes[s]) continue;
+        seen.add(d);
+        comp.push(d);
+      }
+    }
+    if (comp.length >= 40 && cells.length - comp.length >= 40) return true;
+  }
+  return false;
 }

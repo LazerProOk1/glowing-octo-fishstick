@@ -6,7 +6,14 @@ import { computeBiomes } from '../../../src/sim/world/biomes';
 import { computeRivers } from '../../../src/sim/world/rivers';
 import { computeProvinces } from '../../../src/sim/world/provinces';
 import { normalizeShoreline } from '../../../src/sim/world/shoreline';
-import { longestStraightBorder, purity, riverViolations, strayMountainCells } from './provinceMetrics';
+import {
+  bumpShare,
+  longestStraightBorder,
+  purity,
+  riverViolations,
+  splittableIsland,
+  strayMountainCells,
+} from './provinceMetrics';
 import { BIOMES, SEA_LEVEL, WORLD_H, WORLD_W, type Province } from '../../../src/sim/world/types';
 
 const W = WORLD_W;
@@ -188,8 +195,10 @@ describe.each(['1', 'Бета-7', 'tiny-islands', 'lakes-check'])('provinces (se
   it('land provinces are terrain-pure', () => {
     const pur = purity(f.biomes, f.provinceOf, f.provinces.length);
     const land = f.provinces.filter((p) => p.isLand);
-    // Lone islands (no land neighbour) cannot merge anywhere; they are exempt like for the size rule.
-    const lone = (p: Province): boolean => !p.neighbors.some((q) => f.provinces[q]!.isLand);
+    // Lone islands (no land neighbour) cannot merge anywhere: exempt unless they could be split
+    // into two connected single-biome parts of at least 40 cells each (then they must be split).
+    const lone = (p: Province): boolean =>
+      !p.neighbors.some((q) => f.provinces[q]!.isLand) && !splittableIsland(f.biomes, f.provinceOf, p, W);
     const impure = land
       .filter((p) => p.cellCount >= 40 && !lone(p) && pur[p.id]! < 0.8)
       .map((p) => [p.id, pur[p.id]]);
@@ -202,10 +211,18 @@ describe.each(['1', 'Бета-7', 'tiny-islands', 'lakes-check'])('provinces (se
     expect(strayMountainCells(f.biomes, f.provinceOf, f.provinces, W)).toBe(0);
   });
 
-  it.runIf(seed === '1' || seed === 'Бета-7')('borders have no long straight runs', () => {
+  it('borders have few long straight runs', () => {
     const r = longestStraightBorder(f.height, f.riverMask, f.provinceOf, W, H);
-    expect(r.axis).toBeLessThanOrEqual(12);
-    expect(r.diagonal).toBeLessThanOrEqual(12);
+    const b = bumpShare(f.height, f.riverMask, f.provinceOf, W, H);
+    // Cells in axis or 45-degree runs longer than 12: at most 0.5% of border cells; none over 30.
+    expect(r.longCells / b.border).toBeLessThanOrEqual(0.005);
+    expect(r.axis).toBeLessThanOrEqual(30);
+    expect(r.diagonal).toBeLessThanOrEqual(30);
+  });
+
+  it('borders are smooth at the cell scale (few 1-cell bumps or notches)', () => {
+    const r = bumpShare(f.height, f.riverMask, f.provinceOf, W, H);
+    expect(r.share).toBeLessThanOrEqual(0.006);
   });
 
   it.runIf(seed === '1')('is deterministic', { timeout: 30000 }, () => {

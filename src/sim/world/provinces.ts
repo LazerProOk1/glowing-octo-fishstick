@@ -1,17 +1,15 @@
 import type { Rng } from '../rng';
-import { assignCorridor, fixFragments, jitterOwners, mergeSmall, pruneTendrils } from './provinceCleanup';
-import { breakStraightRuns, mergeImpure } from './provinceTerrain';
+import { assignCorridor, fixFragments, pruneTendrils, smoothOwners } from './provinceCleanup';
+import { mergeProvinces, splitIslands } from './provinceTerrain';
 import { jitterBiomes, noiseField } from './provinceNoise';
 import { KIND_CORRIDOR as KIND_CORRIDOR_, KIND_LAND as KIND_LAND_, KIND_WATER as KIND_WATER_, labelByKey, poissonSeeds } from './provinceSeeds';
-import { BIOMES, HILL_LEVEL as HILL_LEVEL_, MOUNTAIN_LEVEL as MOUNTAIN_LEVEL_, SEA_LEVEL as SEA_LEVEL_, type Province } from './types';
+import { BIOMES, SEA_LEVEL as SEA_LEVEL_, type Province } from './types';
 
 // Imported constants copied to module locals: in hot loops, live import bindings can be slow
 // (e.g. under Vite/Vitest module transforms).
 const KIND_CORRIDOR = KIND_CORRIDOR_;
 const KIND_LAND = KIND_LAND_;
 const KIND_WATER = KIND_WATER_;
-const HILL_LEVEL = HILL_LEVEL_;
-const MOUNTAIN_LEVEL = MOUNTAIN_LEVEL_;
 const SEA_LEVEL = SEA_LEVEL_;
 
 /** Poisson-disk radius on land, tuned for ~3100-3200 land provinces (mean ~250 cells). */
@@ -22,39 +20,38 @@ const SEA_RADIUS = LAND_RADIUS * 3;
 const MIN_LAND_CELLS = 40;
 /** Sea slivers smaller than this merge into a sea neighbour. */
 const MIN_SEA_CELLS = 800;
-/** Longest allowed perfectly straight 0/90-degree border run (cells). */
-const MAX_STRAIGHT = 10;
-const mountainCode = BIOMES.indexOf('mountains');
-const hillsCode = BIOMES.indexOf('hills');
 /**
- * Target share of a land province's majority biome (spec: at least 80%; the margin absorbs later
- * notches and river cells).
+ * Target share of a land province's majority biome (spec: at least 80%; the margin absorbs the
+ * later border smoothing and river cells).
  */
 const MIN_PURITY = 0.84;
 const SPEC_PURITY = 0.8;
+/** The first minority hand-over never shrinks a province below this many cells. */
+const DISSOLVE_KEEP = 50;
 /** Every biome patch at least this large gets its own seed; tiny ones then merge as enclaves. */
 const MIN_PATCH_CELLS = 1;
 /** Rivers at least this wide (riverMask) are hard province borders. */
 const MAJOR_RIVER = 2;
 
-// Step cost terms for the multi-source Dijkstra.
+// Growth: key = warped Euclidean distance to the seed + accumulated terrain penalty.
+/** Penalty per unit of height climbed (total ascent), so ridges become borders. */
 const UPHILL_COST = 120;
-const HILL_COST = 0.6;
-const MOUNTAIN_COST = 2.5;
 /** Crossing a small stream (riverMask 1); major rivers are hard borders instead. */
 const RIVER_COST = 0.5;
-/** Shared cost noise (simplex fbm) added to the step multiplier: amplitude, wavelength in cells. */
-const NOISE_AMP = 0.4;
-const NOISE_WAVE = 12;
-/** Domain-warp displacement in cells on land (the sea uses SEA_WARP_SCALE times more). */
-const WARP_AMP = 8;
-const WARP_WAVE = 32;
-const SEA_WARP_SCALE = 2;
-/** Cell-scale jitter of biome edges and of ownership after growth (amplitude, wavelength in cells). */
-const JITTER_AMP = 5;
-const JITTER_WAVE = 5;
-/** Biome-edge jitter uses this fraction of the jitter displacement (keeps terrain purity high). */
-const BIOME_JITTER_SCALE = 0.5;
+/**
+ * Domain warp of the distance space (simplex fbm; amplitude parameter in cells, base wavelength).
+ * Coarse: 2 octaves at 40 cells (non-folding). Fine: 1 octave at 10 cells; it folds in places
+ * (about a third of cells have a non-positive warp Jacobian), which is what keeps borders bending
+ * every ~10 cells; the 3x3 mode filter and bump pruning then remove the cell-scale noise this
+ * leaves, so borders read as smooth wiggly curves.
+ */
+const WARP_AMP = 4;
+const WARP_WAVE = 40;
+const FINE_AMP = 7;
+const FINE_WAVE = 10;
+/** Biome-edge jitter (amplitude parameter, wavelength): smooth, non-folding. */
+const JITTER_AMP = 2.5;
+const JITTER_WAVE = 16;
 
 /** Lower bound of a step length (keeps keys strictly increasing for the bucket queue). */
 const MIN_STEP = 0.05;
@@ -69,9 +66,9 @@ const DY = [0, 1, 0, -1];
  * - Land seeds are Poisson-disk samples per biome with a seed in every biome patch, and growth never
  *   leaves its biome patch, so a province has one terrain type and mountain massifs become mountain
  *   provinces; patches too small for a province merge into the neighbour that stays purest.
- * - Growth is a 4-neighbour Dijkstra whose step is the growth of the Euclidean distance to the
- *   seed measured in a smoothly domain-warped space, times a shared noise field and terrain factors
- *   (slopes, hills/mountains, streams), so borders are wiggly curves following relief.
+ * - Growth orders cells by the Euclidean distance to the seed measured in a smoothly domain-warped
+ *   space plus the terrain penalty along the growth path (ascent, streams), so borders are smooth
+ *   curves at any angle that follow ridges.
  */
 export function computeProvinces(
   rng: Rng,
@@ -84,12 +81,11 @@ export function computeProvinces(
   const trueBiomes = biomes;
   const n = w * h;
   const { kind } = classify(height, riverMask, w, h);
-  // Partition by a slightly jittered biome map so borders along smooth (sometimes straight) biome
-  // and relief edges wiggle too.
-  // Cell-scale jitter field, shared by the biome-edge jitter and the ownership jitter.
-  const jitX = noiseField(rng.fork('jitter-x'), w, h, JITTER_WAVE, JITTER_AMP);
-  const jitY = noiseField(rng.fork('jitter-y'), w, h, JITTER_WAVE, JITTER_AMP);
-  biomes = jitterBiomes(biomes, kind, jitX, jitY, BIOME_JITTER_SCALE, w, h);
+  // Partition by a smoothly jittered biome map so borders along smooth (sometimes straight) biome
+  // and relief edges bend too.
+  const jitX = noiseField(rng.fork('jitter-x'), w, h, JITTER_WAVE, JITTER_AMP, 2, 2);
+  const jitY = noiseField(rng.fork('jitter-y'), w, h, JITTER_WAVE, JITTER_AMP, 2, 2);
+  biomes = jitterBiomes(biomes, kind, jitX, jitY, 1, w, h);
   // Biome patches: 4-connected land cells of one biome (other kinds get keys that never match land).
   const patchKey = new Int32Array(n);
   for (let i = 0; i < n; i++) patchKey[i] = kind[i] === KIND_LAND ? biomes[i]! : -1 - kind[i]!;
@@ -106,38 +102,47 @@ export function computeProvinces(
     LAND_RADIUS,
     SEA_RADIUS,
   );
-  const costNoise = noiseField(rng.fork('cost-noise'), w, h, NOISE_WAVE, NOISE_AMP);
   // Warped coordinates: distances are Euclidean in this smoothly warped space, so borders are
   // curved bisectors instead of straight lines.
-  const wx = noiseField(rng.fork('warp-x'), w, h, WARP_WAVE, WARP_AMP);
-  const wy = noiseField(rng.fork('warp-y'), w, h, WARP_WAVE, WARP_AMP);
+  const wx = noiseField(rng.fork('warp-x'), w, h, WARP_WAVE, WARP_AMP, 2, 4);
+  const wy = noiseField(rng.fork('warp-y'), w, h, WARP_WAVE, WARP_AMP, 2, 4);
+  // Fine warp octave: keeps borders bending at the scale of a dozen cells.
+  const fx = noiseField(rng.fork('fine-x'), w, h, FINE_WAVE, FINE_AMP, 1);
+  const fy = noiseField(rng.fork('fine-y'), w, h, FINE_WAVE, FINE_AMP, 1);
   for (let i = 0; i < n; i++) {
-    const s = kind[i] === KIND_WATER ? SEA_WARP_SCALE : 1;
     const x = i % w;
-    wx[i] = x + s * wx[i]!;
-    wy[i] = (i - x) / w + s * wy[i]!;
+    wx[i] = x + wx[i]! + fx[i]!;
+    wy[i] = (i - x) / w + wy[i]! + fy[i]!;
   }
-  for (let i = 0; i < n; i++) costNoise[i] = 1 + costNoise[i]!;
-  const owner = grow(seeds, costNoise, wx, wy, height, biomes, riverMask, kind, w, h);
+  const owner = grow(seeds, wx, wy, height, biomes, riverMask, kind, w, h);
   const isLand: number[] = seeds.map((s) => (kind[s] === KIND_LAND ? 1 : 0));
   seedUnreached(owner, kind, biomes, isLand, w, h);
   const cls = new Uint8Array(n);
   for (let i = 0; i < n; i++) cls[i] = (kind[i]! << 4) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
-  jitterOwners(owner, cls, jitX, jitY, w, h);
-  pruneTendrils(owner, kind, isLand.length, w, h);
-  pruneTendrils(owner, kind, isLand.length, w, h);
+  // Smooth borders at the cell scale (3x3 mode), then drop remaining 1-cell bumps and tendril tips.
+  smoothOwners(owner, cls, w, h);
+  pruneTendrils(owner, kind, w, h);
   fixFragments(owner, kind, isLand, w, h);
-  mergeSmall(owner, kind, trueBiomes, isLand, MIN_LAND_CELLS, MIN_SEA_CELLS, w, h);
-  const isMountain = (b: number): boolean => b === mountainCode;
-  const isRelief = (b: number): boolean => b === mountainCode || b === hillsCode;
-  breakStraightRuns(owner, kind, trueBiomes, isRelief, isMountain, isLand.length, MAX_STRAIGHT, w, h);
-  // Notches can leave a few pieces under the minimum size.
-  mergeSmall(owner, kind, trueBiomes, isLand, MIN_LAND_CELLS, MIN_SEA_CELLS, w, h);
-  mergeImpure(owner, kind, trueBiomes, isLand, MIN_PURITY, true, w, h);
-  fixFragments(owner, kind, isLand, w, h);
+  const merge = (minPurity: number, greedy: boolean, keepCells: number): void =>
+    mergeProvinces(
+      owner,
+      kind,
+      trueBiomes,
+      isLand,
+      { minLand: MIN_LAND_CELLS, minSea: MIN_SEA_CELLS, minPurity, greedy, keepCells },
+      w,
+      h,
+    );
+  merge(MIN_PURITY, false, DISSOLVE_KEEP);
   assignCorridor(owner, kind, isLand, w, h);
-  // Last guard after river cells joined their banks: whole-province merges only (stay connected).
-  mergeImpure(owner, kind, trueBiomes, isLand, SPEC_PURITY, false, w, h);
+  // Guards after river cells joined their banks: purity at the spec level (merges, then minority
+  // hand-over without a size floor), reconnect, then greedy whole-province merges for what is left;
+  // nothing ends under the minimum size with a land neighbour. Lone two-biome islands split last.
+  merge(SPEC_PURITY, false, 0);
+  fixFragments(owner, kind, isLand, w, h);
+  merge(SPEC_PURITY, true, -1);
+  splitIslands(owner, kind, trueBiomes, isLand, SPEC_PURITY, MIN_LAND_CELLS, w, h);
+  fixFragments(owner, kind, isLand, w, h);
   return finalize(owner, kind, trueBiomes, isLand.length, w, h);
 }
 
@@ -185,6 +190,8 @@ class BucketQueue {
   constructor() {
     for (let i = 0; i < BUCKETS; i++) this.lists.push([]);
   }
+  /** Priority of the bucket the last `pop` came from (quantised). */
+  lastKey = 0;
   push(key: number, id: number): void {
     this.lists[((key * INV_BUCKET_WIDTH) | 0) & (BUCKETS - 1)]!.push(id);
     this.count++;
@@ -196,6 +203,7 @@ class BucketQueue {
       const list = this.lists[this.cur & (BUCKETS - 1)]!;
       if (list.length > 0) {
         this.count--;
+        this.lastKey = this.cur / INV_BUCKET_WIDTH;
         return list.pop()!;
       }
       this.cur++;
@@ -203,10 +211,16 @@ class BucketQueue {
   }
 }
 
-/** Multi-source Dijkstra (bucket queue); returns the owning seed index per cell (-1 if unreached). */
+/**
+ * Multi-source growth (bucket-queue Dijkstra); returns the owning seed index per cell (-1 if
+ * unreached). A cell's key for province p is the Euclidean distance to p's seed measured directly
+ * in the warped space, plus the terrain penalty accumulated along the growth path (total ascent and
+ * stream crossings). The geometric part does not depend on the path, so on uniform terrain the
+ * partition is an exact (warped) Voronoi diagram with curved borders at any angle; penalties make
+ * borders follow ridges and streams.
+ */
 function grow(
   seeds: number[],
-  stepMul: Float32Array,
   wx: Float32Array,
   wy: Float32Array,
   height: Float32Array,
@@ -217,7 +231,8 @@ function grow(
   h: number,
 ): Int32Array {
   const n = w * h;
-  const dist = new Float32Array(n).fill(Infinity);
+  const key = new Float32Array(n).fill(Infinity);
+  const pen = new Float32Array(n);
   const owner = new Int32Array(n).fill(-1);
   // Packed per-cell class: kind in bits 4-5, biome (land only) in bits 0-3, bit 7 = finalised.
   // Growth only steps between cells of equal class, i.e. same kind and, on land, same biome.
@@ -225,18 +240,16 @@ function grow(
   const cls = new Uint8Array(n);
   for (let i = 0; i < n; i++) cls[i] = (kind[i]! << 4) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
   const queue = new BucketQueue();
-  seeds.forEach((s, p) => {
-    dist[s] = 0;
-    owner[s] = p;
-    queue.push(0, s);
-  });
-  const landCls = KIND_LAND << 4;
   const seedX = new Float32Array(seeds.length);
   const seedY = new Float32Array(seeds.length);
   seeds.forEach((s, p) => {
+    key[s] = 0;
+    owner[s] = p;
     seedX[p] = wx[s]!;
     seedY[p] = wy[s]!;
+    queue.push(0, s);
   });
+  const landCls = KIND_LAND << 4;
   for (;;) {
     const c = queue.pop();
     if (c < 0) break;
@@ -249,13 +262,11 @@ function grow(
     const cy = (c - cx) / w;
     const px = seedX[p]!;
     const py = seedY[p]!;
-    const ex = wx[c]! - px;
-    const ey = wy[c]! - py;
-    const ec = Math.sqrt(ex * ex + ey * ey);
     const interior = cx > 0 && cy > 0 && cx < w - 1 && cy < h - 1;
     const hc = height[c]!;
     const rc = riverMask[c]!;
-    const dc = dist[c]!;
+    const kc = queue.lastKey;
+    const pc = pen[c]!;
     for (let k = 0; k < 4; k++) {
       const x = cx + DX[k]!;
       const y = cy + DY[k]!;
@@ -263,28 +274,22 @@ function grow(
       const d = y * w + x;
       // Same class and not finalised (a finalised cell has bit 7 set, so it never compares equal).
       if (cls[d] !== cc) continue;
-      // Step length = growth of the (warped-space) Euclidean distance to the province's seed. These
-      // increments telescope along monotone paths, so on uniform terrain distances are Euclidean
-      // even with 4 neighbours and borders are smooth curved bisectors, not the 0/45/90-degree
-      // segments of a grid (octile) metric.
+      let pd = pc;
+      if (isLandCell) {
+        pd += UPHILL_COST * Math.max(0, height[d]! - hc);
+        const rd = riverMask[d]!;
+        if ((rc > 0) !== (rd > 0)) pd += RIVER_COST * Math.max(rc, rd);
+      }
       const fx = wx[d]! - px;
       const fy = wy[d]! - py;
-      const step = Math.max(MIN_STEP, Math.sqrt(fx * fx + fy * fy) - ec);
-      let mul = stepMul[d]!;
-      let add = 0;
-      if (isLandCell) {
-        const hd = height[d]!;
-        mul *= 1 + UPHILL_COST * Math.max(0, hd - hc);
-        if (hd > MOUNTAIN_LEVEL) mul += MOUNTAIN_COST;
-        else if (hd > HILL_LEVEL) mul += HILL_COST;
-        const rd = riverMask[d]!;
-        if ((rc > 0) !== (rd > 0)) add = RIVER_COST * Math.max(rc, rd);
-      }
-      const nd = dc + Math.min(MAX_STEP, step * mul + add);
-      if (nd < dist[d]!) {
-        dist[d] = nd;
+      const nd = Math.sqrt(fx * fx + fy * fy) + pd;
+      if (nd < key[d]!) {
+        key[d] = nd;
+        pen[d] = pd;
         owner[d] = p;
-        queue.push(nd, d);
+        // Ownership compares the true keys; only the queue priority is clamped to stay monotone
+        // (where the warp folds, a neighbour can be closer to the seed than the current cell).
+        queue.push(Math.min(kc + MAX_STEP, Math.max(kc + MIN_STEP, nd)), d);
       }
     }
   }
@@ -312,12 +317,12 @@ function seedUnreached(
     while (top > 0) {
       const c = stack[--top]!;
       const x = c % w;
-      const nb = [x > 0 ? c - 1 : -1, x < w - 1 ? c + 1 : -1, c - w, c + w];
-      for (const d of nb) {
-        if (d >= 0 && d < n && owner[d] === -1 && kind[d] === kind[c] && (kind[c] !== KIND_LAND || biomes[d] === biomes[c])) {
-          owner[d] = p;
-          stack[top++] = d;
-        }
+      for (let k = 0; k < 4; k++) {
+        const d = k === 0 ? (x < w - 1 ? c + 1 : -1) : k === 1 ? (x > 0 ? c - 1 : -1) : k === 2 ? c - w : c + w;
+        if (d < 0 || d >= n || owner[d] !== -1 || kind[d] !== kind[c]) continue;
+        if (kind[c] === KIND_LAND && biomes[d] !== biomes[c]) continue;
+        owner[d] = p;
+        stack[top++] = d;
       }
     }
   }

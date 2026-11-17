@@ -57,16 +57,23 @@ function sampleCoarse(fn: (u: number, v: number) => number, w: number, h: number
 /** Rows a rain-shadow streak is blurred over (box radius, applied twice). */
 const SHADOW_BLUR = 4;
 
-/** In-place vertical box blur with radius r (clamped at the map edges). */
+/** In-place vertical box blur with radius r (clamped at the map edges), row-major running sums. */
 function blurRows(a: Float32Array, w: number, h: number, r: number): void {
-  const col = new Float32Array(h);
-  for (let x = 0; x < w; x++) {
-    for (let y = 0; y < h; y++) col[y] = a[y * w + x] ?? 0;
-    let sum = 0;
-    for (let y = -r; y <= r; y++) sum += col[Math.min(h - 1, Math.max(0, y))] ?? 0;
-    for (let y = 0; y < h; y++) {
-      a[y * w + x] = sum / (2 * r + 1);
-      sum += (col[Math.min(h - 1, y + r + 1)] ?? 0) - (col[Math.max(0, y - r)] ?? 0);
+  const src = a.slice();
+  const sum = new Float32Array(w);
+  const row = (y: number): number => Math.min(h - 1, Math.max(0, y)) * w;
+  for (let y = -r; y <= r; y++) {
+    const o = row(y);
+    for (let x = 0; x < w; x++) sum[x] = (sum[x] ?? 0) + (src[o + x] ?? 0);
+  }
+  const k = 1 / (2 * r + 1);
+  for (let y = 0; y < h; y++) {
+    const o = y * w;
+    const add = row(y + r + 1);
+    const sub = row(y - r);
+    for (let x = 0; x < w; x++) {
+      a[o + x] = (sum[x] ?? 0) * k;
+      sum[x] = (sum[x] ?? 0) + (src[add + x] ?? 0) - (src[sub + x] ?? 0);
     }
   }
 }

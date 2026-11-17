@@ -42,18 +42,26 @@ export function jitterBiomes(
 }
 
 /**
- * Isotropic simplex fbm field (2 octaves) scaled to [-amp, amp]-ish, with the given wavelength in
- * cells. Evaluated on a coarse lattice and bilinearly upsampled.
+ * Isotropic simplex fbm field scaled to [-amp, amp]-ish, with the given base wavelength in cells.
+ * Evaluated on a lattice of `stride` cells and bilinearly upsampled (the finest octave's wavelength
+ * should stay several strides long).
  */
-export function noiseField(rng: Rng, w: number, h: number, wavelength: number, amp: number): Float32Array {
+export function noiseField(
+  rng: Rng,
+  w: number,
+  h: number,
+  wavelength: number,
+  amp: number,
+  octaves = 2,
+  stride = 2,
+): Float32Array {
   const noise = createNoise2D(rng);
-  // Lattice stride: 2 cells for short wavelengths, 4 for long ones (bilinear upsampling).
-  const st = wavelength >= 12 ? 4 : 2;
+  const st = stride;
   const cw = Math.ceil(w / st) + 1;
   const ch = Math.ceil(h / st) + 1;
   const coarse = new Float32Array(cw * ch);
   for (let cy = 0; cy < ch; cy++) {
-    for (let cx = 0; cx < cw; cx++) coarse[cy * cw + cx] = amp * fbm(noise, (st * cx) / wavelength, (st * cy) / wavelength, 2);
+    for (let cx = 0; cx < cw; cx++) coarse[cy * cw + cx] = amp * fbm(noise, (st * cx) / wavelength, (st * cy) / wavelength, octaves);
   }
   const out = new Float32Array(w * h);
   for (let y = 0; y < h; y++) {
