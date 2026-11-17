@@ -56,7 +56,8 @@ in vec2 vUV;
 out vec4 finalColor;
 
 uniform sampler2D uTerrain;   // RGBA8 linear: G biome (texelFetch), B moisture
-uniform sampler2D uHeight;    // R16F linear: height - SEA_LEVEL
+uniform sampler2D uHeight;    // R16F linear: height - SEA_LEVEL (coast, water depth)
+uniform sampler2D uSurface;   // RGBA16F linear: RG blurred Sobel gradient per cell, B softly blurred height - SEA_LEVEL
 uniform sampler2D uProvince;  // RGBA8: R,G id, B land
 uniform sampler2D uBorder;    // RGBA8: R distance * 32
 uniform sampler2D uPalette;   // 16x1: rgb biome colour, a detail slot (255 = water)
@@ -147,14 +148,14 @@ void main() {
   vec2 inv = 1.0 / uWorldSize;
   vec2 uv = p * inv;
 
-  // ---- height, gradient (central differences over >= 1 screen px), coast distance
+  // ---- raw height (relief, snow), CPU-baked smooth gradient (hillshade), soft coast height
   float h = texture(uHeight, uv).r;
-  float e = max(1.0, 1.0 / pxPerCell);
-  vec2 ex = vec2(e * inv.x, 0.0);
-  vec2 ey = vec2(0.0, e * inv.y);
-  float hx = (texture(uHeight, uv + ex).r - texture(uHeight, uv - ex).r) / (2.0 * e);
-  float hy = (texture(uHeight, uv + ey).r - texture(uHeight, uv - ey).r) / (2.0 * e);
-  float coastPx = h / max(length(vec2(dFdx(h), dFdy(h))), 1e-7);
+  vec3 surf = texture(uSurface, uv).rgb;
+  vec2 grad = surf.rg;
+  // Coastline from the lightly blurred height: the raw shore is near-binary (+-SHORE_DELTA),
+  // whose bilinear isoline zigzags cell by cell on diagonal coasts.
+  float hc = surf.b;
+  float coastPx = hc / max(length(vec2(dFdx(hc), dFdy(hc))), 1e-7);
   float landMask = clamp(coastPx + 0.5, 0.0, 1.0);
 
   // ---- land colour: palette + detail of the 4 nearest cells, bilinear with noise-warped weights
@@ -207,14 +208,16 @@ void main() {
 
   // ---- hillshade: gentle on plains, exaggerated on hills and mountains
   float relief = smoothstep(HILL_REL - 0.06, MOUNT_REL, h);
-  float k = mix(22.0, 50.0, relief);
-  vec3 n = normalize(vec3(-hx * k, -hy * k, 1.0));
-  float shade = clamp(dot(n, LIGHT) / LIGHT.z, 0.5, 1.35);
+  float k = mix(22.0, 34.0, relief);
+  vec3 n = normalize(vec3(-grad * k, 1.0));
+  // Soft compressor instead of a hard clamp: no flat-toned facets at the extremes.
+  float s = dot(n, LIGHT) / LIGHT.z;
+  float shade = 1.0 + 0.35 * tanh((s - 1.0) / 0.35);
   land *= mix(1.0, shade, 0.8);
   land *= 1.0 + (shade - 1.0) * vec3(0.06, 0.0, -0.06);
 
   // ---- water: depth tint, lighter shallow halo, faint large-scale variation
-  float depth = max(-h, 0.0);
+  float depth = max(-hc, 0.0);
   vec3 water = mix(SHALLOW, DEEP, smoothstep(0.0, 0.05, depth));
   water *= 1.0 - 0.08 * smoothstep(0.05, 0.35, depth);
   float halo = 1.0 - smoothstep(0.0, 0.012, depth);

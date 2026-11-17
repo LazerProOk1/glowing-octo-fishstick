@@ -35,6 +35,84 @@ export function riverPixelWidth(width: number, zoom: number): number {
   return Math.min(MAX_PX, Math.max(MIN_PX, 0.4 * width * Math.sqrt(zoom)));
 }
 
+/** Длина волны извилин (клетки), их амплитуда и длина затухания у закреплённых точек. */
+const MEANDER_WAVELENGTH = 7;
+const MEANDER_AMPLITUDE = 0.34;
+const MEANDER_TAPER = 3;
+
+const pointKey = (p: Point): string => `${p.x},${p.y}`;
+
+/** Точки, которые нельзя сдвигать: истоки, устья и концы притоков (точки слияния). */
+export function pinnedPoints(rivers: RiverPath[]): Set<string> {
+  const set = new Set<string>();
+  for (const r of rivers) {
+    const first = r.points[0];
+    const last = r.points[r.points.length - 1];
+    if (first) set.add(pointKey(first));
+    if (last) set.add(pointKey(last));
+  }
+  return set;
+}
+
+/** Детерминированный хеш (целое, сид) → [−1, 1]. */
+function hashSigned(i: number, seed: number): number {
+  let h = Math.imul(i, 0x27d4eb2d) ^ Math.imul(seed + 0x9e3779b9, 0x165667b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  h ^= h >>> 16;
+  return ((h >>> 0) / 0xffffffff) * 2 - 1;
+}
+
+/** Гладкий 1D value noise по длине дуги, [−1, 1]. */
+function noise1(s: number, seed: number): number {
+  const i = Math.floor(s);
+  const f = s - i;
+  const u = f * f * (3 - 2 * f);
+  const a = hashSigned(i, seed);
+  return a + (hashSigned(i + 1, seed) - a) * u;
+}
+
+/**
+ * Извилистость для D8-путей: каждая вершина (шаг 1–√2 клетки) сдвигается перпендикулярно пути
+ * на низкочастотный шум (λ ≈ 7 клеток, ≤ 0.34 клетки), затухающий к закреплённым точкам.
+ * Детерминирован по `seed` (номер реки).
+ */
+export function meander(points: Point[], seed: number, pinned: Set<string>): Point[] {
+  const n = points.length;
+  if (n < 3) return points.map((p) => ({ x: p.x, y: p.y }));
+  const arc = new Float64Array(n);
+  for (let i = 1; i < n; i++) {
+    const a = points[i - 1] as Point;
+    const b = points[i] as Point;
+    arc[i] = (arc[i - 1] as number) + Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  // Расстояние по дуге до ближайшей закреплённой вершины (два прохода).
+  const dPin = new Float64Array(n).fill(Infinity);
+  for (let i = 0; i < n; i++) {
+    if (i === 0 || i === n - 1 || pinned.has(pointKey(points[i] as Point))) dPin[i] = 0;
+  }
+  for (let i = 1; i < n; i++) {
+    dPin[i] = Math.min(dPin[i] as number, (dPin[i - 1] as number) + (arc[i] as number) - (arc[i - 1] as number));
+  }
+  for (let i = n - 2; i >= 0; i--) {
+    dPin[i] = Math.min(dPin[i] as number, (dPin[i + 1] as number) + (arc[i + 1] as number) - (arc[i] as number));
+  }
+  return points.map((p, i) => {
+    const d = dPin[i] as number;
+    if (d === 0) return { x: p.x, y: p.y };
+    const prev = points[i - 1] as Point;
+    const next = points[i + 1] as Point;
+    const tx = next.x - prev.x;
+    const ty = next.y - prev.y;
+    const len = Math.hypot(tx, ty) || 1;
+    const t = Math.min(1, d / MEANDER_TAPER);
+    const envelope = t * t * (3 - 2 * t);
+    const s = (arc[i] as number) / MEANDER_WAVELENGTH;
+    const v = (noise1(s, seed) * 0.75 + noise1(s * 2.1 + 17, seed + 7) * 0.25) * MEANDER_AMPLITUDE * envelope;
+    return { x: p.x - (ty / len) * v, y: p.y + (tx / len) * v };
+  });
+}
+
 /** Участок реки одной ширины (сглаженные точки в клетках мира). */
 interface Run {
   points: Point[];
@@ -42,10 +120,10 @@ interface Run {
 }
 
 /** Сглаживает реку целиком и режет её на участки одной ширины (ширина монотонна вдоль реки). */
-function riverRuns(river: RiverPath): Run[] {
+function riverRuns(river: RiverPath, seed: number, pinned: Set<string>): Run[] {
   const n = river.points.length;
   if (n < 2) return [];
-  const smooth = chaikin(river.points, SMOOTH_ITERATIONS);
+  const smooth = chaikin(meander(river.points, seed, pinned), SMOOTH_ITERATIONS);
   const m = smooth.length;
   const widthAt = (k: number): number => {
     const src = Math.round((k / (m - 1)) * (n - 1));
@@ -76,8 +154,9 @@ export class RiverLayer {
 
   setRivers(rivers: RiverPath[]): void {
     this.groups.clear();
-    for (const river of rivers) {
-      for (const run of riverRuns(river)) {
+    const pinned = pinnedPoints(rivers);
+    for (const [index, river] of rivers.entries()) {
+      for (const run of riverRuns(river, index, pinned)) {
         const list = this.groups.get(run.width);
         if (list) list.push(run.points);
         else this.groups.set(run.width, [run.points]);

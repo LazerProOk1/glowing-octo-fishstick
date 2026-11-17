@@ -67,6 +67,7 @@ export class MapView {
         mapUniforms: this.uniforms,
         uTerrain: this.blank,
         uHeight: this.blank,
+        uSurface: this.blank,
         uProvince: this.blank,
         uBorder: this.blank,
         uPalette: this.palette,
@@ -90,6 +91,7 @@ export class MapView {
     canvas.addEventListener('pointermove', this.onPointerMove);
     canvas.addEventListener('pointerup', this.onPointerUp);
     canvas.addEventListener('pointercancel', this.onPointerUp);
+    canvas.addEventListener('lostpointercapture', this.onPointerUp);
     canvas.addEventListener('pointerleave', this.onPointerLeave);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
     app.renderer.on('resize', this.onResize);
@@ -120,6 +122,7 @@ export class MapView {
     const res = this.shader.resources;
     res.uTerrain = next.terrain;
     res.uHeight = next.height;
+    res.uSurface = next.surface;
     res.uProvince = next.province;
     res.uBorder = next.border;
     if (this.textures) destroyWorldTextures(this.textures);
@@ -152,6 +155,7 @@ export class MapView {
     canvas.removeEventListener('pointermove', this.onPointerMove);
     canvas.removeEventListener('pointerup', this.onPointerUp);
     canvas.removeEventListener('pointercancel', this.onPointerUp);
+    canvas.removeEventListener('lostpointercapture', this.onPointerUp);
     canvas.removeEventListener('pointerleave', this.onPointerLeave);
     canvas.removeEventListener('wheel', this.onWheel);
     this.app.renderer.off('resize', this.onResize);
@@ -206,7 +210,8 @@ export class MapView {
     const cx = Math.floor(p.x);
     const cy = Math.floor(p.y);
     const inside = cx >= 0 && cy >= 0 && cx < world.w && cy < world.h;
-    this.setHoveredProvince(inside ? (world.provinceOf[cy * world.w + cx] ?? null) : null);
+    const id = inside ? world.provinceOf[cy * world.w + cx] : undefined;
+    this.setHoveredProvince(id !== undefined && world.provinces[id] ? id : null);
   }
 
   private readonly onPointerDown = (e: PointerEvent): void => {

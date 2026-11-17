@@ -3,6 +3,7 @@ import { BIOMES, SEA_LEVEL, type World } from '../sim/world/types';
 import { ATLAS_URL, TERRAIN_TEXTURES } from './assets';
 import { bakeTextures } from './bake';
 import { toHalfArray } from './halfFloat';
+import { COAST_SIGMA, bakeGradient, blur } from './normals';
 import { PALETTE } from './palette';
 
 /** GPU-текстуры одного мира. Все без мипмапов: читаются texelFetch или билинейно на нулевом уровне. */
@@ -15,6 +16,11 @@ export interface WorldTextures {
   border: TextureSource;
   /** R16F LINEAR: высота − SEA_LEVEL (половинная точность у нуля ~1e-6, у гор ~1e-4). */
   height: TextureSource;
+  /**
+   * RGBA16F LINEAR: RG — сглаженный градиент высоты (dh/dx, dh/dy на клетку) для отмывки,
+   * B — слегка размытая высота − SEA_LEVEL для береговой линии.
+   */
+  surface: TextureSource;
 }
 
 /** Альфа палитры: слот детали, а у водных биомов — этот маркер. */
@@ -52,7 +58,29 @@ export function createWorldTextures(world: World): WorldTextures {
       alphaMode: 'no-premultiply-alpha',
       autoGenerateMipmaps: false,
     }),
+    surface: new BufferImageSource({
+      resource: toHalfArray(packSurface(world.height, w, h)),
+      width: w,
+      height: h,
+      format: 'rgba16float',
+      scaleMode: 'linear',
+      addressMode: 'clamp-to-edge',
+      alphaMode: 'no-premultiply-alpha',
+      autoGenerateMipmaps: false,
+    }),
   };
+}
+
+function packSurface(height: Float32Array, w: number, h: number): Float32Array {
+  const grad = bakeGradient(height, w, h);
+  const coast = blur(height, w, h, COAST_SIGMA);
+  const out = new Float32Array(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
+    out[i * 4] = grad[i * 2] as number;
+    out[i * 4 + 1] = grad[i * 2 + 1] as number;
+    out[i * 4 + 2] = (coast[i] as number) - SEA_LEVEL;
+  }
+  return out;
 }
 
 export function destroyWorldTextures(t: WorldTextures): void {
@@ -60,6 +88,7 @@ export function destroyWorldTextures(t: WorldTextures): void {
   t.terrain.destroy();
   t.border.destroy();
   t.height.destroy();
+  t.surface.destroy();
 }
 
 /** 16×1 RGBA8: RGB — цвет биома по коду, A — слот детали атласа (у воды WATER_SLOT). */
