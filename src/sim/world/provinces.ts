@@ -49,6 +49,12 @@ const WARP_AMP = 4;
 const WARP_WAVE = 40;
 const FINE_AMP = 7;
 const FINE_WAVE = 10;
+/**
+ * Fine-warp strength on water. Sea borders should read as long smooth curves rather than a
+ * ~10-cell saw-tooth, but without the fine octave they collapse into long axis/45° runs
+ * (the straight-run test fails at 0, and with a separate non-folding octave), so it is damped.
+ */
+const SEA_FINE_SCALE = 0.5;
 /** Biome-edge jitter (amplitude parameter, wavelength): smooth, non-folding. */
 const JITTER_AMP = 2.5;
 const JITTER_WAVE = 16;
@@ -106,13 +112,15 @@ export function computeProvinces(
   // curved bisectors instead of straight lines.
   const wx = noiseField(rng.fork('warp-x'), w, h, WARP_WAVE, WARP_AMP, 2, 4);
   const wy = noiseField(rng.fork('warp-y'), w, h, WARP_WAVE, WARP_AMP, 2, 4);
-  // Fine warp octave: keeps borders bending at the scale of a dozen cells.
+  // Fine warp octave: keeps borders bending at the scale of a dozen cells; damped on water
+  // (land and sea never compete for a cell, so the switch at the coast shows in no border).
   const fx = noiseField(rng.fork('fine-x'), w, h, FINE_WAVE, FINE_AMP, 1);
   const fy = noiseField(rng.fork('fine-y'), w, h, FINE_WAVE, FINE_AMP, 1);
   for (let i = 0; i < n; i++) {
     const x = i % w;
-    wx[i] = x + wx[i]! + fx[i]!;
-    wy[i] = (i - x) / w + wy[i]! + fy[i]!;
+    const fine = kind[i] === KIND_WATER ? SEA_FINE_SCALE : 1;
+    wx[i] = x + wx[i]! + fine * fx[i]!;
+    wy[i] = (i - x) / w + wy[i]! + fine * fy[i]!;
   }
   const owner = grow(seeds, wx, wy, height, biomes, riverMask, kind, w, h);
   const isLand: number[] = seeds.map((s) => (kind[s] === KIND_LAND ? 1 : 0));

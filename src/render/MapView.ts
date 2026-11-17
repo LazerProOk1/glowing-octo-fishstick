@@ -68,6 +68,7 @@ export class MapView {
         uTerrain: this.blank,
         uHeight: this.blank,
         uSurface: this.blank,
+        uBiomeColor: this.blank,
         uProvince: this.blank,
         uBorder: this.blank,
         uPalette: this.palette,
@@ -123,6 +124,7 @@ export class MapView {
     res.uTerrain = next.terrain;
     res.uHeight = next.height;
     res.uSurface = next.surface;
+    res.uBiomeColor = next.biomeColor;
     res.uProvince = next.province;
     res.uBorder = next.border;
     if (this.textures) destroyWorldTextures(this.textures);

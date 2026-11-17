@@ -57,7 +57,8 @@ out vec4 finalColor;
 
 uniform sampler2D uTerrain;   // RGBA8 linear: G biome (texelFetch), B moisture
 uniform sampler2D uHeight;    // R16F linear: height - SEA_LEVEL (coast, water depth)
-uniform sampler2D uSurface;   // RGBA16F linear: RG blurred Sobel gradient per cell, B softly blurred height - SEA_LEVEL
+uniform sampler2D uSurface;   // RGBA16F linear: RG blurred Sobel gradient per cell, B softly blurred height - SEA_LEVEL, A land nearness (sigma 3.5)
+uniform sampler2D uBiomeColor; // RGBA8 linear: blurred land palette colour, A land coverage
 uniform sampler2D uProvince;  // RGBA8: R,G id, B land
 uniform sampler2D uBorder;    // RGBA8: R distance * 32
 uniform sampler2D uPalette;   // 16x1: rgb biome colour, a detail slot (255 = water)
@@ -81,7 +82,6 @@ const float SLOT_GAIN[7] = float[7](${gains});
 
 const vec3 DEEP = ${glslVec3(MAP_COLORS.waterDeep)};
 const vec3 SHALLOW = ${glslVec3(MAP_COLORS.waterShallow)};
-const vec3 BEACH = ${glslVec3(MAP_COLORS.beach)};
 const vec3 COAST_LINE = ${glslVec3(MAP_COLORS.coastLine)};
 const vec3 BORDER = ${glslVec3(MAP_COLORS.border)};
 const vec3 VOID_COLOR = ${glslVec3(MAP_COLORS.void)};
@@ -150,7 +150,7 @@ void main() {
 
   // ---- raw height (relief, snow), CPU-baked smooth gradient (hillshade), soft coast height
   float h = texture(uHeight, uv).r;
-  vec3 surf = texture(uSurface, uv).rgb;
+  vec4 surf = texture(uSurface, uv);
   vec2 grad = surf.rg;
   // Coastline from the lightly blurred height: the raw shore is near-binary (+-SHORE_DELTA),
   // whose bilinear isoline zigzags cell by cell on diagonal coasts.
@@ -158,15 +158,19 @@ void main() {
   float coastPx = hc / max(length(vec2(dFdx(hc), dFdy(hc))), 1e-7);
   float landMask = clamp(coastPx + 0.5, 0.0, 1.0);
 
-  // ---- land colour: palette + detail of the 4 nearest cells, bilinear with noise-warped weights
-  vec2 warp = vec2(vnoise(p * 0.31), vnoise(p * 0.31 + vec2(17.3, 5.9))) - 0.5;
-  warp += 0.5 * (vec2(vnoise(p * 1.13 + 3.1), vnoise(p * 1.13 + vec2(9.7, 1.3))) - 0.5);
-  vec2 bq = p - 0.5 + 0.9 * warp;
+  // ---- land colour: CPU-blurred biome colours (sigma 1.2 cells) looked up at a noise-warped
+  // position (up to ~1.2 cells), so transitions are soft and never align to the cell grid.
+  vec2 warp = vec2(vnoise(p * 0.23), vnoise(p * 0.23 + vec2(17.3, 5.9))) - 0.5;
+  warp += 0.45 * (vec2(vnoise(p * 0.9 + 3.1), vnoise(p * 0.9 + vec2(9.7, 1.3))) - 0.5);
+  warp *= 1.6;
+  vec3 land = texture(uBiomeColor, (p + warp) * inv).rgb;
+
+  // Detail luminance: slots of the 4 cells around the same warped point, bilinear weights.
+  vec2 bq = p - 0.5 + warp;
   vec2 bc = floor(bq);
-  vec2 bw = smoothstep(0.1, 0.9, bq - bc);
+  vec2 bw = bq - bc;
   float lodRaw = atlasLod(DETAIL_SPAN, pxPerCell);
   float lod = clamp(lodRaw, 0.0, MAX_LOD);
-  vec3 landSum = vec3(0.0);
   float wSum = 0.0;
   float detail = 0.0;
   for (int i = 0; i < 4; i++) {
@@ -174,32 +178,12 @@ void main() {
     vec2 ow = mix(1.0 - bw, bw, o);
     float wgt = ow.x * ow.y;
     int code = int(round(texelFetch(uTerrain, cellAt(bc + o), 0).g * 255.0));
-    vec4 pal = texelFetch(uPalette, ivec2(code, 0), 0);
-    float slot = round(pal.a * 255.0);
+    float slot = round(texelFetch(uPalette, ivec2(code, 0), 0).a * 255.0);
     if (slot < WATER_SLOT - 0.5) {
-      landSum += wgt * pal.rgb;
       wSum += wgt;
       detail += wgt * (atlasSample(slot, p, DETAIL_SPAN, lod) - 0.5) * SLOT_GAIN[int(slot)];
     }
   }
-  // Thin land past the coast isoline may have only water among its 4 cells: borrow the
-  // average land colour of the surrounding 4x4 ring instead of a flat fallback.
-  vec3 fallback = BEACH;
-  if (wSum < 0.15) {
-    vec3 ringSum = vec3(0.0);
-    float ringN = 0.0;
-    for (int j = 0; j < 16; j++) {
-      vec2 o = vec2(float(j & 3) - 1.0, float(j >> 2) - 1.0);
-      int code = int(round(texelFetch(uTerrain, cellAt(bc + o), 0).g * 255.0));
-      vec4 pal = texelFetch(uPalette, ivec2(code, 0), 0);
-      if (pal.a * 255.0 < WATER_SLOT - 0.5) {
-        ringSum += pal.rgb;
-        ringN += 1.0;
-      }
-    }
-    if (ringN > 0.0) fallback = ringSum / ringN;
-  }
-  vec3 land = mix(fallback, landSum / max(wSum, 1e-4), smoothstep(0.0, 0.15, wSum));
   detail = detail / max(wSum, 1e-4) * (1.0 - smoothstep(3.5, 5.0, lodRaw));
   float moisture = texture(uTerrain, uv).b;
   land *= mix(vec3(1.03, 1.01, 0.95), vec3(0.98, 1.0, 1.01), moisture);
@@ -216,13 +200,12 @@ void main() {
   land *= mix(1.0, shade, 0.8);
   land *= 1.0 + (shade - 1.0) * vec3(0.06, 0.0, -0.06);
 
-  // ---- water: depth tint, lighter shallow halo, faint large-scale variation
+  // ---- water: calm. Deep slate, a lighter teal-grey band hugging the coast that fades within
+  // ~3-6 cells (blurred land mask, sigma 3.5), a very gentle darkening over the open ocean.
+  float near = surf.a;
+  vec3 water = mix(DEEP, SHALLOW, smoothstep(0.004, 0.45, near));
   float depth = max(-hc, 0.0);
-  vec3 water = mix(SHALLOW, DEEP, smoothstep(0.0, 0.05, depth));
-  water *= 1.0 - 0.08 * smoothstep(0.05, 0.35, depth);
-  float halo = 1.0 - smoothstep(0.0, 0.012, depth);
-  water = mix(water, mix(SHALLOW, vec3(1.0), 0.1), 0.35 * halo);
-  water *= 1.0 + (vnoise(p / 90.0) - 0.5) * 0.04;
+  water *= 1.0 - 0.05 * smoothstep(0.1, 0.4, depth) * (1.0 - smoothstep(0.0, 0.1, near));
 
   vec3 col = mix(water, land, landMask);
 
@@ -239,6 +222,8 @@ void main() {
   bool ownLand = ownT.b > 0.5;
   vec4 vb;
   vec4 vh;
+  vec4 cLand;
+  vec4 cHov;
   for (int i = 0; i < 4; i++) {
     ivec2 c = cellAt(pc + vec2(float(i & 1), float(i >> 1)));
     vec4 t = texelFetch(uProvince, c, 0);
@@ -247,7 +232,17 @@ void main() {
     // Land-sea borders are left to the coastline.
     bool same = id == ownId || ((t.b > 0.5) != ownLand);
     vb[i] = same ? d : -d;
-    vh[i] = id == uHovered ? d : -d;
+    vh[i] = d;
+    cLand[i] = t.b > 0.5 ? 1.0 : 0.0;
+    cHov[i] = id == uHovered ? 1.0 : 0.0;
+  }
+  // Hover: signed field like the borders. Where the hovered province meets the other medium
+  // (land vs sea) its edge is the smooth coastline, not the cell staircase of the province.
+  float anyHov = max(max(cHov.x, cHov.y), max(cHov.z, cHov.w));
+  float hovLand = dot(cHov, cLand) > 0.0 ? 1.0 : 0.0;
+  for (int i = 0; i < 4; i++) {
+    bool inside = cHov[i] > 0.5 || (anyHov > 0.5 && abs(cLand[i] - hovLand) > 0.5);
+    vh[i] = inside ? vh[i] : -vh[i];
   }
   float borderW = uCam.w;
   float borderPx = abs(zeroDistPx(vb, pw, pxPerCell));
@@ -256,7 +251,8 @@ void main() {
   float borderA = line * zoomFade * (ownLand ? 0.35 * landMask : 0.15 * (1.0 - landMask));
   col = mix(col, BORDER, borderA);
 
-  float hovered = clamp(zeroDistPx(vh, pw, pxPerCell) + 0.5, 0.0, 1.0);
+  float hovered = anyHov > 0.5 ? clamp(zeroDistPx(vh, pw, pxPerCell) / 3.0 + 0.5, 0.0, 1.0) : 0.0;
+  hovered *= mix(1.0 - landMask, landMask, hovLand);
   col = mix(col, vec3(1.0), 0.13 * hovered);
 
   // ---- paper grain over land and water

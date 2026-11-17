@@ -80,3 +80,13 @@ export function bakeGradient(height: Float32Array, w: number, h: number, sigma =
   }
   return out;
 }
+
+/** Blur of the land mask for the shallow-water band: lighter water fades out within ~3–6 cells. */
+export const HALO_SIGMA = 3.5;
+
+/** Smooth land fraction in [0, 1] (≈ 0.5 on a straight coast), from `height > seaLevel`. */
+export function coastNearness(height: Float32Array, w: number, h: number, seaLevel: number, sigma = HALO_SIGMA): Float32Array {
+  const land = new Float32Array(w * h);
+  for (let i = 0; i < land.length; i++) land[i] = (height[i] as number) > seaLevel ? 1 : 0;
+  return blur(land, w, h, sigma);
+}

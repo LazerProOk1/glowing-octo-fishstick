@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bakeGradient } from '../../src/render/normals';
+import { bakeGradient, coastNearness } from '../../src/render/normals';
 
 const W = 32;
 const H = 16;
@@ -43,5 +43,19 @@ describe('bakeGradient', () => {
     const nonZero = [];
     for (let x = 0; x < W; x++) if ((g[(row * W + x) * 2] as number) > 1e-3) nonZero.push(x);
     expect(nonZero.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('coastNearness', () => {
+  it('гладко спадает от берега: ≈0.5 у кромки, почти 0 через 8 клеток', () => {
+    // Суша при x ≥ 16.
+    const near = coastNearness(field((x) => (x >= 16 ? 0.6 : 0.4)), W, H, 0.5);
+    const at = (x: number): number => near[8 * W + x] as number;
+    expect(at(15)).toBeGreaterThan(0.3);
+    expect(at(15)).toBeLessThan(0.5);
+    expect(at(13)).toBeLessThan(at(14));
+    expect(at(8)).toBeLessThan(0.03);
+    expect(at(28)).toBeCloseTo(1, 5);
+    for (const v of near) expect(v >= 0 && v <= 1 + 1e-6).toBe(true);
   });
 });
