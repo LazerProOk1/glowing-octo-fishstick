@@ -27,6 +27,8 @@ function zonalWetness(lat: number): number {
   return LAT_WET[LAT_WET.length - 1]?.[1] ?? 0;
 }
 const STEP = 4;
+/** Amplitude of the fine latitude wobble (0.012 ~ 6 rows on a 1024-row map). */
+const LAT_WOBBLE = 0.012;
 
 /** Fill `out` by bilinearly upsampling fn(u, v) evaluated on a coarse STEP-spaced grid. */
 function sampleCoarse(fn: (u: number, v: number) => number, w: number, h: number, out: Float32Array): void {
@@ -48,6 +50,23 @@ function sampleCoarse(fn: (u: number, v: number) => number, w: number, h: number
       const top = (c[i] ?? 0) * (1 - tx) + (c[i + 1] ?? 0) * tx;
       const bot = (c[i + cw] ?? 0) * (1 - tx) + (c[i + cw + 1] ?? 0) * tx;
       out[y * w + x] = top * (1 - ty) + bot * ty;
+    }
+  }
+}
+
+/** Rows a rain-shadow streak is blurred over (box radius, applied twice). */
+const SHADOW_BLUR = 4;
+
+/** In-place vertical box blur with radius r (clamped at the map edges). */
+function blurRows(a: Float32Array, w: number, h: number, r: number): void {
+  const col = new Float32Array(h);
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) col[y] = a[y * w + x] ?? 0;
+    let sum = 0;
+    for (let y = -r; y <= r; y++) sum += col[Math.min(h - 1, Math.max(0, y))] ?? 0;
+    for (let y = 0; y < h; y++) {
+      a[y * w + x] = sum / (2 * r + 1);
+      sum += (col[Math.min(h - 1, y + r + 1)] ?? 0) - (col[Math.max(0, y - r)] ?? 0);
     }
   }
 }
@@ -108,11 +127,14 @@ export function computeClimate(
   // Per-cell latitude (0 equator .. 1 pole), warped by low-frequency noise so belts wander.
   const warp = new Float32Array(n);
   sampleCoarse((u, v) => fbm(latNoise, u * 3 + 40, v * 3 + 40, 3), w, h, warp);
+  // Fine wobble (~32-cell wavelength, a few rows) so belt edges and biome borders are not straight lines.
+  const wobble = new Float32Array(n);
+  sampleCoarse((u, v) => fbm(latNoise, u * 64 + 7, v * 32 + 7, 2), w, h, wobble);
   const lats = new Float32Array(n);
   for (let y = 0; y < h; y++) {
     const base = Math.abs((y + 0.5) / h - 0.5) * 2;
     for (let x = 0; x < w; x++) {
-      const l = base + 0.08 * (warp[y * w + x] ?? 0);
+      const l = base + 0.08 * (warp[y * w + x] ?? 0) + LAT_WOBBLE * (wobble[y * w + x] ?? 0);
       lats[y * w + x] = l < 0 ? 0 : l > 1 ? 1 : l;
     }
   }
@@ -126,26 +148,42 @@ export function computeClimate(
   }
 
   // Rain shadow: per row, sweep along the prevailing wind carrying a decaying "blocked" value.
-  const shadow = new Float32Array(n);
-  for (let y = 0; y < h; y++) {
-    const east2west = Math.abs((y + 0.5) / h - 0.5) * 2 < 0.33; // trade winds near the equator, westerlies elsewhere
-    let s = 0;
-    for (let k = 0; k < w; k++) {
-      const x = east2west ? w - 1 - k : k;
-      const i = y * w + x;
-      const hh = height[i] ?? 0;
-      if (hh <= SEA_LEVEL) {
-        s *= 0.97;
-      } else {
-        s *= 0.985;
-        if (hh > HILL_LEVEL) {
-          const block = 0.25 + 0.75 * Math.min(1, (hh - HILL_LEVEL) / (1 - HILL_LEVEL));
-          if (block > s) s = block;
+  // Trade winds (east -> west) near the equator, westerlies elsewhere. Both sweeps are computed and
+  // blended by the (warped) latitude so there is no hard seam along a row where the wind flips.
+  const shadowE = new Float32Array(n);
+  const shadowW = new Float32Array(n);
+  for (const [east2west, out] of [
+    [true, shadowE],
+    [false, shadowW],
+  ] as const) {
+    for (let y = 0; y < h; y++) {
+      let s = 0;
+      for (let k = 0; k < w; k++) {
+        const x = east2west ? w - 1 - k : k;
+        const i = y * w + x;
+        const hh = height[i] ?? 0;
+        if (hh <= SEA_LEVEL) {
+          s *= 0.97;
+        } else {
+          s *= 0.985;
+          if (hh > HILL_LEVEL) {
+            const block = 0.25 + 0.75 * Math.min(1, (hh - HILL_LEVEL) / (1 - HILL_LEVEL));
+            if (block > s) s = block;
+          }
         }
+        out[i] = s;
       }
-      shadow[i] = s;
     }
   }
+  const shadow = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = Math.min(1, Math.max(0, ((lats[i] ?? 0) - 0.28) / 0.1));
+    const westerly = t * t * (3 - 2 * t);
+    shadow[i] = (shadowE[i] ?? 0) * (1 - westerly) + (shadowW[i] ?? 0) * westerly;
+  }
+  // Per-row sweeps leave shadow streaks with hard row edges; blur across rows so they fade out.
+  blurRows(shadow, w, h, SHADOW_BLUR);
+  blurRows(shadow, w, h, SHADOW_BLUR);
 
   const dist = distanceToSea(height, w, h);
   const moisture = new Float32Array(n);

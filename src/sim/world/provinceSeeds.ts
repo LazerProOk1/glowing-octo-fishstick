@@ -1,5 +1,4 @@
 import type { Rng } from '../rng';
-import { SEA_LEVEL } from './types';
 
 /**
  * Labels 4-connected components of cells for which `same(a, b)` holds between neighbours.
@@ -47,47 +46,115 @@ export function labelComponents(
   return { comp, sizes };
 }
 
-/** 1 = land (height > SEA_LEVEL). Expects input already passed through `normalizeShoreline`. */
-export function landMask(height: Float32Array, w: number, h: number): Uint8Array {
+/** 4-connected components of equal `key` values (fast path of labelComponents). */
+export function labelByKey(key: Int32Array, w: number, h: number): { comp: Int32Array; sizes: number[] } {
   const n = w * h;
-  const land = new Uint8Array(n);
-  for (let i = 0; i < n; i++) land[i] = height[i]! > SEA_LEVEL ? 1 : 0;
-  return land;
+  const comp = new Int32Array(n).fill(-1);
+  const stack = new Int32Array(n);
+  const sizes: number[] = [];
+  for (let s = 0; s < n; s++) {
+    if (comp[s] !== -1) continue;
+    const id = sizes.length;
+    const k = key[s]!;
+    let size = 0;
+    let top = 0;
+    stack[top++] = s;
+    comp[s] = id;
+    while (top > 0) {
+      const c = stack[--top]!;
+      size++;
+      const x = c % w;
+      if (x > 0 && comp[c - 1] === -1 && key[c - 1] === k) {
+        comp[c - 1] = id;
+        stack[top++] = c - 1;
+      }
+      if (x < w - 1 && comp[c + 1] === -1 && key[c + 1] === k) {
+        comp[c + 1] = id;
+        stack[top++] = c + 1;
+      }
+      if (c >= w && comp[c - w] === -1 && key[c - w] === k) {
+        comp[c - w] = id;
+        stack[top++] = c - w;
+      }
+      if (c + w < n && comp[c + w] === -1 && key[c + w] === k) {
+        comp[c + w] = id;
+        stack[top++] = c + w;
+      }
+    }
+    sizes.push(size);
+  }
+  return { comp, sizes };
 }
+
+/** Cell kinds used by the province partition. */
+export const KIND_WATER = 0;
+export const KIND_LAND = 1;
+/** Land cells that provinces never grow through: major rivers and tiny pockets cut off by them. */
+export const KIND_CORRIDOR = 2;
 
 /**
  * Maximal Poisson-disk sampling by random sequential adsorption: cells are visited in a random
- * order and accepted when no earlier sample of the same pattern lies closer than its radius.
- * The land pattern covers land cells only; the sea pattern covers the whole map.
+ * order (on a stride-2 lattice) and accepted when no earlier sample of the same pattern lies closer
+ * than its radius.
+ * Land uses one pattern per biome over cells of biome patches with at least `minPatch` cells, and
+ * every such patch is guaranteed a seed (its first visited cell). The sea pattern covers the whole
+ * map and is kept only on water, so sea seeds do not pack densely along coastlines.
  */
 export function poissonSeeds(
   rng: Rng,
-  land: Uint8Array,
+  kind: Uint8Array,
+  biomes: Uint8Array,
+  patch: Int32Array,
+  patchSizes: number[],
+  minPatch: number,
   w: number,
   h: number,
   landRadius: number,
   seaRadius: number,
 ): number[] {
-  const n = w * h;
+  // Candidates: every second cell in x and y (seed positions need no finer resolution; biome
+  // patches without a candidate get a province from the unseeded-component pass instead).
+  const gw = Math.ceil(w / 2);
+  const n = gw * Math.ceil(h / 2);
   const order = new Int32Array(n);
-  for (let i = 0; i < n; i++) order[i] = i;
+  for (let i = 0; i < n; i++) order[i] = 2 * Math.floor(i / gw) * w + 2 * (i % gw);
+  // Fisher-Yates with an inline xorshift32 seeded from rng (much cheaper than rng calls per cell).
+  let st = rng.int(1, 0x7fffffff);
   for (let i = n - 1; i > 0; i--) {
-    const j = rng.int(0, i + 1);
+    st ^= st << 13;
+    st ^= st >>> 17;
+    st ^= st << 5;
+    const j = (st >>> 0) % (i + 1);
     const t = order[i]!;
     order[i] = order[j]!;
     order[j] = t;
   }
-  const landGrid = makeGrid(landRadius, w, h);
+  const landGrids: Array<Grid | undefined> = [];
   const seaGrid = makeGrid(seaRadius, w, h);
+  const firstCell = new Int32Array(patchSizes.length).fill(-1);
+  const seeded = new Uint8Array(patchSizes.length);
   const seeds: number[] = [];
   for (let k = 0; k < n; k++) {
     const c = order[k]!;
     const x = c % w;
     const y = (c - x) / w;
-    if (land[c] && landGrid.tryInsert(x, y)) seeds.push(c);
-    // The sea pattern is sampled over the whole map and kept only on water, so sea seeds do not
-    // pack densely along coastlines.
-    if (seaGrid.tryInsert(x, y) && !land[c]) seeds.push(c);
+    if (kind[c] === KIND_LAND) {
+      const pc = patch[c]!;
+      if (patchSizes[pc]! >= minPatch) {
+        if (firstCell[pc] === -1) firstCell[pc] = c;
+        const b = biomes[c]!;
+        let g = landGrids[b];
+        if (!g) landGrids[b] = g = makeGrid(landRadius, w, h);
+        if (g.tryInsert(x, y)) {
+          seeds.push(c);
+          seeded[pc] = 1;
+        }
+      }
+    }
+    if (seaGrid.tryInsert(x, y) && kind[c] === KIND_WATER) seeds.push(c);
+  }
+  for (let pc = 0; pc < patchSizes.length; pc++) {
+    if (firstCell[pc] !== -1 && !seeded[pc]) seeds.push(firstCell[pc]!);
   }
   return seeds;
 }
@@ -121,32 +188,4 @@ function makeGrid(r: number, w: number, h: number): Grid {
       return true;
     },
   };
-}
-
-/** Smooth value noise in [0, 1) on a lattice of spacing `scale`, periodic with `period` lattice cells. */
-export function valueNoise(x: number, y: number, scale: number, period: number): number {
-  const gx = x / scale;
-  const gy = y / scale;
-  const ix = Math.floor(gx);
-  const iy = Math.floor(gy);
-  let fx = gx - ix;
-  let fy = gy - iy;
-  fx = fx * fx * (3 - 2 * fx);
-  fy = fy * fy * (3 - 2 * fy);
-  const x0 = ix % period;
-  const y0 = iy % period;
-  const x1 = (ix + 1) % period;
-  const y1 = (iy + 1) % period;
-  const a = hash2(x0, y0);
-  const b = hash2(x1, y0);
-  const c = hash2(x0, y1);
-  const d = hash2(x1, y1);
-  return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
-}
-
-function hash2(x: number, y: number): number {
-  let hh = Math.imul(x, 374761393) ^ Math.imul(y, 668265263);
-  hh = Math.imul(hh ^ (hh >>> 13), 1274126177);
-  hh ^= hh >>> 16;
-  return (hh >>> 0) / 4294967296;
 }

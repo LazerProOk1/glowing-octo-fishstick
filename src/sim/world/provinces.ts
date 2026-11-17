@@ -1,36 +1,77 @@
 import type { Rng } from '../rng';
-import { landMask, labelComponents, poissonSeeds, valueNoise } from './provinceSeeds';
-import { BIOMES, HILL_LEVEL, MOUNTAIN_LEVEL, type Province } from './types';
+import { assignCorridor, fixFragments, jitterOwners, mergeSmall, pruneTendrils } from './provinceCleanup';
+import { breakStraightRuns, mergeImpure } from './provinceTerrain';
+import { jitterBiomes, noiseField } from './provinceNoise';
+import { KIND_CORRIDOR as KIND_CORRIDOR_, KIND_LAND as KIND_LAND_, KIND_WATER as KIND_WATER_, labelByKey, poissonSeeds } from './provinceSeeds';
+import { BIOMES, HILL_LEVEL as HILL_LEVEL_, MOUNTAIN_LEVEL as MOUNTAIN_LEVEL_, SEA_LEVEL as SEA_LEVEL_, type Province } from './types';
 
-/** Poisson-disk radius on land, tuned so the average land province is ~260 cells. */
-const LAND_RADIUS = 14.1;
+// Imported constants copied to module locals: in hot loops, live import bindings can be slow
+// (e.g. under Vite/Vitest module transforms).
+const KIND_CORRIDOR = KIND_CORRIDOR_;
+const KIND_LAND = KIND_LAND_;
+const KIND_WATER = KIND_WATER_;
+const HILL_LEVEL = HILL_LEVEL_;
+const MOUNTAIN_LEVEL = MOUNTAIN_LEVEL_;
+const SEA_LEVEL = SEA_LEVEL_;
+
+/** Poisson-disk radius on land, tuned for ~3100-3200 land provinces (mean ~250 cells). */
+const LAND_RADIUS = 15.8;
 /** Sea provinces are larger: radius x3. */
 const SEA_RADIUS = LAND_RADIUS * 3;
 /** Land pieces smaller than this merge into a land neighbour (lone islands are exempt). */
 const MIN_LAND_CELLS = 40;
 /** Sea slivers smaller than this merge into a sea neighbour. */
 const MIN_SEA_CELLS = 800;
+/** Longest allowed perfectly straight 0/90-degree border run (cells). */
+const MAX_STRAIGHT = 10;
+const mountainCode = BIOMES.indexOf('mountains');
+const hillsCode = BIOMES.indexOf('hills');
+/**
+ * Target share of a land province's majority biome (spec: at least 80%; the margin absorbs later
+ * notches and river cells).
+ */
+const MIN_PURITY = 0.84;
+const SPEC_PURITY = 0.8;
+/** Every biome patch at least this large gets its own seed; tiny ones then merge as enclaves. */
+const MIN_PATCH_CELLS = 1;
+/** Rivers at least this wide (riverMask) are hard province borders. */
+const MAJOR_RIVER = 2;
 
 // Step cost terms for the multi-source Dijkstra.
 const UPHILL_COST = 120;
 const HILL_COST = 0.6;
 const MOUNTAIN_COST = 2.5;
-const RIVER_COST = 2.5;
-const NOISE_AMP = 0.45;
-/** Side of the periodic noise tile (sampled at two offsets as two noise layers). */
-const NOISE_SHIFT = 10;
-const NOISE_TILE = 1 << NOISE_SHIFT;
-const NOISE_MASK = NOISE_TILE - 1;
-/** Lattice spacing of the value noise; NOISE_TILE / NOISE_SCALE is an integer, so the tile is periodic. */
-const NOISE_SCALE = NOISE_TILE / 80;
+/** Crossing a small stream (riverMask 1); major rivers are hard borders instead. */
+const RIVER_COST = 0.5;
+/** Shared cost noise (simplex fbm) added to the step multiplier: amplitude, wavelength in cells. */
+const NOISE_AMP = 0.4;
+const NOISE_WAVE = 12;
+/** Domain-warp displacement in cells on land (the sea uses SEA_WARP_SCALE times more). */
+const WARP_AMP = 8;
+const WARP_WAVE = 32;
+const SEA_WARP_SCALE = 2;
+/** Cell-scale jitter of biome edges and of ownership after growth (amplitude, wavelength in cells). */
+const JITTER_AMP = 5;
+const JITTER_WAVE = 5;
+/** Biome-edge jitter uses this fraction of the jitter displacement (keeps terrain purity high). */
+const BIOME_JITTER_SCALE = 0.5;
 
-const DX = [1, 0, -1, 0, 1, -1, -1, 1];
-const DY = [0, 1, 0, -1, 1, 1, -1, -1];
+/** Lower bound of a step length (keeps keys strictly increasing for the bucket queue). */
+const MIN_STEP = 0.05;
+
+const DX = [1, 0, -1, 0];
+const DY = [0, 1, 0, -1];
 
 /**
- * Partitions the map into land and sea provinces. Seeds come from Poisson-disk sampling; regions
- * grow by an 8-neighbour Dijkstra whose step cost rises on slopes, in hills/mountains and across
- * rivers, so borders tend to follow ridges and rivers. A per-province noise term makes borders wander.
+ * Partitions the map into land and sea provinces (input must be normalised by `normalizeShoreline`).
+ * - Major rivers (riverMask >= 2) are hard borders: growth never passes through them; their cells
+ *   are handed to one bank at the end.
+ * - Land seeds are Poisson-disk samples per biome with a seed in every biome patch, and growth never
+ *   leaves its biome patch, so a province has one terrain type and mountain massifs become mountain
+ *   provinces; patches too small for a province merge into the neighbour that stays purest.
+ * - Growth is a 4-neighbour Dijkstra whose step is the growth of the Euclidean distance to the
+ *   seed measured in a smoothly domain-warped space, times a shared noise field and terrain factors
+ *   (slopes, hills/mountains, streams), so borders are wiggly curves following relief.
  */
 export function computeProvinces(
   rng: Rng,
@@ -40,25 +81,92 @@ export function computeProvinces(
   w: number,
   h: number,
 ): { provinceOf: Uint16Array; provinces: Province[] } {
-  const land = landMask(height, w, h);
-  const seeds = poissonSeeds(rng.fork('seeds'), land, w, h, LAND_RADIUS, SEA_RADIUS);
-  const noiseRng = rng.fork('noise');
-  // Each province mixes two shared noise layers at its own angle, so neighbours see different noise.
-  const noiseCos = new Float64Array(seeds.length);
-  const noiseSin = new Float64Array(seeds.length);
-  for (let p = 0; p < seeds.length; p++) {
-    const a = noiseRng.next() * 2 * Math.PI;
-    noiseCos[p] = Math.cos(a);
-    noiseSin[p] = Math.sin(a);
+  const trueBiomes = biomes;
+  const n = w * h;
+  const { kind } = classify(height, riverMask, w, h);
+  // Partition by a slightly jittered biome map so borders along smooth (sometimes straight) biome
+  // and relief edges wiggle too.
+  // Cell-scale jitter field, shared by the biome-edge jitter and the ownership jitter.
+  const jitX = noiseField(rng.fork('jitter-x'), w, h, JITTER_WAVE, JITTER_AMP);
+  const jitY = noiseField(rng.fork('jitter-y'), w, h, JITTER_WAVE, JITTER_AMP);
+  biomes = jitterBiomes(biomes, kind, jitX, jitY, BIOME_JITTER_SCALE, w, h);
+  // Biome patches: 4-connected land cells of one biome (other kinds get keys that never match land).
+  const patchKey = new Int32Array(n);
+  for (let i = 0; i < n; i++) patchKey[i] = kind[i] === KIND_LAND ? biomes[i]! : -1 - kind[i]!;
+  const patches = labelByKey(patchKey, w, h);
+  const seeds = poissonSeeds(
+    rng.fork('seeds'),
+    kind,
+    biomes,
+    patches.comp,
+    patches.sizes,
+    MIN_PATCH_CELLS,
+    w,
+    h,
+    LAND_RADIUS,
+    SEA_RADIUS,
+  );
+  const costNoise = noiseField(rng.fork('cost-noise'), w, h, NOISE_WAVE, NOISE_AMP);
+  // Warped coordinates: distances are Euclidean in this smoothly warped space, so borders are
+  // curved bisectors instead of straight lines.
+  const wx = noiseField(rng.fork('warp-x'), w, h, WARP_WAVE, WARP_AMP);
+  const wy = noiseField(rng.fork('warp-y'), w, h, WARP_WAVE, WARP_AMP);
+  for (let i = 0; i < n; i++) {
+    const s = kind[i] === KIND_WATER ? SEA_WARP_SCALE : 1;
+    const x = i % w;
+    wx[i] = x + s * wx[i]!;
+    wy[i] = (i - x) / w + s * wy[i]!;
   }
-  const owner = grow(seeds, noiseCos, noiseSin, height, riverMask, land, w, h);
-  const isLand: number[] = seeds.map((s) => land[s]!);
-  seedUnreached(owner, land, isLand, w, h);
-  pruneTendrils(owner, land, isLand.length, w, h);
-  pruneTendrils(owner, land, isLand.length, w, h);
-  fixFragments(owner, land, isLand.length, w, h);
-  mergeSmall(owner, land, isLand, w, h);
-  return finalize(owner, land, biomes, isLand.length, w, h);
+  for (let i = 0; i < n; i++) costNoise[i] = 1 + costNoise[i]!;
+  const owner = grow(seeds, costNoise, wx, wy, height, biomes, riverMask, kind, w, h);
+  const isLand: number[] = seeds.map((s) => (kind[s] === KIND_LAND ? 1 : 0));
+  seedUnreached(owner, kind, biomes, isLand, w, h);
+  const cls = new Uint8Array(n);
+  for (let i = 0; i < n; i++) cls[i] = (kind[i]! << 4) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
+  jitterOwners(owner, cls, jitX, jitY, w, h);
+  pruneTendrils(owner, kind, isLand.length, w, h);
+  pruneTendrils(owner, kind, isLand.length, w, h);
+  fixFragments(owner, kind, isLand, w, h);
+  mergeSmall(owner, kind, trueBiomes, isLand, MIN_LAND_CELLS, MIN_SEA_CELLS, w, h);
+  const isMountain = (b: number): boolean => b === mountainCode;
+  const isRelief = (b: number): boolean => b === mountainCode || b === hillsCode;
+  breakStraightRuns(owner, kind, trueBiomes, isRelief, isMountain, isLand.length, MAX_STRAIGHT, w, h);
+  // Notches can leave a few pieces under the minimum size.
+  mergeSmall(owner, kind, trueBiomes, isLand, MIN_LAND_CELLS, MIN_SEA_CELLS, w, h);
+  mergeImpure(owner, kind, trueBiomes, isLand, MIN_PURITY, true, w, h);
+  fixFragments(owner, kind, isLand, w, h);
+  assignCorridor(owner, kind, isLand, w, h);
+  // Last guard after river cells joined their banks: whole-province merges only (stay connected).
+  mergeImpure(owner, kind, trueBiomes, isLand, SPEC_PURITY, false, w, h);
+  return finalize(owner, kind, trueBiomes, isLand.length, w, h);
+}
+
+/**
+ * Cell kinds. Corridor = land cells of major rivers plus land pockets cut off by them (or by river
+ * and coast) that are too small for a province.
+ */
+function classify(height: Float32Array, riverMask: Uint8Array, w: number, h: number): { kind: Uint8Array } {
+  const n = w * h;
+  const kind = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    if (height[i]! <= SEA_LEVEL) kind[i] = KIND_WATER;
+    else kind[i] = riverMask[i]! >= MAJOR_RIVER ? KIND_CORRIDOR : KIND_LAND;
+  }
+  const lab = labelByKey(Int32Array.from(kind), w, h);
+  const touchesCorridor = new Uint8Array(lab.sizes.length);
+  for (let i = 0; i < n; i++) {
+    if (kind[i] !== KIND_CORRIDOR) continue;
+    const x = i % w;
+    if (x > 0) touchesCorridor[lab.comp[i - 1]!] = 1;
+    if (x < w - 1) touchesCorridor[lab.comp[i + 1]!] = 1;
+    if (i >= w) touchesCorridor[lab.comp[i - w]!] = 1;
+    if (i + w < n) touchesCorridor[lab.comp[i + w]!] = 1;
+  }
+  for (let i = 0; i < n; i++) {
+    const k = lab.comp[i]!;
+    if (kind[i] === KIND_LAND && touchesCorridor[k] && lab.sizes[k]! < MIN_LAND_CELLS) kind[i] = KIND_CORRIDOR;
+  }
+  return { kind };
 }
 
 const INV_BUCKET_WIDTH = 50;
@@ -95,60 +203,76 @@ class BucketQueue {
   }
 }
 
-/** Multi-source Dijkstra (bucket queue); returns the owning seed index per cell (-1 if unreachable). */
+/** Multi-source Dijkstra (bucket queue); returns the owning seed index per cell (-1 if unreached). */
 function grow(
   seeds: number[],
-  noiseCos: Float64Array,
-  noiseSin: Float64Array,
+  stepMul: Float32Array,
+  wx: Float32Array,
+  wy: Float32Array,
   height: Float32Array,
+  biomes: Uint8Array,
   riverMask: Uint8Array,
-  land: Uint8Array,
+  kind: Uint8Array,
   w: number,
   h: number,
 ): Int32Array {
   const n = w * h;
   const dist = new Float32Array(n).fill(Infinity);
   const owner = new Int32Array(n).fill(-1);
-  const done = new Uint8Array(n);
+  // Packed per-cell class: kind in bits 4-5, biome (land only) in bits 0-3, bit 7 = finalised.
+  // Growth only steps between cells of equal class, i.e. same kind and, on land, same biome.
+  const DONE = 0x80;
+  const cls = new Uint8Array(n);
+  for (let i = 0; i < n; i++) cls[i] = (kind[i]! << 4) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
   const queue = new BucketQueue();
-  const noise = noiseTile();
   seeds.forEach((s, p) => {
     dist[s] = 0;
     owner[s] = p;
     queue.push(0, s);
   });
+  const landCls = KIND_LAND << 4;
+  const seedX = new Float32Array(seeds.length);
+  const seedY = new Float32Array(seeds.length);
+  seeds.forEach((s, p) => {
+    seedX[p] = wx[s]!;
+    seedY[p] = wy[s]!;
+  });
   for (;;) {
     const c = queue.pop();
     if (c < 0) break;
-    if (done[c]) continue;
-    done[c] = 1;
+    const cc = cls[c]!;
+    if (cc & DONE) continue;
+    cls[c] = cc | DONE;
     const p = owner[c]!;
-    const t = land[c]!;
+    const isLandCell = (cc & 0x30) === landCls;
     const cx = c % w;
     const cy = (c - cx) / w;
+    const px = seedX[p]!;
+    const py = seedY[p]!;
+    const ex = wx[c]! - px;
+    const ey = wy[c]! - py;
+    const ec = Math.sqrt(ex * ex + ey * ey);
     const interior = cx > 0 && cy > 0 && cx < w - 1 && cy < h - 1;
     const hc = height[c]!;
     const rc = riverMask[c]!;
     const dc = dist[c]!;
-    const ca = noiseCos[p]!;
-    const sa = noiseSin[p]!;
-    for (let k = 0; k < 8; k++) {
+    for (let k = 0; k < 4; k++) {
       const x = cx + DX[k]!;
       const y = cy + DY[k]!;
       if (!interior && (x < 0 || y < 0 || x >= w || y >= h)) continue;
       const d = y * w + x;
-      if (done[d] || land[d] !== t) continue;
-      let step = 1;
-      if (k >= 4) {
-        // Diagonal: only through a corner shared with same-kind cells.
-        if (land[cy * w + x] !== t && land[y * w + cx] !== t) continue;
-        step = Math.SQRT2;
-      }
-      const na = noise[((y & NOISE_MASK) << NOISE_SHIFT) | (x & NOISE_MASK)]!;
-      const nb = noise[(((y + NOISE_TILE / 2) & NOISE_MASK) << NOISE_SHIFT) | ((x + NOISE_TILE / 3) & NOISE_MASK)]!;
-      let mul = 1 + NOISE_AMP * (ca * na + sa * nb);
+      // Same class and not finalised (a finalised cell has bit 7 set, so it never compares equal).
+      if (cls[d] !== cc) continue;
+      // Step length = growth of the (warped-space) Euclidean distance to the province's seed. These
+      // increments telescope along monotone paths, so on uniform terrain distances are Euclidean
+      // even with 4 neighbours and borders are smooth curved bisectors, not the 0/45/90-degree
+      // segments of a grid (octile) metric.
+      const fx = wx[d]! - px;
+      const fy = wy[d]! - py;
+      const step = Math.max(MIN_STEP, Math.sqrt(fx * fx + fy * fy) - ec);
+      let mul = stepMul[d]!;
       let add = 0;
-      if (t) {
+      if (isLandCell) {
         const hd = height[d]!;
         mul *= 1 + UPHILL_COST * Math.max(0, hd - hc);
         if (hd > MOUNTAIN_LEVEL) mul += MOUNTAIN_COST;
@@ -167,26 +291,21 @@ function grow(
   return owner;
 }
 
-/** Periodic tile of value noise in [-1, 1]. */
-function noiseTile(): Float32Array {
-  const period = NOISE_TILE / NOISE_SCALE;
-  const tile = new Float32Array(NOISE_TILE * NOISE_TILE);
-  for (let y = 0; y < NOISE_TILE; y++) {
-    for (let x = 0; x < NOISE_TILE; x++) {
-      tile[y * NOISE_TILE + x] = 2 * valueNoise(x, y, NOISE_SCALE, period) - 1;
-    }
-  }
-  return tile;
-}
-
-/** Same-kind components without any seed (small islands, lakes) become provinces of their own. */
-function seedUnreached(owner: Int32Array, land: Uint8Array, isLand: number[], w: number, h: number): void {
+/** Unseeded same-kind (and, on land, same-biome) components become provinces; corridor stays -1. */
+function seedUnreached(
+  owner: Int32Array,
+  kind: Uint8Array,
+  biomes: Uint8Array,
+  isLand: number[],
+  w: number,
+  h: number,
+): void {
   const n = w * h;
   const stack = new Int32Array(n);
   for (let s = 0; s < n; s++) {
-    if (owner[s] !== -1) continue;
+    if (owner[s] !== -1 || kind[s] === KIND_CORRIDOR) continue;
     const p = isLand.length;
-    isLand.push(land[s]!);
+    isLand.push(kind[s] === KIND_LAND ? 1 : 0);
     let top = 0;
     stack[top++] = s;
     owner[s] = p;
@@ -195,7 +314,7 @@ function seedUnreached(owner: Int32Array, land: Uint8Array, isLand: number[], w:
       const x = c % w;
       const nb = [x > 0 ? c - 1 : -1, x < w - 1 ? c + 1 : -1, c - w, c + w];
       for (const d of nb) {
-        if (d >= 0 && d < n && owner[d] === -1 && land[d] === land[c]) {
+        if (d >= 0 && d < n && owner[d] === -1 && kind[d] === kind[c] && (kind[c] !== KIND_LAND || biomes[d] === biomes[c])) {
           owner[d] = p;
           stack[top++] = d;
         }
@@ -204,157 +323,10 @@ function seedUnreached(owner: Int32Array, land: Uint8Array, isLand: number[], w:
   }
 }
 
-/** Most frequent same-kind foreign province among the 4-neighbours of cell c (ties: lowest id), or -1. */
-function majorityNeighbor(owner: Int32Array, land: Uint8Array, c: number, w: number, n: number): number {
-  const p = owner[c]!;
-  const x = c % w;
-  const nb = [x > 0 ? c - 1 : -1, x < w - 1 ? c + 1 : -1, c - w, c + w];
-  let best = -1;
-  let bestCount = 0;
-  for (const d of nb) {
-    if (d < 0 || d >= n || land[d] !== land[c]) continue;
-    const q = owner[d]!;
-    if (q === p) continue;
-    let cnt = 0;
-    for (const e of nb) if (e >= 0 && e < n && owner[e] === q) cnt++;
-    if (cnt > bestCount || (cnt === bestCount && q < best)) {
-      best = q;
-      bestCount = cnt;
-    }
-  }
-  return best;
-}
-
-/** Cells with at most one same-province 4-neighbour move to the majority neighbouring province. */
-function pruneTendrils(owner: Int32Array, land: Uint8Array, count: number, w: number, h: number): void {
-  const n = w * h;
-  const size = new Int32Array(count);
-  for (let i = 0; i < n; i++) size[owner[i]!]!++;
-  for (let c = 0; c < n; c++) {
-    const p = owner[c]!;
-    if (size[p]! <= 1) continue;
-    const x = c % w;
-    let same = 0;
-    if (x > 0 && owner[c - 1] === p) same++;
-    if (x < w - 1 && owner[c + 1] === p) same++;
-    if (c >= w && owner[c - w] === p) same++;
-    if (c + w < n && owner[c + w] === p) same++;
-    if (same > 1) continue;
-    const q = majorityNeighbor(owner, land, c, w, n);
-    if (q < 0) continue;
-    owner[c] = q;
-    size[p]!--;
-    size[q]!++;
-  }
-}
-
-/** Keeps the largest 4-connected piece of each province; other pieces join their main foreign neighbour. */
-function fixFragments(owner: Int32Array, land: Uint8Array, count: number, w: number, h: number): void {
-  const n = w * h;
-  for (let iter = 0; iter < 20; iter++) {
-    const { comp, sizes } = labelComponents(n, w, h, (a, b) => owner[a] === owner[b]);
-    const main = new Int32Array(count).fill(-1);
-    const compOwner = new Int32Array(sizes.length);
-    for (let i = 0; i < n; i++) compOwner[comp[i]!] = owner[i]!;
-    sizes.forEach((s, k) => {
-      const p = compOwner[k]!;
-      const m = main[p]!;
-      if (m < 0 || s > sizes[m]!) main[p] = k;
-    });
-    const isFragment = (k: number): boolean => main[compOwner[k]!] !== k;
-    const border = borderCounts(owner, land, comp, isFragment, w, h);
-    if (border.size === 0) return;
-    const target = new Map<number, number>();
-    for (const [k, counts] of border) target.set(k, pickMax(counts));
-    for (let i = 0; i < n; i++) {
-      const t = target.get(comp[i]!);
-      if (t !== undefined) owner[i] = t;
-    }
-  }
-  throw new Error('fixFragments did not converge');
-}
-
-/** For each group g (component or province) with interest(g), counts shared 4-edges with same-kind foreign provinces. */
-function borderCounts(
-  owner: Int32Array,
-  land: Uint8Array,
-  group: Int32Array,
-  interest: (g: number) => boolean,
-  w: number,
-  h: number,
-): Map<number, Map<number, number>> {
-  const out = new Map<number, Map<number, number>>();
-  const add = (a: number, b: number): void => {
-    const g = group[a]!;
-    if (!interest(g)) return;
-    let m = out.get(g);
-    if (!m) out.set(g, (m = new Map()));
-    const q = owner[b]!;
-    m.set(q, (m.get(q) ?? 0) + 1);
-  };
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const i = y * w + x;
-      const p = owner[i]!;
-      if (x < w - 1 && owner[i + 1] !== p && land[i + 1] === land[i]) {
-        add(i, i + 1);
-        add(i + 1, i);
-      }
-      if (y < h - 1 && owner[i + w] !== p && land[i + w] === land[i]) {
-        add(i, i + w);
-        add(i + w, i);
-      }
-    }
-  }
-  return out;
-}
-
-function pickMax(counts: Map<number, number>): number {
-  let best = -1;
-  let bestCount = -1;
-  for (const [q, c] of counts) {
-    if (c > bestCount || (c === bestCount && q < best)) {
-      best = q;
-      bestCount = c;
-    }
-  }
-  return best;
-}
-
-/** Small provinces join the same-kind neighbour sharing the longest border (lone islands stay). */
-function mergeSmall(owner: Int32Array, land: Uint8Array, isLand: number[], w: number, h: number): void {
-  const n = w * h;
-  const count = isLand.length;
-  for (let iter = 0; iter < 50; iter++) {
-    const size = new Int32Array(count);
-    for (let i = 0; i < n; i++) size[owner[i]!]!++;
-    const isSmall = (p: number): boolean =>
-      size[p]! > 0 && size[p]! < (isLand[p] ? MIN_LAND_CELLS : MIN_SEA_CELLS);
-    const border = borderCounts(owner, land, owner, isSmall, w, h);
-    const small = [...border.keys()].sort((a, b) => size[a]! - size[b]! || a - b);
-    const touched = new Uint8Array(count);
-    const target = new Int32Array(count).fill(-1);
-    let merged = 0;
-    for (const p of small) {
-      const q = pickMax(border.get(p)!);
-      if (touched[p] || touched[q]) continue;
-      touched[p] = touched[q] = 1;
-      target[p] = q;
-      merged++;
-    }
-    if (merged === 0) return;
-    for (let i = 0; i < n; i++) {
-      const t = target[owner[i]!]!;
-      if (t >= 0) owner[i] = t;
-    }
-  }
-  throw new Error('mergeSmall did not converge');
-}
-
 /** Compacts ids and computes per-province attributes. */
 function finalize(
   owner: Int32Array,
-  land: Uint8Array,
+  kind: Uint8Array,
   biomes: Uint8Array,
   count: number,
   w: number,
@@ -383,7 +355,7 @@ function finalize(
     sx[p] = sx[p]! + x;
     sy[p] = sy[p]! + (i - x) / w;
     cells[p]!++;
-    isLand[p] = land[i]!;
+    isLand[p] = kind[i] === KIND_WATER ? 0 : 1;
     biomeCounts[p * k + biomes[i]!]!++;
   }
   const best = new Float64Array(m).fill(Infinity);

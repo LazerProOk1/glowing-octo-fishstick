@@ -6,6 +6,7 @@ import { computeBiomes } from '../../../src/sim/world/biomes';
 import { computeRivers } from '../../../src/sim/world/rivers';
 import { computeProvinces } from '../../../src/sim/world/provinces';
 import { normalizeShoreline } from '../../../src/sim/world/shoreline';
+import { longestStraightBorder, purity, riverViolations, strayMountainCells } from './provinceMetrics';
 import { BIOMES, SEA_LEVEL, WORLD_H, WORLD_W, type Province } from '../../../src/sim/world/types';
 
 const W = WORLD_W;
@@ -180,7 +181,34 @@ describe.each(['1', 'Бета-7', 'tiny-islands', 'lakes-check'])('provinces (se
     }
   });
 
-  it.runIf(seed === '1')('is deterministic', () => {
+  it('major rivers separate provinces', () => {
+    expect(riverViolations(f.height, f.riverMask, f.provinceOf, f.provinces, W)).toEqual([]);
+  });
+
+  it('land provinces are terrain-pure', () => {
+    const pur = purity(f.biomes, f.provinceOf, f.provinces.length);
+    const land = f.provinces.filter((p) => p.isLand);
+    // Lone islands (no land neighbour) cannot merge anywhere; they are exempt like for the size rule.
+    const lone = (p: Province): boolean => !p.neighbors.some((q) => f.provinces[q]!.isLand);
+    const impure = land
+      .filter((p) => p.cellCount >= 40 && !lone(p) && pur[p.id]! < 0.8)
+      .map((p) => [p.id, pur[p.id]]);
+    expect(impure).toEqual([]);
+    const pure90 = land.filter((p) => pur[p.id]! >= 0.9).length / land.length;
+    expect(pure90).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it('mountain massifs belong to mountain or hill provinces', () => {
+    expect(strayMountainCells(f.biomes, f.provinceOf, f.provinces, W)).toBe(0);
+  });
+
+  it.runIf(seed === '1' || seed === 'Бета-7')('borders have no long straight runs', () => {
+    const r = longestStraightBorder(f.height, f.riverMask, f.provinceOf, W, H);
+    expect(r.axis).toBeLessThanOrEqual(12);
+    expect(r.diagonal).toBeLessThanOrEqual(12);
+  });
+
+  it.runIf(seed === '1')('is deterministic', { timeout: 30000 }, () => {
     const rng = createRng(seed);
     const again = computeProvinces(rng.fork('provinces'), f.height, f.biomes, f.riverMask, W, H);
     expect(Buffer.from(again.provinceOf.buffer).equals(Buffer.from(f.provinceOf.buffer))).toBe(true);
