@@ -36,8 +36,9 @@ export function bakeTextures(world: World): BakedTextures {
     const o = i * 4;
     const id = provinceOf[i] as number;
     if (id >= provinces.length) throw new Error(`нет провинции с id ${id} (клетка ${i})`);
-    provinceRG[o] = id & 255; // = encodeProvinceId
-    provinceRG[o + 1] = id >> 8;
+    const [r, g] = encodeProvinceId(id);
+    provinceRG[o] = r;
+    provinceRG[o + 1] = g;
     provinceRG[o + 2] = landOf[id] as number;
     provinceRG[o + 3] = 255;
     terrain[o] = clampByte(Math.round((height[i] as number) * 255));

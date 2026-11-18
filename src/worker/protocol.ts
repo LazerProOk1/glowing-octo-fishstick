@@ -1,4 +1,4 @@
-import type { SurfaceBake, WorldBake } from '../render/bakeWorld';
+import { uniqueBuffers, type SurfaceBake, type WorldBake } from '../render/bakeWorld';
 import { GEN_STAGES } from '../sim/world/generateWorld';
 import type { World } from '../sim/world/types';
 
@@ -46,14 +46,6 @@ export interface SurfaceRequest {
 export type SurfaceResponse =
   | { type: 'done'; id: number; bake: SurfaceBake; ms: number }
   | { type: 'error'; id: number; message: string };
-
-function uniqueBuffers(views: ArrayBufferView[]): ArrayBuffer[] {
-  const seen = new Set<ArrayBuffer>();
-  for (const v of views) {
-    if (v.buffer instanceof ArrayBuffer) seen.add(v.buffer);
-  }
-  return [...seen];
-}
 
 /** Буферы всех типизированных массивов мира, каждый один раз (повтор в списке передачи — ошибка). */
 export function collectTransferables(world: World): ArrayBuffer[] {

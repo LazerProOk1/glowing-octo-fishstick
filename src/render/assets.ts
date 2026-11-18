@@ -31,10 +31,3 @@ export const TERRAIN_TEXTURES: Record<Biome, DetailSlot> = {
   glacier: DetailSlot.SNOW,
   swamp: DetailSlot.MUD,
 };
-
-/** Шрифт интерфейса: PT Sans (ParaType, SIL OFL 1.1), статические начертания Regular и Bold. */
-export const FONT_UI = 'PT Sans';
-export const FONT_URLS = {
-  regular: new URL('../../assets/fonts/PT_Sans-Web-Regular.ttf', import.meta.url).href,
-  bold: new URL('../../assets/fonts/PT_Sans-Web-Bold.ttf', import.meta.url).href,
-} as const;

@@ -25,6 +25,8 @@ export class LoadingScreen {
 
     const head = el('div', 'loading__head');
     this.elapsedEl = el('span', 'loading__elapsed');
+    // Счётчик меняется каждый кадр — читалке экрана он не нужен (иначе живой регион не умолкает).
+    this.elapsedEl.setAttribute('aria-hidden', 'true');
     head.append(el('h1', 'loading__title', t('loading.title')), this.elapsedEl);
     this.seedEl = el('div', 'loading__seed');
     const stage = el('div', 'loading__stage');

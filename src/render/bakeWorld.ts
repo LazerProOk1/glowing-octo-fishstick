@@ -59,11 +59,16 @@ export function bakeWorld(world: World, surface?: SurfaceBake): WorldBake {
   };
 }
 
-/** Буферы запечённых текстур, каждый один раз. */
-export function bakeTransferables(bake: Partial<WorldBake>): ArrayBuffer[] {
+/** Буферы типизированных массивов, каждый один раз (повтор в списке передачи — ошибка). */
+export function uniqueBuffers(views: Iterable<ArrayBufferView>): ArrayBuffer[] {
   const seen = new Set<ArrayBuffer>();
-  for (const v of Object.values(bake) as ArrayBufferView[]) {
+  for (const v of views) {
     if (v.buffer instanceof ArrayBuffer) seen.add(v.buffer);
   }
   return [...seen];
+}
+
+/** Буферы запечённых текстур, каждый один раз. */
+export function bakeTransferables(bake: Partial<WorldBake>): ArrayBuffer[] {
+  return uniqueBuffers(Object.values(bake) as ArrayBufferView[]);
 }

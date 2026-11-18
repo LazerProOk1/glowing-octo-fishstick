@@ -31,6 +31,22 @@ interface SurfaceResult {
 /** Вложенный воркер создаётся один раз; null — недоступен (тогда печём в этом потоке). */
 let surfaceWorker: Worker | null | undefined;
 const surfacePending = new Map<number, { resolve(r: SurfaceResult): void; reject(e: Error): void }>();
+/**
+ * Сколько ждать вложенный воркер с момента запроса. Он печёт ~0,5–1 с; если за это время нет ответа,
+ * воркер считается зависшим, останавливается, и рельеф печётся в этом потоке.
+ */
+const SURFACE_TIMEOUT_MS = 15000;
+
+/**
+ * Останавливает вложенный воркер и отклоняет ожидающие запросы.
+ * retry — пересоздать его при следующей генерации (зависание), иначе больше не пробовать (сбой).
+ */
+function dropSurfaceWorker(worker: Worker, err: Error, retry: boolean): void {
+  if (surfaceWorker === worker) surfaceWorker = retry ? undefined : null;
+  worker.terminate();
+  for (const p of surfacePending.values()) p.reject(err);
+  surfacePending.clear();
+}
 
 function getSurfaceWorker(): Worker | null {
   if (surfaceWorker !== undefined) return surfaceWorker;
@@ -48,11 +64,10 @@ function getSurfaceWorker(): Worker | null {
     worker.onerror = (e: ErrorEvent) => {
       e.preventDefault();
       // Воркер не поднялся или упал: дальше печём в этом потоке.
-      surfaceWorker = null;
-      worker.terminate();
-      const err = new Error(e.message || 'surface worker failed');
-      for (const p of surfacePending.values()) p.reject(err);
-      surfacePending.clear();
+      dropSurfaceWorker(worker, new Error(e.message || 'surface worker failed'), false);
+    };
+    worker.onmessageerror = () => {
+      dropSurfaceWorker(worker, new Error('surface worker sent an unreadable message'), false);
     };
     surfaceWorker = worker;
   } catch {
@@ -67,7 +82,20 @@ function startSurfaceBake(id: number, height: Float32Array, biome: Uint8Array, w
   if (!worker) return null;
   const req: SurfaceRequest = { id, height: height.slice(), biome: biome.slice(), w, h };
   return new Promise<SurfaceResult>((resolve, reject) => {
-    surfacePending.set(id, { resolve, reject });
+    const timer = setTimeout(
+      () => dropSurfaceWorker(worker, new Error('surface worker timed out'), true),
+      SURFACE_TIMEOUT_MS,
+    );
+    surfacePending.set(id, {
+      resolve: (r) => {
+        clearTimeout(timer);
+        resolve(r);
+      },
+      reject: (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    });
     worker.postMessage(req, [req.height.buffer, req.biome.buffer]);
   });
 }

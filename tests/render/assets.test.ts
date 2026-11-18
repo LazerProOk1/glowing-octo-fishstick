@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { ATLAS_GRID, DetailSlot, FONT_UI, FONT_URLS, TERRAIN_TEXTURES } from '../../src/render/assets';
+import { ATLAS_GRID, DetailSlot, TERRAIN_TEXTURES } from '../../src/render/assets';
 import { BIOMES } from '../../src/sim/world/types';
 
 const ROOT = join(__dirname, '..', '..');
@@ -18,11 +18,6 @@ describe('TERRAIN_TEXTURES', () => {
       expect(slot).toBeLessThanOrEqual(DetailSlot.PAPER);
       expect(slot).toBeLessThan(ATLAS_GRID * ATLAS_GRID);
     }
-  });
-  it('exposes the UI font family and its files', () => {
-    expect(FONT_UI).toBe('PT Sans');
-    expect(FONT_URLS.regular).toContain('PT_Sans-Web-Regular.ttf');
-    expect(FONT_URLS.bold).toContain('PT_Sans-Web-Bold.ttf');
   });
 });
 
@@ -113,6 +108,16 @@ describe('fonts', () => {
     const ofl = readFileSync(join(ASSETS, 'fonts', 'OFL.txt'), 'utf8');
     expect(ofl).toContain('PT Sans');
     expect(ofl).toContain('SIL Open Font License, Version 1.1');
+  });
+  it('the UI stylesheet loads exactly these font files', () => {
+    const css = readFileSync(join(ROOT, 'src', 'ui', 'styles.css'), 'utf8');
+    expect(css).toContain("font-family: 'PT Sans'");
+    const urls = [...css.matchAll(/url\('([^']+)'\)/g)].map((m) => m[1]!.split('/').pop());
+    expect(urls.sort()).toEqual(['PT_Sans-Web-Bold.ttf', 'PT_Sans-Web-Regular.ttf']);
+  });
+  it('CREDITS.md names the font source and license', () => {
+    expect(credits).toContain('https://raw.githubusercontent.com/google/fonts/main/ofl/ptsans/');
+    expect(credits).toContain('SIL Open Font License 1.1');
   });
 });
 

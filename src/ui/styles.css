@@ -233,11 +233,7 @@ body {
 }
 
 .debug__row--total .debug__label,
-.debug__row--total .debug__row--sub .debug__label {
-  padding-left: 1.5ch;
-}
-
-.debug__value {
+.debug__row--total .debug__value {
   color: var(--text);
   font-weight: 700;
 }

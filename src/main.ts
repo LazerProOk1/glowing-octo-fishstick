@@ -85,20 +85,32 @@ async function start(root: HTMLElement): Promise<void> {
   }
 
   // Генерация стартует сразу и идёт в воркере параллельно с запуском графики.
-  const firstWorld = requestWorld(seed, (s) => loading.setStage(s));
+  // Смена адреса, пока графика запускается, сразу перезапрашивает мир (старый запрос вытесняется).
+  let first = { seed, world: requestWorld(seed, (s) => loading.setStage(s)) };
+  const onEarlyHash = (): void => {
+    const next = seedFromHash();
+    if (!next || next === first.seed) return;
+    first.world.catch(() => undefined);
+    loading.show(next);
+    first = { seed: next, world: requestWorld(next, (s) => loading.setStage(s)) };
+  };
+  window.addEventListener('hashchange', onEarlyHash);
+  const abortStart = (): void => {
+    window.removeEventListener('hashchange', onEarlyHash);
+    first.world.catch(() => undefined);
+    loading.hide();
+  };
 
   let app: Application;
   try {
     app = await createApp();
   } catch (err) {
-    firstWorld.catch(() => undefined);
-    loading.hide();
+    abortStart();
     showError(root, t('error.init'), errorDetail(err));
     return;
   }
   if (!rendererIsWebGL2(app)) {
-    firstWorld.catch(() => undefined);
-    loading.hide();
+    abortStart();
     app.destroy();
     showError(root, t('error.webgl2'));
     return;
@@ -120,7 +132,7 @@ async function start(root: HTMLElement): Promise<void> {
       else location.hash = encodeURIComponent(next);
     },
   );
-  debug.setSeed(seed);
+  debug.setSeed(first.seed);
 
   const show = async (pending: Promise<GenResult>): Promise<void> => {
     try {
@@ -146,6 +158,7 @@ async function start(root: HTMLElement): Promise<void> {
     void show(requestWorld(next, (s) => loading.setStage(s)));
   };
 
+  window.removeEventListener('hashchange', onEarlyHash);
   window.addEventListener('hashchange', () => {
     const next = seedFromHash();
     if (next) regenerate(next);
@@ -154,7 +167,7 @@ async function start(root: HTMLElement): Promise<void> {
   // Для ручной проверки в браузере (счётчик текстур и т.п.).
   if (import.meta.env.DEV) Object.assign(window, { __app: app, __mapView: view });
 
-  await show(firstWorld);
+  await show(first.world);
 }
 
 const root = document.getElementById('app') ?? document.body;
