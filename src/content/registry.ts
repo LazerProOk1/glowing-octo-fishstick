@@ -35,11 +35,12 @@ export function isRequired(def: BiomeDef): boolean {
   return (def.kind === 'land' && isFallback(def)) || hasTag(def, 'deepWater') || hasTag(def, 'shallowWater');
 }
 
-function saturation([r, g, b]: readonly [number, number, number]): number {
+/** Насыщенность и светлота HSL цвета sRGB 0..255. */
+export function hsl([r, g, b]: readonly [number, number, number]): { s: number; l: number } {
   const max = Math.max(r, g, b) / 255;
   const min = Math.min(r, g, b) / 255;
   const l = (max + min) / 2;
-  return max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+  return { s: max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1)), l };
 }
 
 /** Проверка одного биома; бросает ошибку с id биома. */
@@ -53,10 +54,13 @@ export function validateBiome(def: BiomeDef): void {
   if (def.color.length !== 3 || def.color.some((v) => !Number.isInteger(v) || v < 0 || v > 255)) {
     fail('цвет — три целых 0..255');
   }
-  if (saturation(def.color) > 0.45) fail('цвет слишком насыщен (насыщенность HSL > 0.45)');
+  const { s, l } = hsl(def.color);
+  if (s > 0.45) fail('цвет слишком насыщен (насыщенность HSL > 0.45)');
+  if (l < 0.2 || l > 0.9) fail('цвет слишком тёмный или светлый (светлота HSL вне 0.2..0.9)');
   if (!(DETAIL_SLOT_NAMES as readonly string[]).includes(def.detail)) fail(`нет слота атласа «${def.detail}»`);
   if (!Number.isFinite(def.priority)) fail('приоритет — конечное число');
-  for (const [k, r] of Object.entries(def.when) as Array<[string, readonly [number, number]]>) {
+  for (const [k, r] of Object.entries(def.when) as Array<[string, readonly [number, number] | undefined]>) {
+    if (r === undefined) continue;
     if (!(r[0] < r[1])) fail(`условие ${k}: нужно min < max`);
   }
 }
@@ -81,6 +85,9 @@ export function resolveBiomes(options: GenOptions = {}, available: readonly Pack
       byId.set(id, { ...old, ...patch, id });
     }
   }
+  // Все объявленные биомы (после правок), а не только включённые: ошибка в данных пака
+  // видна сразу, а не когда биом впервые включат.
+  for (const def of byId.values()) validateBiome(def);
   const disabled = new Set(options.disabledBiomes ?? []);
   for (const id of disabled) {
     const def = byId.get(id);
@@ -88,7 +95,6 @@ export function resolveBiomes(options: GenOptions = {}, available: readonly Pack
     if (isRequired(def)) throw new Error(`биом «${id}» нельзя выключить: без него мир не собрать`);
   }
   const list = [...byId.values()].filter((b) => (options.fantasy || !b.fantasy) && !disabled.has(b.id));
-  for (const b of list) validateBiome(b);
   if (list.length > MAX_BIOMES) throw new Error(`слишком много биомов: ${list.length} (максимум ${MAX_BIOMES})`);
   for (const kind of ['land', 'water'] as const) {
     const fallbacks = list.filter((b) => b.kind === kind && isFallback(b));

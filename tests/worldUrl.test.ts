@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { buildWorldUrl, parseWorldUrl } from '../src/worldUrl';
 
 describe('parseWorldUrl', () => {
-  it('сид, фэнтези и выключенные биомы', () => {
+  it('сид, фэнтези и выключенные биомы (без повторов, по алфавиту)', () => {
     expect(parseWorldUrl('#Бета-7?fantasy=1&off=swamp,desert')).toEqual({
       seed: 'Бета-7',
-      options: { fantasy: true, disabledBiomes: ['swamp', 'desert'] },
+      options: { fantasy: true, disabledBiomes: ['desert', 'swamp'] },
     });
+    expect(parseWorldUrl('#x?off=swamp,desert,swamp')).toEqual(parseWorldUrl('#x?off=desert,swamp'));
   });
 
   it('сид в кодировке URI', () => {
@@ -41,8 +42,9 @@ describe('buildWorldUrl', () => {
 
   it('обратная сборка совпадает с разбором', () => {
     const url = buildWorldUrl('Бета-7', { fantasy: true, disabledBiomes: ['swamp', 'desert'] });
-    expect(url).toBe(`#${encodeURIComponent('Бета-7')}?fantasy=1&off=swamp,desert`);
-    expect(parseWorldUrl(url)).toEqual({ seed: 'Бета-7', options: { fantasy: true, disabledBiomes: ['swamp', 'desert'] } });
+    expect(url).toBe(`#${encodeURIComponent('Бета-7')}?fantasy=1&off=desert,swamp`);
+    expect(buildWorldUrl('Бета-7', { fantasy: true, disabledBiomes: ['desert', 'swamp', 'desert'] })).toBe(url);
+    expect(parseWorldUrl(url)).toEqual({ seed: 'Бета-7', options: { fantasy: true, disabledBiomes: ['desert', 'swamp'] } });
   });
 
   it('сид со знаком вопроса и амперсандом переживает круг', () => {

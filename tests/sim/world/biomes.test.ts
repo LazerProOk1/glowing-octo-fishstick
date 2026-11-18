@@ -59,6 +59,26 @@ describe('classifyBiome', () => {
     const noSwamp = resolveBiomes({ disabledBiomes: ['swamp'] });
     expect(noSwamp[classifyBiome(noSwamp, 0.55, 10, 0.8, 0.5)]!.id).toBe('forest');
   });
+  it('classifyBiome и computeBiomes согласованы на случайной выборке (и с фэнтези)', () => {
+    const rng = createRng('sample');
+    for (const list of [defs, resolveBiomes({ fantasy: true }), resolveBiomes({ disabledBiomes: ['swamp', 'mountains'] })]) {
+      const n = 4000;
+      const h = new Float32Array(n);
+      const t = new Float32Array(n);
+      const m = new Float32Array(n);
+      const a = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        h[i] = rng.next();
+        t[i] = -35 + 70 * rng.next();
+        m[i] = rng.next();
+        a[i] = rng.next();
+      }
+      const fast = computeBiomes(list, h, t, m, a);
+      let diff = 0;
+      for (let i = 0; i < n; i++) if (classifyBiome(list, h[i]!, t[i]!, m[i]!, a[i]!) !== fast[i]) diff++;
+      expect(diff).toBe(0);
+    }
+  });
   it('компиляция: приоритеты по убыванию, вода и суша раздельно, запасной последним', () => {
     const c = compileBiomes(defs);
     const land = [...c.code.slice(c.landStart)].map((k) => defs[k]!.id);

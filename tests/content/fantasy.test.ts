@@ -49,9 +49,11 @@ describe('фэнтези-биомы', () => {
   it('фэнтези выключено: в списке и на карте нет фэнтези-биомов', () => {
     const { defs, biomes } = surfaceBiomes('1', {});
     expect(defs.some((d) => d.fantasy)).toBe(false);
-    let max = 0;
-    for (const b of biomes) if (b > max) max = b;
-    expect(max).toBeLessThan(defs.length);
+    const fantasyIds = new Set(FANTASY);
+    const onMap = new Set<string>();
+    for (const b of biomes) onMap.add(defs[b]?.id ?? `код ${b}`);
+    for (const id of onMap) expect(defs.some((d) => d.id === id), id).toBe(true);
+    expect([...onMap].filter((id) => fantasyIds.has(id))).toEqual([]);
   });
 
   it('каждый фэнтези-биом занимает ≥ 200 клеток хотя бы на одном сиде', () => {

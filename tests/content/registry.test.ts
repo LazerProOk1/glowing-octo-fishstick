@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DETAIL_SLOT_NAMES, type BiomeDef, type PackManifest } from '../../src/content/biomes/types';
 import { BASE_PACK } from '../../src/content/packs/base/manifest';
-import { biomeName, isFallback, resolveBiomes } from '../../src/content/registry';
+import { biomeName, hsl, isFallback, resolveBiomes } from '../../src/content/registry';
 
 /** Насыщенность HSL цвета sRGB 0..255. */
 function saturation([r, g, b]: readonly [number, number, number]): number {
@@ -37,11 +37,13 @@ describe('реестр биомов базового пака', () => {
     }
   });
 
-  it('цвет — байты 0..255, насыщенность ≤ 0.45', () => {
+  it('цвет — байты 0..255, насыщенность ≤ 0.45, светлота 0.2..0.9', () => {
     for (const b of all) {
       expect(b.color, b.id).toHaveLength(3);
       for (const v of b.color) expect(Number.isInteger(v) && v >= 0 && v <= 255, b.id).toBe(true);
       expect(saturation(b.color), b.id).toBeLessThanOrEqual(0.45);
+      expect(hsl(b.color).l, b.id).toBeGreaterThanOrEqual(0.2);
+      expect(hsl(b.color).l, b.id).toBeLessThanOrEqual(0.9);
     }
   });
 
@@ -134,6 +136,29 @@ describe('resolveBiomes', () => {
     expect(list.map((b) => b.id)).toEqual([...OLD_ORDER, 'heath']);
     // Базовый пак не изменился.
     expect(resolveBiomes({}).find((b) => b.id === 'forest')!.color).not.toEqual([100, 110, 90]);
+  });
+
+  it('проверяются все объявленные биомы после правок, а не только включённые', () => {
+    // Фэнтези выключено, но испорченный фэнтези-биом всё равно даёт ошибку.
+    const bright: PackManifest = {
+      id: 'bright', name: 'x', version: '0', biomes: [],
+      overrides: { magic_forest: { color: [0, 255, 0] } },
+    };
+    expect(() => resolveBiomes({ packs: ['base', 'bright'] }, [BASE_PACK, bright])).toThrow(/magic_forest/);
+    const dark: PackManifest = {
+      id: 'dark', name: 'x', version: '0', biomes: [],
+      overrides: { forest: { color: [20, 20, 20] } },
+    };
+    expect(() => resolveBiomes({ packs: ['base', 'dark'] }, [BASE_PACK, dark])).toThrow(/forest/);
+  });
+
+  it('условие undefined в when пропускается, биом без условий остаётся запасным', () => {
+    const pack: PackManifest = {
+      id: 'undef', name: 'x', version: '0', biomes: [],
+      overrides: { plains: { when: { height: undefined } } },
+    };
+    const list = resolveBiomes({ packs: ['base', 'undef'] }, [BASE_PACK, pack]);
+    expect(isFallback(list.find((b) => b.id === 'plains')!)).toBe(true);
   });
 
   it('override неизвестного биома — ошибка', () => {

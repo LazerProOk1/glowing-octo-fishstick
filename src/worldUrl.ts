@@ -10,6 +10,11 @@ function decode(s: string): string {
   }
 }
 
+/** Выключенные биомы без повторов и по алфавиту: `off=a,b` и `off=b,a` — один и тот же мир. */
+function normalizeOff(ids: readonly string[]): string[] {
+  return [...new Set(ids)].sort();
+}
+
 /** Разбор `location.hash`; неизвестные параметры игнорируются. */
 export function parseWorldUrl(hash: string): { seed: string; options: GenOptions } {
   const raw = hash.startsWith('#') ? hash.slice(1) : hash;
@@ -23,7 +28,7 @@ export function parseWorldUrl(hash: string): { seed: string; options: GenOptions
       .split(',')
       .map((s) => s.trim())
       .filter((s) => s !== '');
-    if (off.length > 0) options.disabledBiomes = off;
+    if (off.length > 0) options.disabledBiomes = normalizeOff(off);
   }
   return { seed, options };
 }
@@ -33,7 +38,7 @@ export function buildWorldUrl(seed: string, options: GenOptions): string {
   const params: string[] = [];
   if (options.fantasy) params.push('fantasy=1');
   if (options.disabledBiomes && options.disabledBiomes.length > 0) {
-    params.push(`off=${options.disabledBiomes.map(encodeURIComponent).join(',')}`);
+    params.push(`off=${normalizeOff(options.disabledBiomes).map(encodeURIComponent).join(',')}`);
   }
   return `#${encodeURIComponent(seed)}${params.length > 0 ? `?${params.join('&')}` : ''}`;
 }
