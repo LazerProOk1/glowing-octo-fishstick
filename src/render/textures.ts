@@ -7,12 +7,12 @@ import { bakeWorld, type WorldBake } from './bakeWorld';
 
 /** GPU-текстуры одного мира. Все без мипмапов: читаются texelFetch или билинейно на нулевом уровне. */
 export interface WorldTextures {
-  /** RGBA8: R,G — id провинции, B — суша. Только texelFetch. */
+  /** RGBA8: R,G — id провинции, B — суша; владельцы там, где на экране суша. Только texelFetch. */
   province: TextureSource;
+  /** RGBA8, та же раскладка: владельцы там, где на экране вода (provinceSeaRG). Только texelFetch. */
+  provinceSea: TextureSource;
   /** RGBA8 LINEAR: G — код биома (texelFetch), B — влажность (билинейно). */
   terrain: TextureSource;
-  /** RGBA8: R — расстояние до границы ×32. Только texelFetch (своя знаковая интерполяция). */
-  border: TextureSource;
   /** R16F LINEAR: высота − SEA_LEVEL (половинная точность у нуля ~1e-6, у гор ~1e-4). */
   height: TextureSource;
   /**
@@ -56,8 +56,8 @@ export function createWorldTextures(world: World, bake: WorldBake = bakeWorld(wo
   const { w, h } = world;
   return {
     province: rgba8(bake.provinceRG, w, h, false),
+    provinceSea: rgba8(bake.provinceSeaRG, w, h, false),
     terrain: rgba8(bake.terrain, w, h, true),
-    border: rgba8(bake.border, w, h, false),
     height: new BufferImageSource({
       resource: bake.height,
       width: w,
@@ -85,8 +85,8 @@ export function createWorldTextures(world: World, bake: WorldBake = bakeWorld(wo
 
 export function destroyWorldTextures(t: WorldTextures): void {
   t.province.destroy();
+  t.provinceSea.destroy();
   t.terrain.destroy();
-  t.border.destroy();
   t.height.destroy();
   t.surface.destroy();
   t.biomeColor.destroy();

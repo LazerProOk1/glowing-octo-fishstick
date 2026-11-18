@@ -14,13 +14,13 @@ import {
 import { DEFAULT_SIZE, SIZE_PRESETS } from '../sim/world/params';
 import type { World } from '../sim/world/types';
 import { clampCamera, minZoom, screenToWorld, zoomAt, type Camera, type MapSize } from './camera';
-import { decodeProvinceIds } from './bake';
 import { bakeWorld, type WorldBake } from './bakeWorld';
 import type { Rect } from './derived';
 import { DEFAULT_FILL, MAP_MODES, mapModeById, type MapMode, type ProvinceRGBA } from './mapModes';
 import { MAP_FRAGMENT, MAP_VERTEX } from './mapShader';
 import { PROVINCE_FLAGS, ProvinceData, WEBGL2_MIN_TEXTURE_SIZE } from './provinceData';
 import { RiverLayer } from './riverLayer';
+import { pickProvince, type ProvinceMaps } from './softProvince';
 import {
   createAtlasPlaceholder,
   createWorldTextures,
@@ -55,8 +55,8 @@ export class MapView {
   private atlas: TextureSource;
   private textures: WorldTextures | null = null;
   private world: World | null = null;
-  /** Владелец клетки для показа (id из текстуры провинций, см. displayProvinceOf): по нему наведение. */
-  private owner: Uint16Array | null = null;
+  /** Карты владельцев для показа и береговая высота (те же массивы, что в текстурах): по ним наведение. */
+  private owners: ProvinceMaps | null = null;
   /** Данные провинций (цвет заливки режима, флаги) и их текстура; есть, пока показан мир. */
   private provData: ProvinceData | null = null;
   private provSource: BufferImageSource | null = null;
@@ -94,7 +94,7 @@ export class MapView {
         uSurface: this.blank,
         uBiomeColor: this.blank,
         uProvince: this.blank,
-        uBorder: this.blank,
+        uProvinceSea: this.blank,
         uPalette: this.blank,
         uAtlas: this.atlas,
         uProvData: this.blank,
@@ -160,7 +160,7 @@ export class MapView {
     res.uSurface = next.surface;
     res.uBiomeColor = next.biomeColor;
     res.uProvince = next.province;
-    res.uBorder = next.border;
+    res.uProvinceSea = next.provinceSea;
     res.uPalette = next.palette;
     const resized = world.w !== this.map.w || world.h !== this.map.h;
     this.map = { w: world.w, h: world.h };
@@ -172,7 +172,7 @@ export class MapView {
     }
     this.textures = next;
     this.world = world;
-    this.owner = decodeProvinceIds(bake.provinceRG);
+    this.owners = { w: world.w, h: world.h, land: bake.provinceRG, sea: bake.provinceSeaRG, surface: bake.surface };
     this.worldU[0] = world.w;
     this.worldU[1] = world.h;
     this.rivers.setRivers(world.rivers);
@@ -260,7 +260,7 @@ export class MapView {
     if (this.textures) destroyWorldTextures(this.textures);
     this.textures = null;
     this.world = null;
-    this.owner = null;
+    this.owners = null;
     this.provSource?.destroy();
     this.provSource = null;
     this.provData = null;
@@ -323,20 +323,18 @@ export class MapView {
   }
 
   /**
-   * Наведение по CPU-копии владельцев клеток для показа (как в текстуре провинций), без чтения
-   * с GPU: клетка воды, видимая сушей у берега, выбирает сухопутную провинцию.
+   * Наведение по CPU-копиям тех же карт, что у шейдера, без чтения с GPU: суша или вода в точке —
+   * по размытой высоте, затем провинция с наибольшей долей рядом по карте этой стороны
+   * (pickProvince повторяет softSide шейдера, поэтому выбранная провинция — подсвеченная).
    */
   private hoverAt(sx: number, sy: number): void {
     const world = this.world;
-    const owner = this.owner;
-    if (!world || !owner) return;
+    const owners = this.owners;
+    if (!world || !owners) return;
     const { width, height } = this.app.screen;
     const p = screenToWorld(this.cam, sx, sy, width, height);
-    const cx = Math.floor(p.x);
-    const cy = Math.floor(p.y);
-    const inside = cx >= 0 && cy >= 0 && cx < world.w && cy < world.h;
-    const id = inside ? owner[cy * world.w + cx] : undefined;
-    this.setHoveredProvince(id !== undefined && world.provinces[id] ? id : null);
+    const id = pickProvince(owners, p.x, p.y);
+    this.setHoveredProvince(id !== null && world.provinces[id] ? id : null);
   }
 
   private readonly onPointerDown = (e: PointerEvent): void => {

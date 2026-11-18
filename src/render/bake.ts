@@ -29,22 +29,12 @@ function clampByte(v: number): number {
 export function bakeTextures(world: World, owner: Uint16Array = world.provinceOf): BakedTextures {
   const { w, h, provinces } = world;
   const n = w * h;
+  const provinceRG = provinceIdPixels(owner, provinces);
   const dist = borderDistance(owner, w, h);
-  const provinceRG = new Uint8Array(n * 4);
   const terrain = new Uint8Array(n * 4);
   const border = new Uint8Array(n * 4);
-  // Суша по id провинции заранее: без поиска объекта провинции в цикле по 2 млн клеток.
-  const landOf = new Uint8Array(provinces.length);
-  provinces.forEach((p, id) => (landOf[id] = p.isLand ? 255 : 0));
   for (let i = 0; i < n; i++) {
     const o = i * 4;
-    const id = owner[i] as number;
-    if (id >= provinces.length) throw new Error(`нет провинции с id ${id} (клетка ${i})`);
-    const [r, g] = encodeProvinceId(id);
-    provinceRG[o] = r;
-    provinceRG[o + 1] = g;
-    provinceRG[o + 2] = landOf[id] as number;
-    provinceRG[o + 3] = 255;
     writeTerrainCell(terrain, world, i);
     border[o] = Math.min(255, Math.round((dist[i] as number) * 32));
     border[o + 3] = 255;
@@ -52,11 +42,23 @@ export function bakeTextures(world: World, owner: Uint16Array = world.provinceOf
   return { provinceRG, terrain, border };
 }
 
-/** id провинции каждой клетки обратно из RGBA-пикселей provinceRG. */
-export function decodeProvinceIds(provinceRG: Uint8Array): Uint16Array {
-  const out = new Uint16Array(provinceRG.length / 4);
-  for (let i = 0; i < out.length; i++) {
-    out[i] = decodeProvinceId(provinceRG[i * 4] as number, provinceRG[i * 4 + 1] as number);
+/**
+ * RGBA-пиксели карты владельцев (раскладка provinceRG): R,G — id, B — 255 у сухопутной провинции,
+ * A — 255. Неизвестный id — ошибка.
+ */
+export function provinceIdPixels(owner: Uint16Array, provinces: readonly Pick<World['provinces'][number], 'isLand'>[]): Uint8Array {
+  const out = new Uint8Array(owner.length * 4);
+  // Суша по id провинции заранее: без поиска объекта провинции в цикле по 2 млн клеток.
+  const landOf = new Uint8Array(provinces.length);
+  provinces.forEach((p, id) => (landOf[id] = p.isLand ? 255 : 0));
+  for (let i = 0; i < owner.length; i++) {
+    const o = i * 4;
+    const id = owner[i] as number;
+    if (id >= provinces.length) throw new Error(`нет провинции с id ${id} (клетка ${i})`);
+    out[o] = id & 255;
+    out[o + 1] = id >> 8;
+    out[o + 2] = landOf[id] as number;
+    out[o + 3] = 255;
   }
   return out;
 }

@@ -18,6 +18,16 @@ export function toHalf(v: number): number {
   return (sign | (exp << 10) | (mant >>> 13)) + ((mant >>> 12) & 1);
 }
 
+/** IEEE 754 binary16 → число (обратное к toHalf). */
+export function fromHalf(h: number): number {
+  const sign = h & 0x8000 ? -1 : 1;
+  const exp = (h >> 10) & 0x1f;
+  const mant = h & 0x3ff;
+  if (exp === 0) return sign * mant * 2 ** -24;
+  if (exp === 31) return mant ? NaN : sign * Infinity;
+  return sign * (1 + mant / 1024) * 2 ** (exp - 15);
+}
+
 /** Массив float32 → Uint16Array половинной точности со сдвигом `offset`. */
 export function toHalfArray(src: Float32Array, offset = 0): Uint16Array {
   const out = new Uint16Array(src.length);

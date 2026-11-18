@@ -3,7 +3,7 @@
 import type { BiomeDef } from '../content/biomes/types';
 import { SEA_LEVEL } from '../content/terrainLevels';
 import type { World } from '../sim/world/types';
-import { bakeTextures, type BakedTextures } from './bake';
+import { bakeTextures, provinceIdPixels, type BakedTextures } from './bake';
 import { bakeBiomeColors } from './biomeColors';
 import { toHalf, toHalfArray } from './halfFloat';
 import { blur } from '../sim/geom/blur';
@@ -20,7 +20,10 @@ export interface SurfaceBake {
 
 /** Готовые пиксели текстур мира (раскладка каналов — см. WorldTextures в textures.ts). */
 export interface WorldBake extends SurfaceBake {
+  /** id для показа там, где на экране суша (displayProvinceOf). */
   provinceRG: Uint8Array;
+  /** id для показа там, где на экране вода (displaySeaProvinceOf). */
+  provinceSeaRG: Uint8Array;
   terrain: Uint8Array;
   border: Uint8Array;
 }
@@ -61,16 +64,44 @@ export function displayProvinceOf(
   world: Pick<World, 'w' | 'h' | 'provinces' | 'provinceOf'>,
   coast: Float32Array,
 ): Uint16Array {
+  return spreadAcrossCoast(world, coast, true);
+}
+
+/**
+ * Зеркало displayProvinceOf для воды: клетки суши, которые могут быть видны водой (у самой клетки
+ * или у одного из 8 соседей coast < 0), отдаются ближайшей морской или озёрной провинции. По этой
+ * карте шейдер рисует подсветку, заливку и границы там, где на экране вода, а MapView выбирает
+ * провинцию под курсором. Водные клетки сохраняют свою провинцию.
+ */
+export function displaySeaProvinceOf(
+  world: Pick<World, 'w' | 'h' | 'provinces' | 'provinceOf'>,
+  coast: Float32Array,
+): Uint16Array {
+  return spreadAcrossCoast(world, coast, false);
+}
+
+/**
+ * Общая часть обеих карт показа. toLand: клетки воды у видимой суши получают сушу; иначе клетки
+ * суши у видимой воды получают воду. Обход в ширину по 8 соседям, при равном расстоянии — меньший id.
+ */
+function spreadAcrossCoast(
+  world: Pick<World, 'w' | 'h' | 'provinces' | 'provinceOf'>,
+  coast: Float32Array,
+  toLand: boolean,
+): Uint16Array {
   const { w, h, provinces, provinceOf } = world;
   const n = w * h;
   const out = provinceOf.slice();
-  const landOf = new Uint8Array(provinces.length);
-  provinces.forEach((p, id) => (landOf[id] = p.isLand ? 1 : 0));
-  // 0 — не трогаем, 1 — полоса воды, ещё без владельца, 2 — владелец найден на этом слое.
+  // 1 — провинция той стороны берега, которой отдаём полосу.
+  const sourceOf = new Uint8Array(provinces.length);
+  provinces.forEach((p, id) => (sourceOf[id] = p.isLand === toLand ? 1 : 0));
+  // Знак coast, при котором клетка может быть видна стороной-источником.
+  const sign = toLand ? 1 : -1;
+  // 0 — не трогаем, 1 — полоса, ещё без владельца, 2 — владелец найден на этом слое.
   const state = new Uint8Array(n);
   let frontier: number[] = [];
   for (let i = 0; i < n; i++) {
-    if (landOf[provinceOf[i] as number]) {
+    if (sourceOf[provinceOf[i] as number]) {
       frontier.push(i);
       continue;
     }
@@ -82,7 +113,7 @@ export function displayProvinceOf(
       if (ny < 0 || ny >= h) continue;
       for (let dx = -1; dx <= 1; dx++) {
         const nx = x + dx;
-        if (nx >= 0 && nx < w && (coast[ny * w + nx] as number) > 0) {
+        if (nx >= 0 && nx < w && sign * (coast[ny * w + nx] as number) > 0) {
           near = true;
           break;
         }
@@ -121,10 +152,16 @@ export function displayProvinceOf(
   return out;
 }
 
-/** Текстуры провинций по владельцам для показа (см. displayProvinceOf). */
-export function bakeProvinces(world: World): BakedTextures {
-  const owner = displayProvinceOf(world, coastHeight(world.height, world.w, world.h));
-  return bakeTextures(world, owner);
+/** Текстуры провинций по владельцам для показа: сухопутная и морская карты (см. displayProvinceOf). */
+export interface ProvinceBake extends BakedTextures {
+  /** RGBA8 в раскладке provinceRG по displaySeaProvinceOf: карта id там, где на экране вода. */
+  provinceSeaRG: Uint8Array;
+}
+
+export function bakeProvinces(world: World): ProvinceBake {
+  const coast = coastHeight(world.height, world.w, world.h);
+  const baked = bakeTextures(world, displayProvinceOf(world, coast));
+  return { ...baked, provinceSeaRG: provinceIdPixels(displaySeaProvinceOf(world, coast), world.provinces) };
 }
 
 export function bakeSurface(
@@ -146,6 +183,7 @@ export function bakeWorld(world: World, surface?: SurfaceBake): WorldBake {
   const baked = bakeProvinces(world);
   return {
     provinceRG: baked.provinceRG,
+    provinceSeaRG: baked.provinceSeaRG,
     terrain: baked.terrain,
     border: baked.border,
     ...(surface ?? bakeSurface(world.height, world.biome, world.biomes, w, h)),

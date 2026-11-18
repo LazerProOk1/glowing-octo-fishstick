@@ -44,6 +44,8 @@ const FINGERPRINT = {
   // v3, Task 6 (та же версия): биом выбирается по температуре и влажности со смещением шумом
   // (classifyTemperatureJitter / classifyMoistureJitter) — меняются biome, provinceOf, рёбра и
   // запекание provinceRG, terrain, border, biomeColor. Поля климата не меняются.
+  // Task 6b (рендер, версия та же): новая текстура provinceSeaRG — владельцы там, где на экране
+  // вода (displaySeaProvinceOf). Остальные хэши не меняются.
   genVersion: 3,
   world: {
     height: '9f842423',
@@ -54,6 +56,7 @@ const FINGERPRINT = {
   },
   bake: {
     provinceRG: '1744067d',
+    provinceSeaRG: '38ff157b',
     terrain: '995ba005',
     border: 'afd35dfa',
     bakeHeight: '8c184fb8',
@@ -118,6 +121,7 @@ describe('отпечаток мира (сид "1", параметры по ум�
     expect(
       {
         provinceRG: fnv1a(bake.provinceRG),
+        provinceSeaRG: fnv1a(bake.provinceSeaRG),
         terrain: fnv1a(bake.terrain),
         border: fnv1a(bake.border),
         bakeHeight: fnv1a(bake.height),

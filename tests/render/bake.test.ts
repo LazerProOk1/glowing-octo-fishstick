@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { resolveBiomes } from '../../src/content/registry';
-import { bakeTextures, decodeProvinceId, encodeProvinceId } from '../../src/render/bake';
+import { bakeTextures, decodeProvinceId, encodeProvinceId, provinceIdPixels } from '../../src/render/bake';
 import { defaultParams } from '../../src/sim/world/params';
 import type { Province, World } from '../../src/sim/world/types';
 
@@ -71,5 +71,14 @@ describe('bakeTextures', () => {
 
   it('бросает при отсутствующей провинции', () => {
     expect(() => bakeTextures({ ...world, provinces: [] })).toThrow();
+  });
+
+  it('provinceIdPixels: та же раскладка, что provinceRG, для любой карты владельцев', () => {
+    const owner = new Uint16Array(w * h).fill(300);
+    owner[0] = 0;
+    const px = provinceIdPixels(owner, world.provinces);
+    expect(Array.from(px.subarray(0, 8))).toEqual([0, 0, 255, 255, 300 & 255, 300 >> 8, 0, 255]);
+    expect(provinceIdPixels(world.provinceOf, world.provinces)).toEqual(bakeTextures(world).provinceRG);
+    expect(() => provinceIdPixels(new Uint16Array([301]), world.provinces)).toThrow();
   });
 });

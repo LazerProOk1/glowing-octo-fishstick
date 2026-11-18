@@ -43,6 +43,7 @@ function fakeWorld(seed: string): World {
 function fakeBake(): WorldBake {
   return {
     provinceRG: new Uint8Array(32),
+    provinceSeaRG: new Uint8Array(32),
     terrain: new Uint8Array(32),
     border: new Uint8Array(32),
     height: new Uint16Array(8),
@@ -216,10 +217,11 @@ describe('collectTransferables', () => {
 });
 
 describe('bakeTransferables', () => {
-  it('отдаёт все шесть буферов запечённых текстур', () => {
+  it('отдаёт все семь буферов запечённых текстур', () => {
     const b = fakeBake();
     const list = bakeTransferables(b);
-    expect(list.length).toBe(6);
+    expect(list.length).toBe(7);
     expect(list).toContain(b.surface.buffer);
+    expect(list).toContain(b.provinceSeaRG.buffer);
   });
 });
