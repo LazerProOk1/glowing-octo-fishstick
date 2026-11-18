@@ -40,7 +40,7 @@ const STEP = 4;
 const LAT_WOBBLE = 0.012;
 
 /** Fill `out` by bilinearly upsampling fn(u, v) evaluated on a coarse STEP-spaced grid. */
-function sampleCoarse(fn: (u: number, v: number) => number, w: number, h: number, out: Float32Array): void {
+export function sampleCoarse(fn: (u: number, v: number) => number, w: number, h: number, out: Float32Array): void {
   const cw = Math.ceil(w / STEP) + 1;
   const ch = Math.ceil(h / STEP) + 1;
   const c = new Float32Array(cw * ch);

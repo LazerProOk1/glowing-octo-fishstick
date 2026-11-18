@@ -1,6 +1,10 @@
 import type { BiomeDef, Range } from '../../content/biomes/types';
 import { hasTag, isFallback } from '../../content/registry';
 import { SEA_LEVEL } from '../../content/terrainLevels';
+import { createNoise2D, fbm } from '../noise';
+import type { Rng } from '../rng';
+import { sampleCoarse } from './climate';
+import { MEDIUM_H } from './params';
 
 /** Измерения условий в порядке хранения: высота, температура, влажность, магичность. */
 const DIMS = 4;
@@ -81,6 +85,58 @@ export function classifyBiome(
   const c = compileBiomes(biomes);
   const water = height <= SEA_LEVEL;
   return c.code[pick(c, water ? 0 : c.landStart, water ? c.landStart : c.code.length, height, temperature, moisture, arcana)]!;
+}
+
+/** Наибольшее смещение температуры (°C) при выборе биома. */
+export const BIOME_JITTER_AMPLITUDE = 1.5;
+/** Наибольшее смещение влажности при выборе биома. */
+export const BIOME_MOISTURE_JITTER_AMPLITUDE = 0.05;
+/** Длины волн октав смещения на medium-карте, клеток: 120, ~69, 40. */
+const JITTER_WAVELENGTH = 120;
+const JITTER_OCTAVES = 3;
+const JITTER_LACUNARITY = Math.sqrt(3);
+/**
+ * Растяжка fbm перед обрезкой до [-1, 1]: у нормированного fbm стандартное отклонение ~0.3,
+ * и без растяжки смещение было бы втрое меньше заявленной амплитуды (граница почти не изгибалась).
+ * После растяжки ~20% клеток упираются в ±амплитуду.
+ */
+const JITTER_GAIN = 2.5;
+
+/** Копия `field` плюс amp × fbm (масштаб 40–120 клеток на medium, в той же доле карты на других). */
+function jitter(rng: Rng, field: Float32Array, amp: number, w: number, h: number): Float32Array {
+  const noise = createNoise2D(rng);
+  const cells = JITTER_WAVELENGTH * (h / MEDIUM_H);
+  const out = new Float32Array(w * h);
+  sampleCoarse(
+    (u, v) => {
+      const n = JITTER_GAIN * fbm(noise, (u * w) / cells, (v * h) / cells, JITTER_OCTAVES, JITTER_LACUNARITY);
+      return amp * (n < -1 ? -1 : n > 1 ? 1 : n);
+    },
+    w,
+    h,
+    out,
+  );
+  for (let i = 0; i < out.length; i++) out[i] = field[i]! + out[i]!;
+  return out;
+}
+
+/**
+ * Температура только для выбора биома: поле `temperature`, смещённое fbm-шумом с амплитудой
+ * ±BIOME_JITTER_AMPLITUDE и масштабом 40–120 клеток. Без смещения широтный градиент у порога
+ * (например, 24 °C у джунглей) почти одинаков по x, и граница биомов тянется прямой линией.
+ * Само поле `World.temperature` не меняется. `rng` — отдельный поток (`rng.fork('biomeJitter')`).
+ */
+export function classifyTemperatureJitter(rng: Rng, temperature: Float32Array, w: number, h: number): Float32Array {
+  return jitter(rng, temperature, BIOME_JITTER_AMPLITUDE, w, h);
+}
+
+/**
+ * Влажность только для выбора биома — то же смещение, что у температуры, со своим шумом
+ * (±BIOME_MOISTURE_JITTER_AMPLITUDE). Зональная влажность тоже зависит от широты, и порог
+ * влажности джунглей (0.7) давал прямую границу у экватора. `World.moisture` не меняется.
+ */
+export function classifyMoistureJitter(rng: Rng, moisture: Float32Array, w: number, h: number): Float32Array {
+  return jitter(rng, moisture, BIOME_MOISTURE_JITTER_AMPLITUDE, w, h);
 }
 
 export function computeBiomes(

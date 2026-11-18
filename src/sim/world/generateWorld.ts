@@ -2,7 +2,7 @@ import type { BiomeDef } from '../../content/biomes/types';
 import { resolveBiomes } from '../../content/registry';
 import { createRng } from '../rng';
 import { computeAdjacency } from './adjacency';
-import { computeBiomes } from './biomes';
+import { classifyMoistureJitter, classifyTemperatureJitter, computeBiomes } from './biomes';
 import { computeArcana, computeClimate } from './climate';
 import { generateHeight } from './heightmap';
 import { applyLakeBiome, findLakes } from './lakes';
@@ -55,7 +55,11 @@ export function generateWorld(
   // Отдельный поток ГСЧ: включение фэнтези не меняет остальные поля мира.
   const arcana = computeArcana(seed, w, h);
   onStage?.('biomes');
-  const rawBiomes = computeBiomes(defs, rawHeight, temperature, moisture, arcana);
+  // Смещённая температура — только для выбора биома, чтобы границы не шли ровно по широте.
+  const jitterRng = rng.fork('biomeJitter');
+  const biomeTemperature = classifyTemperatureJitter(jitterRng, temperature, w, h);
+  const biomeMoisture = classifyMoistureJitter(jitterRng.fork('moisture'), moisture, w, h);
+  const rawBiomes = computeBiomes(defs, rawHeight, biomeTemperature, biomeMoisture, arcana);
   onStage?.('shoreline');
   const shore = normalizeShoreline(rawHeight, rawBiomes, w, h, defs);
   const { height } = shore;

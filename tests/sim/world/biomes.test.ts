@@ -3,8 +3,16 @@ import { resolveBiomes } from '../../../src/content/registry';
 import { createRng } from '../../../src/sim/rng';
 import { generateHeight } from '../../../src/sim/world/heightmap';
 import { computeArcana, computeClimate } from '../../../src/sim/world/climate';
-import { classifyBiome, compileBiomes, computeBiomes } from '../../../src/sim/world/biomes';
-import { SIZE_PRESETS } from '../../../src/sim/world/params';
+import {
+  BIOME_JITTER_AMPLITUDE,
+  classifyBiome,
+  classifyMoistureJitter,
+  classifyTemperatureJitter,
+  compileBiomes,
+  computeBiomes,
+} from '../../../src/sim/world/biomes';
+import { generateWorld } from '../../../src/sim/world/generateWorld';
+import { defaultParams, SIZE_PRESETS } from '../../../src/sim/world/params';
 import { SEA_LEVEL } from '../../../src/content/terrainLevels';
 
 const { w: WORLD_W, h: WORLD_H } = SIZE_PRESETS.medium;
@@ -90,6 +98,79 @@ describe('classifyBiome', () => {
     expect(land[0]).toBe('mountains');
     expect(land[land.length - 1]).toBe('plains');
   });
+});
+
+/**
+ * Самая длинная прямая горизонтальная граница «джунгли / не джунгли»: для каждой строки y
+ * самая длинная серия подряд идущих x, где граница лежит между строками y и y + 1.
+ */
+function longestStraightJungleEdge(biome: Uint8Array, list: readonly { id: string }[], w: number, h: number): number {
+  const jungle = list.findIndex((d) => d.id === 'jungle');
+  let best = 0;
+  for (let y = 0; y + 1 < h; y++) {
+    let run = 0;
+    for (let x = 0; x < w; x++) {
+      const a = biome[y * w + x] === jungle;
+      const b = biome[(y + 1) * w + x] === jungle;
+      run = a !== b ? run + 1 : 0;
+      if (run > best) best = run;
+    }
+  }
+  return best;
+}
+
+describe('смещение климата для выбора биома', () => {
+  const w = WORLD_W;
+  const h = 256;
+  const n = w * h;
+  const height = new Float32Array(n).fill(0.65);
+  const arcana = new Float32Array(n).fill(0.5);
+  /** Поле, зависящее только от строки: как широтный градиент без шума по x. */
+  const rows = (f: (y: number) => number): Float32Array => {
+    const out = new Float32Array(n);
+    for (let y = 0; y < h; y++) out.fill(f(y), y * w, (y + 1) * w);
+    return out;
+  };
+  // Градиенты как у реального мира у порогов джунглей: ~0.055 °C и ~0.005 влажности на строку.
+  const temperature = rows((y) => 24 + 0.055 * (y - h / 2));
+  const moisture = rows((y) => 0.7 + 0.005 * (y - h / 2));
+  const wet = new Float32Array(n).fill(0.9);
+  const hot = new Float32Array(n).fill(27);
+
+  it('без смещения граница — прямая во всю ширину (воспроизводит дефект)', () => {
+    expect(longestStraightJungleEdge(computeBiomes(defs, height, temperature, wet, arcana), defs, w, h)).toBe(w);
+    expect(longestStraightJungleEdge(computeBiomes(defs, height, hot, moisture, arcana), defs, w, h)).toBe(w);
+  });
+
+  it('граница по температуре извилиста; поле температуры не меняется', () => {
+    const before = temperature.slice();
+    const t = classifyTemperatureJitter(createRng('j').fork('biomeJitter'), temperature, w, h);
+    expect(temperature).toEqual(before);
+    let max = 0;
+    for (let i = 0; i < n; i++) max = Math.max(max, Math.abs(t[i]! - temperature[i]!));
+    expect(max).toBeLessThanOrEqual(BIOME_JITTER_AMPLITUDE + 1e-4);
+    expect(max).toBeGreaterThan(BIOME_JITTER_AMPLITUDE * 0.9);
+    expect(longestStraightJungleEdge(computeBiomes(defs, height, t, wet, arcana), defs, w, h)).toBeLessThanOrEqual(25);
+  });
+
+  it('граница по влажности извилиста', () => {
+    const m = classifyMoistureJitter(createRng('j').fork('biomeJitter').fork('moisture'), moisture, w, h);
+    expect(longestStraightJungleEdge(computeBiomes(defs, height, hot, m, arcana), defs, w, h)).toBeLessThanOrEqual(25);
+  });
+
+  it('детерминизм', () => {
+    const a = classifyTemperatureJitter(createRng('j'), temperature, w, h);
+    const b = classifyTemperatureJitter(createRng('j'), temperature, w, h);
+    expect(a).toEqual(b);
+  });
+});
+
+describe.each(['1', 'worldbox'])('no straight biome edges (medium, seed %j)', (seed) => {
+  it('граница джунглей не идёт прямой линией длиннее 25 клеток', () => {
+    const world = generateWorld(defaultParams(seed));
+    const len = longestStraightJungleEdge(world.biome, world.biomes, world.w, world.h);
+    expect(len).toBeLessThanOrEqual(25);
+  }, 60000);
 });
 
 describe.each(['1', 'Бета-7'])('world biomes (seed %j)', (seed) => {
