@@ -1,0 +1,301 @@
+/*
+ * Интерфейс: тёмные нейтральные панели, рамка в 1 px, один приглушённый акцент.
+ * Иерархия — размером и насыщенностью текста, без украшений.
+ */
+
+@font-face {
+  font-family: 'PT Sans';
+  src: url('../../assets/fonts/PT_Sans-Web-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PT Sans';
+  src: url('../../assets/fonts/PT_Sans-Web-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-ui: 'PT Sans', 'Segoe UI', Arial, sans-serif;
+  --font-mono: Consolas, 'Cascadia Mono', Menlo, 'DejaVu Sans Mono', monospace;
+
+  --page: #111315;
+  --panel: rgba(22, 24, 26, 0.94);
+  --panel-solid: #16181a;
+  --field: #0e1012;
+  --line: #34383c;
+  --line-soft: #26292c;
+  --text: #e2e0dc;
+  --text-dim: #a09e99;
+  --text-faint: #6f6e6a;
+  --accent: #8fb0c8;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--page);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+#app {
+  position: relative;
+  height: 100%;
+}
+
+.ui-panel {
+  box-sizing: border-box;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+
+.ui-button {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 5px 14px;
+  cursor: pointer;
+}
+
+.ui-button:hover {
+  border-color: var(--text-faint);
+}
+
+.ui-button:focus-visible,
+.debug__input:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------- Загрузка: компактный блок по центру ---------- */
+
+.loading {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 30;
+  width: 260px;
+  padding: 14px 16px 12px;
+  transform: translate(-50%, -50%);
+}
+
+.loading__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.loading__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.loading__elapsed {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.loading__seed {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loading__stage {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.loading__count {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.loading__track {
+  margin-top: 6px;
+  height: 2px;
+  background: var(--line-soft);
+}
+
+.loading__fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+
+/* ---------- Подсказка у курсора ---------- */
+
+.tooltip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 20;
+  pointer-events: none;
+  padding: 4px 8px 5px;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.tooltip__title {
+  font-weight: 700;
+}
+
+.tooltip__info {
+  color: var(--text-dim);
+}
+
+.tooltip__info::first-letter {
+  text-transform: uppercase;
+}
+
+/* ---------- Панель отладки (F3) ---------- */
+
+.debug {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  width: 240px;
+  padding: 6px 8px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.debug__head {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+  font-weight: 700;
+}
+
+.debug__hint {
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.debug__section {
+  margin: 6px 0 2px;
+  color: var(--text-faint);
+}
+
+.debug__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.debug__label {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.debug__row--sub .debug__label {
+  padding-left: 1.5ch;
+}
+
+.debug__value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.debug__row--total {
+  margin-top: 2px;
+  padding-top: 2px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.debug__row--total .debug__label,
+.debug__row--total .debug__row--sub .debug__label {
+  padding-left: 1.5ch;
+}
+
+.debug__value {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.debug__input {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 2px;
+  font: inherit;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: 3px 5px;
+}
+
+.debug__input::placeholder {
+  color: var(--text-faint);
+}
+
+/* ---------- Ошибка ---------- */
+
+.error-screen {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 40;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px 16px;
+  transform: translate(-50%, -50%);
+}
+
+.error-screen__title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.error-screen__message {
+  margin: 0 0 10px;
+}
+
+.error-screen__detail {
+  margin: 0 0 12px;
+  padding: 6px 8px;
+  max-height: 160px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--field);
+  border: 1px solid var(--line-soft);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading__fill {
+    transition: none;
+  }
+}

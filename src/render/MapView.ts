@@ -10,6 +10,7 @@ import {
 } from 'pixi.js';
 import { WORLD_H, WORLD_W, type World } from '../sim/world/types';
 import { clampCamera, minZoom, screenToWorld, zoomAt, type Camera } from './camera';
+import type { WorldBake } from './bakeWorld';
 import { MAP_FRAGMENT, MAP_VERTEX } from './mapShader';
 import { RiverLayer } from './riverLayer';
 import {
@@ -47,6 +48,7 @@ export class MapView {
   private world: World | null = null;
   private cam: Camera = { x: WORLD_W / 2, y: WORLD_H / 2, zoom: 1 };
   private hovered: number | null = null;
+  private readonly hoverListeners = new Set<(id: number | null) => void>();
   private drag: { id: number; x: number; y: number } | null = null;
   private destroyed = false;
 
@@ -117,9 +119,12 @@ export class MapView {
     return { ...this.cam };
   }
 
-  /** Показывает мир; текстуры предыдущего мира освобождаются. */
-  setWorld(world: World): void {
-    const next = createWorldTextures(world);
+  /**
+   * Показывает мир; текстуры предыдущего мира освобождаются.
+   * bake — текстуры, запечённые в воркере; без него печём в главном потоке (несколько секунд).
+   */
+  setWorld(world: World, bake?: WorldBake): void {
+    const next = createWorldTextures(world, bake);
     const res = this.shader.resources;
     res.uTerrain = next.terrain;
     res.uHeight = next.height;
@@ -147,11 +152,19 @@ export class MapView {
     this.hovered = id;
     this.uniforms.uniforms.uHovered = id ?? -1;
     this.uniforms.update();
+    for (const cb of this.hoverListeners) cb(id);
+  }
+
+  /** Подписка на смену провинции под курсором; возвращает отписку. */
+  onHover(cb: (id: number | null) => void): () => void {
+    this.hoverListeners.add(cb);
+    return () => this.hoverListeners.delete(cb);
   }
 
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.hoverListeners.clear();
     const canvas = this.app.canvas;
     canvas.removeEventListener('pointerdown', this.onPointerDown);
     canvas.removeEventListener('pointermove', this.onPointerMove);

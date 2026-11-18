@@ -1,10 +1,7 @@
 import { BufferImageSource, ImageSource, type TextureSource } from 'pixi.js';
-import { BIOMES, SEA_LEVEL, type World } from '../sim/world/types';
+import { BIOMES, type World } from '../sim/world/types';
 import { ATLAS_URL, TERRAIN_TEXTURES } from './assets';
-import { bakeTextures } from './bake';
-import { toHalfArray } from './halfFloat';
-import { bakeBiomeColors } from './biomeColors';
-import { COAST_SIGMA, bakeGradient, blur, coastNearness } from './normals';
+import { bakeWorld, type WorldBake } from './bakeWorld';
 import { PALETTE } from './palette';
 
 /** GPU-текстуры одного мира. Все без мипмапов: читаются texelFetch или билинейно на нулевом уровне. */
@@ -45,15 +42,15 @@ function rgba8(data: Uint8Array, width: number, height: number, linear: boolean)
   });
 }
 
-export function createWorldTextures(world: World): WorldTextures {
+/** bake — данные, запечённые заранее (в воркере); без него печём здесь, в главном потоке. */
+export function createWorldTextures(world: World, bake: WorldBake = bakeWorld(world)): WorldTextures {
   const { w, h } = world;
-  const baked = bakeTextures(world);
   return {
-    province: rgba8(baked.provinceRG, w, h, false),
-    terrain: rgba8(baked.terrain, w, h, true),
-    border: rgba8(baked.border, w, h, false),
+    province: rgba8(bake.provinceRG, w, h, false),
+    terrain: rgba8(bake.terrain, w, h, true),
+    border: rgba8(bake.border, w, h, false),
     height: new BufferImageSource({
-      resource: toHalfArray(world.height, SEA_LEVEL),
+      resource: bake.height,
       width: w,
       height: h,
       format: 'r16float',
@@ -62,9 +59,9 @@ export function createWorldTextures(world: World): WorldTextures {
       alphaMode: 'no-premultiply-alpha',
       autoGenerateMipmaps: false,
     }),
-    biomeColor: rgba8(bakeBiomeColors(world.biome, w, h), w, h, true),
+    biomeColor: rgba8(bake.biomeColor, w, h, true),
     surface: new BufferImageSource({
-      resource: toHalfArray(packSurface(world.height, w, h)),
+      resource: bake.surface,
       width: w,
       height: h,
       format: 'rgba16float',
@@ -74,20 +71,6 @@ export function createWorldTextures(world: World): WorldTextures {
       autoGenerateMipmaps: false,
     }),
   };
-}
-
-function packSurface(height: Float32Array, w: number, h: number): Float32Array {
-  const grad = bakeGradient(height, w, h);
-  const coast = blur(height, w, h, COAST_SIGMA);
-  const near = coastNearness(height, w, h, SEA_LEVEL);
-  const out = new Float32Array(w * h * 4);
-  for (let i = 0; i < w * h; i++) {
-    out[i * 4] = grad[i * 2] as number;
-    out[i * 4 + 1] = grad[i * 2 + 1] as number;
-    out[i * 4 + 2] = (coast[i] as number) - SEA_LEVEL;
-    out[i * 4 + 3] = near[i] as number;
-  }
-  return out;
 }
 
 export function destroyWorldTextures(t: WorldTextures): void {

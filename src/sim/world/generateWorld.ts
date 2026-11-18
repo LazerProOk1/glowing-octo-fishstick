@@ -16,15 +16,36 @@ export function assertProvinceCount(n: number): void {
   }
 }
 
-export function generateWorld(seed: string): World {
+/** Этапы генерации в порядке выполнения. */
+export const GEN_STAGES = ['height', 'climate', 'biomes', 'shoreline', 'rivers', 'provinces'] as const;
+export type GenStage = (typeof GEN_STAGES)[number];
+
+/**
+ * @param onStage вызывается перед каждым этапом (для экрана загрузки и замеров в воркере;
+ *   само ядро время не измеряет).
+ * @param onSurface вызывается, как только высота и биомы окончательны (после этапа берегов):
+ *   воркер отдаёт их на параллельное запекание текстур. Массивы дальше не меняются.
+ */
+export function generateWorld(
+  seed: string,
+  onStage?: (stage: GenStage) => void,
+  onSurface?: (height: Float32Array, biome: Uint8Array) => void,
+): World {
   const w = WORLD_W;
   const h = WORLD_H;
   const rng = createRng(seed);
+  onStage?.('height');
   const rawHeight = generateHeight(rng.fork('height'), w, h);
+  onStage?.('climate');
   const { temperature, moisture } = computeClimate(rng.fork('climate'), rawHeight, w, h);
+  onStage?.('biomes');
   const rawBiomes = computeBiomes(rawHeight, temperature, moisture);
+  onStage?.('shoreline');
   const { height, biomes } = normalizeShoreline(rawHeight, rawBiomes, w, h);
+  onSurface?.(height, biomes);
+  onStage?.('rivers');
   const { rivers, riverMask } = computeRivers(height, moisture, w, h);
+  onStage?.('provinces');
   const { provinceOf, provinces } = computeProvinces(
     rng.fork('provinces'),
     height,
