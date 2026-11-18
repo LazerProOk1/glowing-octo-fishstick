@@ -5,7 +5,7 @@ import type { BiomeDef } from '../content/biomes/types';
 import { bakeTextures } from '../render/bake';
 import { bakeSurface, bakeTransferables, type SurfaceBake, type WorldBake } from '../render/bakeWorld';
 import { generateWorld } from '../sim/world/generateWorld';
-import { WORLD_H, WORLD_W, type World } from '../sim/world/types';
+import type { World } from '../sim/world/types';
 import {
   collectTransferables,
   LOAD_STEPS,
@@ -112,7 +112,7 @@ scope.onmessage = (e) => {
   void handle(e.data);
 };
 
-async function handle({ id, seed, options }: GenRequest): Promise<void> {
+async function handle({ id, params }: GenRequest): Promise<void> {
   const stages = Object.fromEntries(LOAD_STEPS.map((s) => [s, 0])) as Record<LoadStep, number>;
   const start = performance.now();
   let step: LoadStep | null = null;
@@ -126,8 +126,8 @@ async function handle({ id, seed, options }: GenRequest): Promise<void> {
   };
   try {
     let parallel: Promise<SurfaceResult> | null = null;
-    const world = generateWorld(seed, options, enter, (height, biome, defs) => {
-      parallel = startSurfaceBake(id, height, biome, defs, WORLD_W, WORLD_H);
+    const world = generateWorld(params, enter, (height, biome, defs, w, h) => {
+      parallel = startSurfaceBake(id, height, biome, defs, w, h);
     });
     enter('bake');
     // Текстуры провинций зависят от всей генерации — их печём здесь, пока вложенный воркер

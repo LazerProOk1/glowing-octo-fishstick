@@ -1,6 +1,6 @@
 import type { BiomeDef, Range } from '../../content/biomes/types';
 import { isFallback } from '../../content/registry';
-import { SEA_LEVEL as SEA_LEVEL_ } from './types';
+import { SEA_LEVEL as SEA_LEVEL_ } from '../../content/terrainLevels';
 
 const SEA_LEVEL = SEA_LEVEL_;
 /** Измерения условий в порядке хранения: высота, температура, влажность, магичность. */

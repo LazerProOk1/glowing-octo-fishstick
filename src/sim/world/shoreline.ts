@@ -1,7 +1,7 @@
 import type { BiomeDef } from '../../content/biomes/types';
 import { hasTag } from '../../content/registry';
 import { labelComponents } from './provinceSeeds';
-import { SEA_LEVEL } from './types';
+import { SEA_LEVEL } from '../../content/terrainLevels';
 
 /** Land components (4-connected) smaller than this sink into shallow water. */
 export const MIN_ISLAND_CELLS = 6;

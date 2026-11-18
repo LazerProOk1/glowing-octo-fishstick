@@ -1,6 +1,6 @@
 import { ATLAS_GRID, DetailSlot } from './assets';
 import { MAP_COLORS, glslVec3 } from './palette';
-import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../sim/world/types';
+import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../content/terrainLevels';
 import { PALETTE_SIZE, WATER_SLOT } from './textures';
 
 /** Число как литерал GLSL float. */

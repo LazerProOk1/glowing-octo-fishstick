@@ -1,4 +1,4 @@
-import type { GenOptions } from '../content/biomes/types';
+import type { WorldParams } from '../sim/world/params';
 import type { GenRequest, GenResponse, GenResult, LoadStep } from './protocol';
 
 export type { GenResult, GenTimings, LoadStep } from './protocol';
@@ -29,7 +29,7 @@ export function isSuperseded(err: unknown): boolean {
 export type StageCallback = (step: LoadStep) => void;
 
 export interface GenClient {
-  requestWorld(seed: string, options?: GenOptions, onStage?: StageCallback): Promise<GenResult>;
+  requestWorld(params: WorldParams, onStage?: StageCallback): Promise<GenResult>;
   dispose(): void;
 }
 
@@ -92,7 +92,7 @@ export function createGenClient(factory: WorkerFactory = viteWorkerFactory): Gen
   };
 
   return {
-    requestWorld(seed, options = {}, onStage) {
+    requestWorld(params, onStage) {
       if (current) {
         const old = current;
         current = null;
@@ -104,7 +104,7 @@ export function createGenClient(factory: WorkerFactory = viteWorkerFactory): Gen
         current = { id, resolve, reject, onStage };
         try {
           port ??= factory(onMessage, onError);
-          port.post({ id, seed, options });
+          port.post({ id, params });
         } catch (err) {
           current = null;
           killPort();
@@ -127,7 +127,7 @@ let defaultClient: GenClient | null = null;
  * Генерирует мир и запекает его текстуры в воркере; более новый вызов вытесняет предыдущий.
  * Типизированные массивы приходят передачей (transferable), без копирования.
  */
-export function requestWorld(seed: string, options: GenOptions = {}, onStage?: StageCallback): Promise<GenResult> {
+export function requestWorld(params: WorldParams, onStage?: StageCallback): Promise<GenResult> {
   defaultClient ??= createGenClient();
-  return defaultClient.requestWorld(seed, options, onStage);
+  return defaultClient.requestWorld(params, onStage);
 }

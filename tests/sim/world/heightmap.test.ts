@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../../../src/sim/rng';
 import { generateHeight, countLandmasses } from '../../../src/sim/world/heightmap';
-import { SEA_LEVEL, MOUNTAIN_LEVEL, HILL_LEVEL, WORLD_W, WORLD_H } from '../../../src/sim/world/types';
+import { SIZE_PRESETS } from '../../../src/sim/world/params';
+import { SEA_LEVEL, MOUNTAIN_LEVEL, HILL_LEVEL } from '../../../src/sim/world/types';
+
+const { w: WORLD_W, h: WORLD_H } = SIZE_PRESETS.medium;
 
 const SEEDS = [...Array.from({ length: 17 }, (_, i) => String(i + 1)), '', 'Бета-7', 'worldbox'];
 
-describe('types', () => {
+describe('size presets and levels', () => {
   it('has constants', () => {
+    expect(SIZE_PRESETS.small).toEqual({ w: 1024, h: 512 });
+    expect(SIZE_PRESETS.large).toEqual({ w: 3072, h: 1536 });
     expect(WORLD_W).toBe(2048);
     expect(WORLD_H).toBe(1024);
     expect(SEA_LEVEL).toBe(0.5);

@@ -1,4 +1,4 @@
-import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL as SEA } from '../../../sim/world/types';
+import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL as SEA } from '../../terrainLevels';
 import { above, type BiomeDef } from '../../biomes/types';
 
 // Обычные биомы. Порядок массива — коды биомов (не менять: на нём стоят эталонные хэши мира).
@@ -8,7 +8,7 @@ import { above, type BiomeDef } from '../../biomes/types';
 export const BASE_BIOMES: BiomeDef[] = [
   {
     id: 'ocean',
-    name: 'океан',
+    nameKey: 'biome.ocean',
     kind: 'water',
     fantasy: false,
     color: [62, 85, 96],
@@ -19,7 +19,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'coast',
-    name: 'побережье',
+    nameKey: 'biome.coast',
     kind: 'water',
     fantasy: false,
     color: [111, 138, 143],
@@ -30,7 +30,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'plains',
-    name: 'равнины',
+    nameKey: 'biome.plains',
     kind: 'land',
     fantasy: false,
     color: [148, 155, 110],
@@ -40,7 +40,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'forest',
-    name: 'лес',
+    nameKey: 'biome.forest',
     kind: 'land',
     fantasy: false,
     color: [109, 126, 84],
@@ -50,7 +50,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'taiga',
-    name: 'тайга',
+    nameKey: 'biome.taiga',
     kind: 'land',
     fantasy: false,
     color: [94, 110, 90],
@@ -60,7 +60,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'tundra',
-    name: 'тундра',
+    nameKey: 'biome.tundra',
     kind: 'land',
     fantasy: false,
     color: [170, 172, 150],
@@ -70,7 +70,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'glacier',
-    name: 'ледник',
+    nameKey: 'biome.glacier',
     kind: 'land',
     fantasy: false,
     color: [232, 231, 224],
@@ -80,7 +80,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'desert',
-    name: 'пустыня',
+    nameKey: 'biome.desert',
     kind: 'land',
     fantasy: false,
     color: [196, 180, 140],
@@ -92,7 +92,7 @@ export const BASE_BIOMES: BiomeDef[] = [
     // Старый список: «t < 5 и m ≤ 0.3» или «m < 0.35»; первое уже покрыто вторым,
     // потому что «t < 5 и m > 0.3» раньше забирает тайга.
     id: 'steppe',
-    name: 'степь',
+    nameKey: 'biome.steppe',
     kind: 'land',
     fantasy: false,
     color: [172, 166, 124],
@@ -102,7 +102,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'swamp',
-    name: 'болото',
+    nameKey: 'biome.swamp',
     kind: 'land',
     fantasy: false,
     color: [114, 121, 90],
@@ -112,7 +112,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'hills',
-    name: 'холмы',
+    nameKey: 'biome.hills',
     kind: 'land',
     fantasy: false,
     color: [158, 145, 118],
@@ -123,7 +123,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'mountains',
-    name: 'горы',
+    nameKey: 'biome.mountains',
     kind: 'land',
     fantasy: false,
     color: [150, 140, 130],
@@ -134,7 +134,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   },
   {
     id: 'jungle',
-    name: 'джунгли',
+    nameKey: 'biome.jungle',
     kind: 'land',
     fantasy: false,
     color: [92, 118, 72],

@@ -1,7 +1,8 @@
 // Подготовка данных всех текстур мира без pixi.js: выполняется в воркерах генерации,
 // чтобы главный поток только загружал готовые массивы на GPU.
 import type { BiomeDef } from '../content/biomes/types';
-import { SEA_LEVEL, type World } from '../sim/world/types';
+import { SEA_LEVEL } from '../content/terrainLevels';
+import type { World } from '../sim/world/types';
 import { bakeTextures } from './bake';
 import { bakeBiomeColors } from './biomeColors';
 import { toHalf, toHalfArray } from './halfFloat';

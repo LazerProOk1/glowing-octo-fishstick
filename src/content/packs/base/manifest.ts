@@ -5,7 +5,7 @@ import { FANTASY_BIOMES } from './fantasyBiomes';
 /** Базовый пак: обычные биомы, затем фэнтези (коды фэнтези идут после обычных). */
 export const BASE_PACK: PackManifest = {
   id: 'base',
-  name: 'Базовый',
+  nameKey: 'pack.base',
   version: '1.0.0',
   biomes: [...BASE_BIOMES, ...FANTASY_BIOMES],
 };

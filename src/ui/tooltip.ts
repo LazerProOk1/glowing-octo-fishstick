@@ -1,5 +1,4 @@
-import { biomeName } from '../content/registry';
-import { t } from '../i18n/ru';
+import { t, translate } from '../i18n/ru';
 import type { World } from '../sim/world/types';
 import { el } from './dom';
 
@@ -41,7 +40,7 @@ export class ProvinceTooltip {
     }
     this.titleEl.textContent = `${t('tip.province')} ${p.id}`;
     const def = this.world?.biomes.find((b) => b.id === p.biome);
-    const parts = [def ? biomeName(def) : p.biome, p.isLand ? t('tip.land') : t('tip.sea')];
+    const parts = [def ? translate(def.nameKey) : p.biome, p.isLand ? t('tip.land') : t('tip.sea')];
     if (p.coastal) parts.push(t('tip.coastal'));
     this.infoEl.textContent = parts.join(' · ');
     this.update();

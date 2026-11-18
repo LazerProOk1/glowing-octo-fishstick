@@ -7,11 +7,11 @@ import { computeArcana, computeClimate } from '../../src/sim/world/climate';
 import { generateWorld } from '../../src/sim/world/generateWorld';
 import { generateHeight } from '../../src/sim/world/heightmap';
 import { normalizeShoreline } from '../../src/sim/world/shoreline';
-import { SEA_LEVEL, WORLD_H, WORLD_W, type World } from '../../src/sim/world/types';
+import { defaultParams, SIZE_PRESETS } from '../../src/sim/world/params';
+import { SEA_LEVEL, type World } from '../../src/sim/world/types';
 import { purity } from '../sim/world/provinceMetrics';
 
-const W = WORLD_W;
-const H = WORLD_H;
+const { w: W, h: H } = SIZE_PRESETS.medium;
 const FANTASY = ['mushroom_forest', 'magic_forest', 'ash_wastes', 'crystal_mountains'];
 const SEEDS = ['1', '2', 'Бета-7', 'worldbox'];
 
@@ -78,8 +78,9 @@ describe.each([['swamp'], ['desert']])('выключенный биом %s', (of
   let base: World;
   let world: World;
   beforeAll(() => {
-    base = generateWorld('1');
-    world = generateWorld('1', { disabledBiomes: [off] });
+    base = generateWorld(defaultParams('1'));
+    const p = defaultParams('1');
+    world = generateWorld({ ...p, options: { ...p.options, disabledBiomes: [off] } });
   }, 120000);
 
   it('биома нет ни в списке, ни на карте, его клетки достались другим биомам суши', () => {

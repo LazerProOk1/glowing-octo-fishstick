@@ -11,7 +11,7 @@ export const NORMAL_SIGMA = 1.25;
 /** Light blur for the coastline: rounds the cell-scale zigzag of a near-binary shore. */
 export const COAST_SIGMA = 0.7;
 
-function gaussianKernel(sigma: number): Float32Array {
+export function gaussianKernel(sigma: number): Float32Array {
   const r = Math.ceil(3 * sigma);
   const k = new Float32Array(2 * r + 1);
   let sum = 0;

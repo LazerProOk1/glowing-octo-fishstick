@@ -1,11 +1,19 @@
 import { createRng, type Rng } from '../rng';
 import { createNoise2D, fbm } from '../noise';
-import { HILL_LEVEL, SEA_LEVEL } from './types';
+import { MEDIUM_H } from './params';
+import { HILL_LEVEL, SEA_LEVEL } from '../../content/terrainLevels';
 
 const EQUATOR_TEMP = 28;
 const POLE_TEMP = -25;
 const LAPSE = 30; // °C lost between sea level and height 1
-const MOISTURE_SCALE = 220; // cells: e-folding distance of coastal humidity
+/**
+ * Cells on a medium map: e-folding distance of coastal humidity. Distances given in cells scale
+ * with the map height (continents are laid out in map fractions), so every size has the same climate.
+ */
+const MOISTURE_SCALE = 220;
+/** Per-cell decay of the rain-shadow value over sea and over land (medium map). */
+const SHADOW_DECAY_SEA = 0.97;
+const SHADOW_DECAY_LAND = 0.985;
 /** Zonal moisture by latitude (0 equator .. 1 pole): wet equator, dry subtropics, wet mid-latitudes, dry poles. */
 const LAT_WET: readonly (readonly [number, number])[] = [
   [0, 0.85],
@@ -54,7 +62,7 @@ function sampleCoarse(fn: (u: number, v: number) => number, w: number, h: number
   }
 }
 
-/** Rows a rain-shadow streak is blurred over (box radius, applied twice). */
+/** Rows a rain-shadow streak is blurred over on a medium map (box radius, applied twice). */
 const SHADOW_BLUR = 4;
 
 /** In-place vertical box blur with radius r (clamped at the map edges), row-major running sums. */
@@ -149,6 +157,12 @@ export function computeClimate(
   h: number,
 ): { temperature: Float32Array; moisture: Float32Array } {
   const n = w * h;
+  // Cell-size scale relative to medium: exactly 1 there, so the medium world is unchanged.
+  const k = h / MEDIUM_H;
+  const decaySea = Math.pow(SHADOW_DECAY_SEA, 1 / k);
+  const decayLand = Math.pow(SHADOW_DECAY_LAND, 1 / k);
+  const shadowBlur = Math.max(1, Math.round(SHADOW_BLUR * k));
+  const moistureScale = MOISTURE_SCALE * k;
   const tNoise = createNoise2D(rng.fork('temp'));
   const mNoise = createNoise2D(rng.fork('moist'));
   const mNoise2 = createNoise2D(rng.fork('moist2'));
@@ -203,9 +217,9 @@ export function computeClimate(
         const i = y * w + x;
         const hh = height[i] ?? 0;
         if (hh <= SEA_LEVEL) {
-          s *= 0.97;
+          s *= decaySea;
         } else {
-          s *= 0.985;
+          s *= decayLand;
           if (hh > HILL_LEVEL) {
             const block = 0.25 + 0.75 * Math.min(1, (hh - HILL_LEVEL) / (1 - HILL_LEVEL));
             if (block > s) s = block;
@@ -222,8 +236,8 @@ export function computeClimate(
     shadow[i] = (shadowE[i] ?? 0) * (1 - westerly) + (shadowW[i] ?? 0) * westerly;
   }
   // Per-row sweeps leave shadow streaks with hard row edges; blur across rows so they fade out.
-  blurRows(shadow, w, h, SHADOW_BLUR);
-  blurRows(shadow, w, h, SHADOW_BLUR);
+  blurRows(shadow, w, h, shadowBlur);
+  blurRows(shadow, w, h, shadowBlur);
 
   const dist = distanceToSea(height, w, h);
   const moisture = new Float32Array(n);
@@ -234,7 +248,7 @@ export function computeClimate(
         moisture[i] = 1;
         continue;
       }
-      const coast = Math.exp(-(dist[i] ?? 0) / MOISTURE_SCALE);
+      const coast = Math.exp(-(dist[i] ?? 0) / moistureScale);
       const m = zonalWetness(lats[i] ?? 0) * (0.6 + 0.4 * coast) + 0.1 * coast + (mJit[i] ?? 0) * 0.25 - (shadow[i] ?? 0) * 0.25;
       moisture[i] = m < 0 ? 0 : m > 1 ? 1 : m;
     }

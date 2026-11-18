@@ -11,15 +11,30 @@ import { normalizeShoreline } from '../../../src/sim/world/shoreline';
 import {
   bumpShare,
   longestStraightBorder,
+  provinceBounds,
   purity,
   riverViolations,
   splittableIsland,
   strayMountainCells,
 } from './provinceMetrics';
-import { SEA_LEVEL, WORLD_H, WORLD_W, type Province } from '../../../src/sim/world/types';
+import { SIZE_PRESETS, type WorldSize } from '../../../src/sim/world/params';
+import { SEA_LEVEL, type Province } from '../../../src/sim/world/types';
 
-const W = WORLD_W;
-const H = WORLD_H;
+/**
+ * Пороги качества провинций по размеру мира. Спец и настройка генератора — для medium. Материки и
+ * климат заданы в долях карты, а провинции — в клетках (радиус Пуассона), поэтому на small пятна
+ * биомов вдвое мельче относительно провинции: смешанных провинций и ступенек на границах
+ * (растр биомов грубее) больше. Для small пороги ослаблены и записаны явно.
+ */
+const QUALITY: Record<WorldSize, { minPurity: number; pure90: number; bumps: number }> = {
+  small: { minPurity: 0.75, pure90: 0.8, bumps: 0.01 },
+  medium: { minPurity: 0.8, pure90: 0.9, bumps: 0.006 },
+  large: { minPurity: 0.8, pure90: 0.9, bumps: 0.006 },
+};
+
+// Размер карты текущего набора: блоки describe выполняются по очереди, beforeAll ставит размер.
+let W = 0;
+let H = 0;
 
 interface Fixture {
   defs: BiomeDef[];
@@ -39,7 +54,8 @@ function landOf(height: Float32Array): Uint8Array {
   return land;
 }
 
-function build(seed: string, options: GenOptions): Fixture {
+function build(seed: string, options: GenOptions, size: WorldSize): Fixture {
+  ({ w: W, h: H } = SIZE_PRESETS[size]);
   const defs = resolveBiomes(options);
   const rng = createRng(seed);
   const height0 = generateHeight(rng.fork('height'), W, H);
@@ -80,24 +96,28 @@ function realNeighbors(f: Fixture): number[][] {
 }
 
 describe.each([
-  ['1', {}],
-  ['Бета-7', {}],
-  ['tiny-islands', {}],
-  ['lakes-check', {}],
-  ['Бета-7', { fantasy: true }],
-] as Array<[string, GenOptions]>)('provinces (seed %j, options %j)', (seed, options) => {
+  ['1', {}, 'medium'],
+  ['Бета-7', {}, 'medium'],
+  ['tiny-islands', {}, 'medium'],
+  ['lakes-check', {}, 'medium'],
+  ['Бета-7', { fantasy: true }, 'medium'],
+  ['1', {}, 'small'],
+  ['Бета-7', { fantasy: true }, 'small'],
+] as Array<[string, GenOptions, WorldSize]>)('provinces (seed %j, options %j, size %s)', (seed, options, size) => {
   let f: Fixture;
   beforeAll(() => {
-    f = build(seed, options);
+    f = build(seed, options, size);
   }, 60000);
 
-  it('has sane land and sea province counts, ids equal indices', () => {
+  it('has sane land and sea province counts (proportional to land/sea area), ids equal indices', () => {
     const land = f.provinces.filter((p) => p.isLand).length;
     const sea = f.provinces.length - land;
-    expect(land).toBeGreaterThanOrEqual(2000);
-    expect(land).toBeLessThanOrEqual(4000);
-    expect(sea).toBeGreaterThanOrEqual(150);
-    expect(sea).toBeLessThanOrEqual(560);
+    // medium: 2000–4000 land, 150–560 sea; other sizes in proportion to their land and sea area.
+    const b = provinceBounds(f.height, W, H);
+    expect(land).toBeGreaterThanOrEqual(b.land[0]);
+    expect(land).toBeLessThanOrEqual(b.land[1]);
+    expect(sea).toBeGreaterThanOrEqual(b.sea[0]);
+    expect(sea).toBeLessThanOrEqual(b.sea[1]);
     expect(f.provinces.length).toBeLessThanOrEqual(65535);
     f.provinces.forEach((p, i) => expect(p.id).toBe(i));
   });
@@ -210,12 +230,13 @@ describe.each([
     // into two connected single-biome parts of at least 40 cells each (then they must be split).
     const lone = (p: Province): boolean =>
       !p.neighbors.some((q) => f.provinces[q]!.isLand) && !splittableIsland(f.biomes, f.provinceOf, p, W);
+    const q = QUALITY[size];
     const impure = land
-      .filter((p) => p.cellCount >= 40 && !lone(p) && pur[p.id]! < 0.8)
+      .filter((p) => p.cellCount >= 40 && !lone(p) && pur[p.id]! < q.minPurity)
       .map((p) => [p.id, pur[p.id]]);
     expect(impure).toEqual([]);
     const pure90 = land.filter((p) => pur[p.id]! >= 0.9).length / land.length;
-    expect(pure90).toBeGreaterThanOrEqual(0.9);
+    expect(pure90).toBeGreaterThanOrEqual(q.pure90);
   });
 
   it('mountain massifs belong to mountain or hill provinces', () => {
@@ -233,10 +254,10 @@ describe.each([
 
   it('borders are smooth at the cell scale (few 1-cell bumps or notches)', () => {
     const r = bumpShare(f.height, f.riverMask, f.provinceOf, W, H);
-    expect(r.share).toBeLessThanOrEqual(0.006);
+    expect(r.share).toBeLessThanOrEqual(QUALITY[size].bumps);
   });
 
-  it.runIf(seed === '1')('is deterministic', { timeout: 30000 }, () => {
+  it.runIf(seed === '1' && size === 'medium')('is deterministic', { timeout: 30000 }, () => {
     const rng = createRng(seed);
     const again = computeProvinces(rng.fork('provinces'), f.height, f.biomes, f.riverMask, W, H, f.defs);
     expect(Buffer.from(again.provinceOf.buffer).equals(Buffer.from(f.provinceOf.buffer))).toBe(true);

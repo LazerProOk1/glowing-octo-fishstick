@@ -8,11 +8,15 @@ import {
 import { collectTransferables, type GenRequest, type GenResponse } from '../../src/worker/protocol';
 import type { World } from '../../src/sim/world/types';
 import { bakeTransferables, type WorldBake } from '../../src/render/bakeWorld';
+import { defaultParams, type WorldParams } from '../../src/sim/world/params';
+
+/** Параметры по умолчанию для сида. */
+const P = (seed: string): WorldParams => defaultParams(seed);
 
 function fakeWorld(seed: string): World {
   const n = 4 * 2;
   return {
-    seed,
+    params: defaultParams(seed),
     w: 4,
     h: 2,
     height: new Float32Array(n),
@@ -25,6 +29,8 @@ function fakeWorld(seed: string): World {
     rivers: [],
     provinceOf: new Uint16Array(n),
     provinces: [],
+    adjacency: [],
+    edgesOf: [],
   };
 }
 
@@ -80,11 +86,12 @@ describe('genClient', () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     const stages: string[] = [];
-    const p = client.requestWorld('Альфа-1', { fantasy: true, disabledBiomes: ['swamp'] }, (s) => stages.push(s));
+    const params = P('Альфа-1');
+    params.options = { fantasy: true, disabledBiomes: ['swamp'], size: 'small' };
+    const p = client.requestWorld(params, (s) => stages.push(s));
     const w = workers[0]!;
     const req = w.requests[0]!;
-    expect(req.seed).toBe('Альфа-1');
-    expect(req.options).toEqual({ fantasy: true, disabledBiomes: ['swamp'] });
+    expect(req.params).toEqual(params);
     w.emit({ type: 'stage', id: req.id, stage: 'height' });
     w.emit({ type: 'stage', id: req.id, stage: 'climate' });
     const world = fakeWorld('Альфа-1');
@@ -99,16 +106,15 @@ describe('genClient', () => {
   it('второй запрос до ответа первого: результат первого игнорируется', async () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
-    const first = client.requestWorld('старый');
+    const first = client.requestWorld(P('старый'));
     const firstReq = workers[0]!.requests[0]!;
-    const second = client.requestWorld('новый');
+    const second = client.requestWorld(P('новый'));
     await expect(first).rejects.toSatisfy(isSuperseded);
     // Занятый воркер прерывается, новый запрос идёт в свежий.
     expect(workers[0]!.terminated).toBe(true);
     const secondWorker = workers[workers.length - 1]!;
     const secondReq = secondWorker.requests[0]!;
-    expect(secondReq.seed).toBe('новый');
-    expect(secondReq.options).toEqual({});
+    expect(secondReq.params).toEqual(P('новый'));
     expect(secondReq.id).not.toBe(firstReq.id);
 
     // Запоздалый ответ на первый запрос ничего не ломает и не подменяет мир.
@@ -123,30 +129,30 @@ describe('genClient', () => {
   it('свободный воркер переиспользуется', async () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
-    const p1 = client.requestWorld('a');
+    const p1 = client.requestWorld(P('a'));
     workers[0]!.emit({ type: 'done', id: workers[0]!.requests[0]!.id, world: fakeWorld('a'), bake, timings });
     await p1;
-    const p2 = client.requestWorld('b');
+    const p2 = client.requestWorld(P('b'));
     expect(workers.length).toBe(1);
     workers[0]!.emit({ type: 'done', id: workers[0]!.requests[1]!.id, world: fakeWorld('b'), bake, timings });
-    expect((await p2).world.seed).toBe('b');
+    expect((await p2).world.params.seed).toBe('b');
   });
 
   it('ошибка генерации и падение воркера отклоняют запрос', async () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
-    const p1 = client.requestWorld('a');
+    const p1 = client.requestWorld(P('a'));
     workers[0]!.emit({ type: 'error', id: workers[0]!.requests[0]!.id, message: 'boom' });
     await expect(p1).rejects.toThrow('boom');
 
-    const p2 = client.requestWorld('b');
+    const p2 = client.requestWorld(P('b'));
     workers[workers.length - 1]!.fail('script error');
     await expect(p2).rejects.toThrow('script error');
     expect(workers[workers.length - 1]!.terminated).toBe(true);
 
     // После падения следующий запрос получает новый воркер.
     const before = workers.length;
-    void client.requestWorld('c').catch(() => undefined);
+    void client.requestWorld(P('c')).catch(() => undefined);
     expect(workers.length).toBe(before + 1);
   });
 });

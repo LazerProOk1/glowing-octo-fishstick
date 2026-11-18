@@ -48,10 +48,40 @@ export const ru = {
   'error.retry': 'Перезагрузить',
 
   'seed.words': 'Альфа,Бета,Гамма,Дельта,Эпсилон,Дзета,Эта,Тета,Йота,Каппа,Лямбда,Сигма,Омега',
+
+  // Контент: в данных паков названия — ключи (`nameKey`), перевод — здесь. Другой язык —
+  // файл с теми же ключами (en.ts); переводы внешних паков подмешиваются к этой таблице.
+  'pack.base': 'Базовый',
+
+  'biome.ocean': 'океан',
+  'biome.coast': 'побережье',
+  'biome.plains': 'равнины',
+  'biome.forest': 'лес',
+  'biome.taiga': 'тайга',
+  'biome.tundra': 'тундра',
+  'biome.glacier': 'ледник',
+  'biome.desert': 'пустыня',
+  'biome.steppe': 'степь',
+  'biome.swamp': 'болото',
+  'biome.hills': 'холмы',
+  'biome.mountains': 'горы',
+  'biome.jungle': 'джунгли',
+  'biome.mushroom_forest': 'грибной лес',
+  'biome.magic_forest': 'магический лес',
+  'biome.ash_wastes': 'пепельные пустоши',
+  'biome.crystal_mountains': 'кристальные горы',
 } as const satisfies Record<string, string>;
 
 export type RuKey = keyof typeof ru;
 
 export function t(key: RuKey): string {
   return ru[key];
+}
+
+/**
+ * Перевод ключа, известного только во время выполнения (названия контента из паков).
+ * Нет перевода — возвращается сам ключ: видно, чего не хватает, и интерфейс не падает.
+ */
+export function translate(key: string): string {
+  return Object.hasOwn(ru, key) ? ru[key as RuKey] : key;
 }

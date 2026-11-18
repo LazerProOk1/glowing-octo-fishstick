@@ -1,12 +1,8 @@
 import type { BiomeDef } from '../../content/biomes/types';
+import type { WorldParams } from './params';
 
-export const WORLD_W = 2048;
-export const WORLD_H = 1024;
-export const SEA_LEVEL = 0.5;
-/** Heights above this are mountains (top ~3% of land). */
-export const MOUNTAIN_LEVEL = 0.85;
-/** Heights above this (and up to MOUNTAIN_LEVEL) are hills (~12% of land). */
-export const HILL_LEVEL = 0.72;
+// Уровни рельефа живут в content (условия биомов в паках задаются через них); здесь — для sim и render.
+export { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../../content/terrainLevels';
 
 export interface RiverPath {
   points: Array<{ x: number; y: number }>;
@@ -29,8 +25,22 @@ export interface Province {
   coastal: boolean;
 }
 
+/** Ребро графа соседства провинций. */
+export interface ProvinceEdge {
+  /** a < b — id провинций. */
+  a: number;
+  b: number;
+  /** Число пар 4-соседних клеток a|b на общей границе; 0 у пролива без общей границы. */
+  length: number;
+  /** Граница суша–суша, не меньше половины которой идёт по крупной реке (ширина ≥ 2). */
+  river: boolean;
+  /** Сухопутные провинции без общей границы, разделённые водой не шире STRAIT_MAX_WATER клеток. */
+  strait: boolean;
+}
+
 export interface World {
-  seed: string;
+  /** Всё, что задаёт мир; генерация по тем же параметрам и той же версии даёт тот же мир. */
+  params: WorldParams;
   w: number;
   h: number;
   height: Float32Array;
@@ -46,4 +56,8 @@ export interface World {
   rivers: RiverPath[];
   provinceOf: Uint16Array;
   provinces: Province[];
+  /** Рёбра соседства по возрастанию (a, b); проливы — в том же списке. */
+  adjacency: ProvinceEdge[];
+  /** Индексы рёбер `adjacency` по id провинции, по возрастанию. */
+  edgesOf: number[][];
 }

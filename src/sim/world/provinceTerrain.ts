@@ -148,11 +148,13 @@ export function dominantBiomes(owner: Int32Array, biomes: Uint8Array, count: num
 }
 
 /**
- * A lone island (no land neighbour, so it cannot merge) that is below `minPurity` and has two
- * biomes of at least `minCells` cells each is split: the largest connected patch of its second
- * biome becomes a province of its own. Run fixFragments afterwards.
+ * A land province still below `minPurity` after the merges (a lone island cannot merge at all; on
+ * small maps biome patches are coarse relative to provinces, so a few inland ones stay mixed too)
+ * that has two biomes of at least `minCells` cells each is split: the largest connected patch of
+ * its second biome becomes a province of its own when both parts keep `minCells` cells.
+ * Run fixFragments afterwards.
  */
-export function splitIslands(
+export function splitImpure(
   owner: Int32Array,
   kind: Uint8Array,
   biomes: Uint8Array,
@@ -167,7 +169,7 @@ export function splitIslands(
   const g = new MergeGraph(owner, kind, biomes, count, w, h);
   const cells = new Map<number, number[]>();
   for (let p = 0; p < count; p++) {
-    if (!isLand[p] || g.size[p] === 0 || g.neighbors(p).length > 0 || g.purity(p) >= minPurity) continue;
+    if (!isLand[p] || g.size[p] === 0 || g.purity(p) >= minPurity) continue;
     const order = [...Array(BIOME_SLOTS).keys()].sort(
       (a, b) => g.bc[p * BIOME_SLOTS + b]! - g.bc[p * BIOME_SLOTS + a]! || a - b,
     );

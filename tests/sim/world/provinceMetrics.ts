@@ -1,6 +1,23 @@
 import type { BiomeDef } from '../../../src/content/biomes/types';
 import { hasTag } from '../../../src/content/registry';
+import { SIZE_PRESETS } from '../../../src/sim/world/params';
 import { SEA_LEVEL, type Province } from '../../../src/sim/world/types';
+
+/** Доля суши, к которой приводит генератор рельефа (TARGET_LAND в heightmap.ts). */
+const LAND_SHARE = 0.38;
+const MEDIUM_AREA = SIZE_PRESETS.medium.w * SIZE_PRESETS.medium.h;
+
+/**
+ * Границы числа провинций, пропорциональные площади суши (и моря): для medium (38% суши) это
+ * 2000–4000 сухопутных и 150–560 морских; small и large — в отношении их площадей.
+ */
+export function provinceBounds(height: Float32Array, w: number, h: number): { land: [number, number]; sea: [number, number] } {
+  let landCells = 0;
+  for (let i = 0; i < w * h; i++) if (height[i]! > SEA_LEVEL) landCells++;
+  const kl = landCells / (LAND_SHARE * MEDIUM_AREA);
+  const ks = (w * h - landCells) / ((1 - LAND_SHARE) * MEDIUM_AREA);
+  return { land: [2000 * kl, 4000 * kl], sea: [150 * ks, 560 * ks] };
+}
 
 /** Rivers at least this wide must separate provinces. */
 export const MAJOR_RIVER = 2;

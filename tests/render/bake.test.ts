@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { resolveBiomes } from '../../src/content/registry';
 import { bakeTextures, decodeProvinceId, encodeProvinceId } from '../../src/render/bake';
+import { defaultParams } from '../../src/sim/world/params';
 import type { Province, World } from '../../src/sim/world/types';
 
 describe('encodeProvinceId', () => {
@@ -33,7 +34,7 @@ describe('bakeTextures', () => {
     const riverMask = new Uint8Array(n);
     riverMask[1] = 4;
     world = {
-      seed: 't',
+      params: defaultParams('t'),
       w,
       h,
       height,
@@ -46,6 +47,8 @@ describe('bakeTextures', () => {
       rivers: [],
       provinceOf,
       provinces: mkProvinces(),
+      adjacency: [],
+      edgesOf: [],
     };
   });
 

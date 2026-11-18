@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DETAIL_SLOT_NAMES, type BiomeDef, type PackManifest } from '../../src/content/biomes/types';
 import { BASE_PACK } from '../../src/content/packs/base/manifest';
-import { biomeName, hsl, isFallback, resolveBiomes } from '../../src/content/registry';
+import { hsl, isFallback, resolveBiomes } from '../../src/content/registry';
+import { translate } from '../../src/i18n/ru';
 
 /** Насыщенность HSL цвета sRGB 0..255. */
 function saturation([r, g, b]: readonly [number, number, number]): number {
@@ -29,7 +30,7 @@ describe('реестр биомов базового пака', () => {
 
   it('обязательные поля заполнены', () => {
     for (const b of all) {
-      expect(b.name.trim(), b.id).not.toBe('');
+      expect(b.nameKey, b.id).toBe(`biome.${b.id}`);
       expect(['water', 'land'], b.id).toContain(b.kind);
       expect(typeof b.fantasy, b.id).toBe('boolean');
       expect(Number.isFinite(b.priority), b.id).toBe(true);
@@ -76,9 +77,17 @@ describe('реестр биомов базового пака', () => {
     expect(tagged('mountain').map((b) => b.id)).toContain('crystal_mountains');
   });
 
-  it('название биома берётся из реестра', () => {
-    expect(biomeName(all.find((b) => b.id === 'taiga')!)).toBe('тайга');
-    expect(biomeName(all.find((b) => b.id === 'mushroom_forest')!)).toBe('грибной лес');
+  it('название биома — ключ i18n, перевод в ru', () => {
+    expect(translate(all.find((b) => b.id === 'taiga')!.nameKey)).toBe('тайга');
+    expect(translate(all.find((b) => b.id === 'mushroom_forest')!.nameKey)).toBe('грибной лес');
+  });
+
+  it('название — готовый текст вместо ключа — ошибка', () => {
+    const bad: PackManifest = {
+      id: 'txt', nameKey: 'pack.txt', version: '0',
+      biomes: [{ ...all.find((b) => b.id === 'forest')!, id: 'birch', nameKey: 'берёзы' }],
+    };
+    expect(() => resolveBiomes({ packs: ['base', 'txt'] }, [BASE_PACK, bad])).toThrow(/birch/);
   });
 });
 
@@ -116,7 +125,7 @@ describe('resolveBiomes', () => {
   it('пак с overrides меняет цвет леса и добавляет биом', () => {
     const extra: BiomeDef = {
       id: 'heath',
-      name: 'вересковая пустошь',
+      nameKey: 'biome.heath',
       kind: 'land',
       fantasy: false,
       color: [140, 128, 120],
@@ -126,7 +135,7 @@ describe('resolveBiomes', () => {
     };
     const pack: PackManifest = {
       id: 'test',
-      name: 'Тестовый пак',
+      nameKey: 'pack.test',
       version: '0.0.1',
       biomes: [extra],
       overrides: { forest: { color: [100, 110, 90] } },
@@ -141,12 +150,12 @@ describe('resolveBiomes', () => {
   it('проверяются все объявленные биомы после правок, а не только включённые', () => {
     // Фэнтези выключено, но испорченный фэнтези-биом всё равно даёт ошибку.
     const bright: PackManifest = {
-      id: 'bright', name: 'x', version: '0', biomes: [],
+      id: 'bright', nameKey: 'pack.x', version: '0', biomes: [],
       overrides: { magic_forest: { color: [0, 255, 0] } },
     };
     expect(() => resolveBiomes({ packs: ['base', 'bright'] }, [BASE_PACK, bright])).toThrow(/magic_forest/);
     const dark: PackManifest = {
-      id: 'dark', name: 'x', version: '0', biomes: [],
+      id: 'dark', nameKey: 'pack.x', version: '0', biomes: [],
       overrides: { forest: { color: [20, 20, 20] } },
     };
     expect(() => resolveBiomes({ packs: ['base', 'dark'] }, [BASE_PACK, dark])).toThrow(/forest/);
@@ -154,7 +163,7 @@ describe('resolveBiomes', () => {
 
   it('условие undefined в when пропускается, биом без условий остаётся запасным', () => {
     const pack: PackManifest = {
-      id: 'undef', name: 'x', version: '0', biomes: [],
+      id: 'undef', nameKey: 'pack.x', version: '0', biomes: [],
       overrides: { plains: { when: { height: undefined } } },
     };
     const list = resolveBiomes({ packs: ['base', 'undef'] }, [BASE_PACK, pack]);
@@ -162,7 +171,7 @@ describe('resolveBiomes', () => {
   });
 
   it('override неизвестного биома — ошибка', () => {
-    const pack: PackManifest = { id: 'bad', name: 'x', version: '0', biomes: [], overrides: { nope: { priority: 1 } } };
+    const pack: PackManifest = { id: 'bad', nameKey: 'pack.x', version: '0', biomes: [], overrides: { nope: { priority: 1 } } };
     expect(() => resolveBiomes({ packs: ['base', 'bad'] }, [BASE_PACK, pack])).toThrow(/nope/);
   });
 });

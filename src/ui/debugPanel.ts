@@ -102,7 +102,7 @@ export class DebugPanel {
 
   /** Сведения о готовом мире; timings — замеры воркера (может не быть). */
   setWorld(world: World, timings: GenTimings | null): void {
-    this.setSeed(world.seed);
+    this.setSeed(world.params.seed);
     let land = 0;
     for (const p of world.provinces) if (p.isLand) land++;
     this.provValue.textContent = String(world.provinces.length);

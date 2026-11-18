@@ -4,7 +4,10 @@ import { createRng } from '../../../src/sim/rng';
 import { generateHeight } from '../../../src/sim/world/heightmap';
 import { computeArcana, computeClimate } from '../../../src/sim/world/climate';
 import { classifyBiome, compileBiomes, computeBiomes } from '../../../src/sim/world/biomes';
-import { SEA_LEVEL, WORLD_H, WORLD_W } from '../../../src/sim/world/types';
+import { SIZE_PRESETS } from '../../../src/sim/world/params';
+import { SEA_LEVEL } from '../../../src/sim/world/types';
+
+const { w: WORLD_W, h: WORLD_H } = SIZE_PRESETS.medium;
 
 /** Эталонная копия classifyBiome до задачи 12 (решающий список по именам). */
 function oldClassify(height: number, temperature: number, moisture: number): string {

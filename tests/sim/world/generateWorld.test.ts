@@ -5,7 +5,10 @@ import {
   generateWorld,
   type GenStage,
 } from '../../../src/sim/world/generateWorld';
-import { WORLD_H, WORLD_W, type World } from '../../../src/sim/world/types';
+import { defaultParams, GEN_VERSION, SIZE_PRESETS } from '../../../src/sim/world/params';
+import type { World } from '../../../src/sim/world/types';
+
+const { w: WORLD_W, h: WORLD_H } = SIZE_PRESETS.medium;
 
 describe('assertProvinceCount', () => {
   it('65536 бросает, 65535 нет', () => {
@@ -20,24 +23,23 @@ describe('generateWorld', () => {
   let ms = 0;
   let c: World;
   const stages: GenStage[] = [];
-  let surface: { height: Float32Array; biome: Uint8Array; stagesBefore: number } | null = null;
+  let surface: { height: Float32Array; biome: Uint8Array; w: number; h: number; stagesBefore: number } | null = null;
   beforeAll(() => {
     const t = performance.now();
     a = generateWorld(
-      'Бета-7',
-      {},
+      defaultParams('Бета-7'),
       (s) => stages.push(s),
-      (height, biome) => (surface = { height, biome, stagesBefore: stages.length }),
+      (height, biome, _defs, w, h) => (surface = { height, biome, w, h, stagesBefore: stages.length }),
     );
     ms = performance.now() - t;
-    b = generateWorld('Бета-7');
-    c = generateWorld('другое-зерно');
+    b = generateWorld(defaultParams('Бета-7'));
+    c = generateWorld(defaultParams('другое-зерно'));
   }, 60000);
 
   it('размеры и согласованность', () => {
     expect(a.w).toBe(WORLD_W);
     expect(a.h).toBe(WORLD_H);
-    expect(a.seed).toBe('Бета-7');
+    expect(a.params).toEqual(defaultParams('Бета-7'));
     expect(a.provinceOf.length).toBe(WORLD_W * WORLD_H);
     expect(a.provinces.length).toBeGreaterThan(0);
   });
@@ -56,6 +58,16 @@ describe('generateWorld', () => {
     expect(eq(a.provinceOf, b.provinceOf)).toBe(true);
     expect(JSON.stringify(a.rivers)).toBe(JSON.stringify(b.rivers));
     expect(JSON.stringify(a.provinces)).toBe(JSON.stringify(b.provinces));
+    expect(JSON.stringify(a.adjacency)).toBe(JSON.stringify(b.adjacency));
+  });
+
+  it('параметры другой версии генератора отклоняются с понятной ошибкой', () => {
+    expect(() => generateWorld({ ...defaultParams('x'), genVersion: GEN_VERSION - 1 })).toThrow('версии генератора');
+  });
+
+  it('параметры — копия: правка исходных не меняет мир', () => {
+    const p = defaultParams('Бета-7');
+    expect(a.params).not.toBe(p);
   });
 
   it('согласованность provinces и provinceOf', () => {
@@ -78,6 +90,7 @@ describe('generateWorld', () => {
     expect(surface).not.toBeNull();
     expect(surface!.height).toBe(a.height);
     expect(surface!.biome).toBe(a.biome);
+    expect([surface!.w, surface!.h]).toEqual([a.w, a.h]);
     expect(surface!.stagesBefore).toBe(GEN_STAGES.indexOf('shoreline') + 1);
   });
 

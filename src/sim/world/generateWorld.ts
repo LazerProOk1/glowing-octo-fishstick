@@ -1,13 +1,15 @@
-import type { BiomeDef, GenOptions } from '../../content/biomes/types';
+import type { BiomeDef } from '../../content/biomes/types';
 import { resolveBiomes } from '../../content/registry';
 import { createRng } from '../rng';
+import { computeAdjacency } from './adjacency';
 import { computeBiomes } from './biomes';
 import { computeArcana, computeClimate } from './climate';
 import { generateHeight } from './heightmap';
+import { GEN_VERSION, genOptionsOf, SIZE_PRESETS, type WorldParams, type WorldSize } from './params';
 import { computeProvinces } from './provinces';
 import { computeRivers } from './rivers';
 import { normalizeShoreline } from './shoreline';
-import { WORLD_H, WORLD_W, type World } from './types';
+import type { World } from './types';
 
 /** Province ids are stored in Uint16Array / two texture channels. */
 export const MAX_PROVINCES = 65535;
@@ -23,22 +25,27 @@ export const GEN_STAGES = ['height', 'climate', 'biomes', 'shoreline', 'rivers',
 export type GenStage = (typeof GEN_STAGES)[number];
 
 /**
- * @param options паки, фэнтези и выключенные биомы (по умолчанию — базовый пак без фэнтези).
+ * @param params сид, паки, фэнтези, выключенные биомы и размер; записываются в мир как есть.
+ *   genVersion должен совпадать с GEN_VERSION: старый мир этой версией не воспроизвести — ошибка.
  * @param onStage вызывается перед каждым этапом (для экрана загрузки и замеров в воркере;
  *   само ядро время не измеряет).
  * @param onSurface вызывается, как только высота и биомы окончательны (после этапа берегов):
- *   воркер отдаёт их на параллельное запекание текстур (вместе со списком биомов мира).
+ *   воркер отдаёт их на параллельное запекание текстур (вместе со списком биомов мира и размером).
  *   Массивы дальше не меняются.
  */
 export function generateWorld(
-  seed: string,
-  options: GenOptions = {},
+  params: WorldParams,
   onStage?: (stage: GenStage) => void,
-  onSurface?: (height: Float32Array, biome: Uint8Array, defs: BiomeDef[]) => void,
+  onSurface?: (height: Float32Array, biome: Uint8Array, defs: BiomeDef[], w: number, h: number) => void,
 ): World {
-  const w = WORLD_W;
-  const h = WORLD_H;
-  const defs = resolveBiomes(options);
+  if (params.genVersion !== GEN_VERSION) {
+    throw new Error(`мир описан для версии генератора ${params.genVersion}, а текущая — ${GEN_VERSION}`);
+  }
+  const preset = SIZE_PRESETS[params.options.size] as (typeof SIZE_PRESETS)[WorldSize] | undefined;
+  if (!preset) throw new Error(`неизвестный размер мира «${String(params.options.size)}»`);
+  const { w, h } = preset;
+  const { seed } = params;
+  const defs = resolveBiomes(genOptionsOf(params));
   const rng = createRng(seed);
   onStage?.('height');
   const rawHeight = generateHeight(rng.fork('height'), w, h);
@@ -50,7 +57,7 @@ export function generateWorld(
   const rawBiomes = computeBiomes(defs, rawHeight, temperature, moisture, arcana);
   onStage?.('shoreline');
   const { height, biomes } = normalizeShoreline(rawHeight, rawBiomes, w, h, defs);
-  onSurface?.(height, biomes, defs);
+  onSurface?.(height, biomes, defs, w, h);
   onStage?.('rivers');
   const { rivers, riverMask } = computeRivers(height, moisture, w, h);
   onStage?.('provinces');
@@ -64,8 +71,10 @@ export function generateWorld(
     defs,
   );
   assertProvinceCount(provinces.length);
+  // Соседство — часть этапа провинций (десятки мс).
+  const { adjacency, edgesOf } = computeAdjacency(provinceOf, provinces, height, riverMask, w, h);
   return {
-    seed,
+    params: structuredClone(params),
     w,
     h,
     height,
@@ -78,5 +87,7 @@ export function generateWorld(
     rivers,
     provinceOf,
     provinces,
+    adjacency,
+    edgesOf,
   };
 }

@@ -1,6 +1,7 @@
-import type { BiomeDef, GenOptions } from '../content/biomes/types';
+import type { BiomeDef } from '../content/biomes/types';
 import { uniqueBuffers, type SurfaceBake, type WorldBake } from '../render/bakeWorld';
 import { GEN_STAGES } from '../sim/world/generateWorld';
+import type { WorldParams } from '../sim/world/params';
 import type { World } from '../sim/world/types';
 
 /** Шаги работы воркера: шесть этапов генерации и запекание текстур карты. */
@@ -27,8 +28,7 @@ export interface GenResult {
 
 export interface GenRequest {
   id: number;
-  seed: string;
-  options: GenOptions;
+  params: WorldParams;
 }
 
 export type GenResponse =

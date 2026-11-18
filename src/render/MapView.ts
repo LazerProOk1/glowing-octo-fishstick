@@ -8,8 +8,9 @@ import {
   type Application,
   type TextureSource,
 } from 'pixi.js';
-import { WORLD_H, WORLD_W, type World } from '../sim/world/types';
-import { clampCamera, minZoom, screenToWorld, zoomAt, type Camera } from './camera';
+import { DEFAULT_SIZE, SIZE_PRESETS } from '../sim/world/params';
+import type { World } from '../sim/world/types';
+import { clampCamera, minZoom, screenToWorld, zoomAt, type Camera, type MapSize } from './camera';
 import type { WorldBake } from './bakeWorld';
 import { MAP_FRAGMENT, MAP_VERTEX } from './mapShader';
 import { RiverLayer } from './riverLayer';
@@ -38,13 +39,15 @@ export class MapView {
   private readonly uniforms: UniformGroup;
   private readonly camU = new Float32Array(4);
   private readonly viewU = new Float32Array(2);
-  private readonly worldU = new Float32Array([WORLD_W, WORLD_H]);
+  /** Размер карты в клетках; до первого setWorld — размер по умолчанию. */
+  private map: MapSize = { ...SIZE_PRESETS[DEFAULT_SIZE] };
+  private readonly worldU = new Float32Array([this.map.w, this.map.h]);
   /** Заглушка для текстур мира до первого setWorld. */
   private readonly blank: TextureSource;
   private atlas: TextureSource;
   private textures: WorldTextures | null = null;
   private world: World | null = null;
-  private cam: Camera = { x: WORLD_W / 2, y: WORLD_H / 2, zoom: 1 };
+  private cam: Camera = { x: this.map.w / 2, y: this.map.h / 2, zoom: 1 };
   private hovered: number | null = null;
   private readonly hoverListeners = new Set<(id: number | null) => void>();
   private drag: { id: number; x: number; y: number } | null = null;
@@ -130,10 +133,13 @@ export class MapView {
     res.uProvince = next.province;
     res.uBorder = next.border;
     res.uPalette = next.palette;
+    const resized = world.w !== this.map.w || world.h !== this.map.h;
+    this.map = { w: world.w, h: world.h };
     if (this.textures) destroyWorldTextures(this.textures);
-    else {
+    if (!this.textures || resized) {
+      // Первый мир или другой размер: вся карта на экране.
       const { width, height } = this.app.screen;
-      this.cam = { x: world.w / 2, y: world.h / 2, zoom: minZoom(width, height) };
+      this.cam = { x: world.w / 2, y: world.h / 2, zoom: minZoom(width, height, this.map) };
     }
     this.textures = next;
     this.world = world;
@@ -188,7 +194,7 @@ export class MapView {
   /** Применяет ограничения камеры и обновляет uniform-ы, quad и слой рек. */
   private sync(): void {
     const { width, height } = this.app.screen;
-    this.cam = clampCamera(this.cam, width, height);
+    this.cam = clampCamera(this.cam, width, height, this.map);
     const { x, y, zoom } = this.cam;
     this.mesh.scale.set(width, height);
     this.camU[0] = x;
@@ -266,7 +272,7 @@ export class MapView {
     const notches = Math.max(-3, Math.min(3, -px / 100));
     const { x, y } = this.local(e);
     const { width, height } = this.app.screen;
-    this.cam = zoomAt(this.cam, x, y, ZOOM_STEP ** notches, width, height);
+    this.cam = zoomAt(this.cam, x, y, ZOOM_STEP ** notches, width, height, this.map);
     this.sync();
     this.hoverAt(x, y);
   };

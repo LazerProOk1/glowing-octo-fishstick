@@ -26,8 +26,8 @@ export interface BiomeConditions {
 export interface BiomeDef {
   /** Латиница snake_case, уникален: 'mushroom_forest'. */
   id: string;
-  /** Русское название (в задаче 13 станет ключом i18n). */
-  name: string;
+  /** Ключ i18n названия: 'biome.mushroom_forest' (перевод — в src/i18n/ru.ts). */
+  nameKey: string;
   /** Вода выбирается только на клетках не выше уровня моря, суша — только выше. */
   kind: 'water' | 'land';
   /** Включается только в мире с фэнтези. */
@@ -47,7 +47,8 @@ export interface BiomeDef {
 
 export interface PackManifest {
   id: string;
-  name: string;
+  /** Ключ i18n названия пака: 'pack.base'. */
+  nameKey: string;
   version: string;
   biomes: BiomeDef[];
   /** Правки биомов, объявленных этим или предыдущими паками (по id). */

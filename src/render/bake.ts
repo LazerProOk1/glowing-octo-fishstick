@@ -23,7 +23,7 @@ function clampByte(v: number): number {
 }
 
 export function bakeTextures(world: World): BakedTextures {
-  const { w, h, provinceOf, provinces, height, biome, moisture, riverMask } = world;
+  const { w, h, provinceOf, provinces } = world;
   const n = w * h;
   const dist = borderDistance(provinceOf, w, h);
   const provinceRG = new Uint8Array(n * 4);
@@ -41,12 +41,22 @@ export function bakeTextures(world: World): BakedTextures {
     provinceRG[o + 1] = g;
     provinceRG[o + 2] = landOf[id] as number;
     provinceRG[o + 3] = 255;
-    terrain[o] = clampByte(Math.round((height[i] as number) * 255));
-    terrain[o + 1] = biome[i] as number;
-    terrain[o + 2] = clampByte(Math.round((moisture[i] as number) * 255));
-    terrain[o + 3] = Math.min(252, (riverMask[i] as number) * 63);
+    writeTerrainCell(terrain, world, i);
     border[o] = Math.min(255, Math.round((dist[i] as number) * 32));
     border[o + 3] = 255;
   }
   return { provinceRG, terrain, border };
+}
+
+/** Один пиксель текстуры terrain (RGBA: высота, код биома, влажность, ширина реки · 63). */
+export function writeTerrainCell(
+  terrain: Uint8Array,
+  world: Pick<World, 'height' | 'biome' | 'moisture' | 'riverMask'>,
+  i: number,
+): void {
+  const o = i * 4;
+  terrain[o] = clampByte(Math.round((world.height[i] as number) * 255));
+  terrain[o + 1] = world.biome[i] as number;
+  terrain[o + 2] = clampByte(Math.round((world.moisture[i] as number) * 255));
+  terrain[o + 3] = Math.min(252, (world.riverMask[i] as number) * 63);
 }

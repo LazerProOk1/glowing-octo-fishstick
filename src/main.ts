@@ -7,30 +7,24 @@ import { DebugPanel } from './ui/debugPanel';
 import { errorDetail, showError } from './ui/errorScreen';
 import { LoadingScreen } from './ui/loading';
 import { ProvinceTooltip } from './ui/tooltip';
-import type { GenOptions } from './content/biomes/types';
+import type { WorldParams } from './sim/world/params';
 import { isSuperseded, requestWorld, type GenResult } from './worker/genClient';
 import { buildWorldUrl, parseWorldUrl } from './worldUrl';
 import './ui/styles.css';
 
-/** Что сгенерировать: сид и опции (фэнтези, выключенные биомы) из адреса. */
-interface WorldRequest {
-  seed: string;
-  options: GenOptions;
-}
-
 /** Ключ запроса: два запроса с одинаковым ключом дают один и тот же мир. */
-const requestKey = (r: WorldRequest): string => buildWorldUrl(r.seed, r.options);
+const requestKey = (r: WorldParams): string => buildWorldUrl(r);
 
 /**
- * Запрос из адреса; без сида — случайный сид (опции из адреса сохраняются), записывается
+ * Параметры мира из адреса; без сида — случайный сид (опции из адреса сохраняются), записывается
  * в адрес без новой записи в истории.
  */
-function initialRequest(): WorldRequest {
+function initialRequest(): WorldParams {
   const fromHash = parseWorldUrl(location.hash);
   if (fromHash.seed) return fromHash;
   const words = t('seed.words').split(',');
   const word = words[Math.floor(Math.random() * words.length)] ?? words[0] ?? 'seed';
-  const req = { seed: `${word}-${1 + Math.floor(Math.random() * 99)}`, options: fromHash.options };
+  const req = { ...fromHash, seed: `${word}-${1 + Math.floor(Math.random() * 99)}` };
   history.replaceState(null, '', requestKey(req));
   return req;
 }
@@ -91,7 +85,7 @@ async function start(root: HTMLElement): Promise<void> {
 
   // Генерация стартует сразу и идёт в воркере параллельно с запуском графики.
   // Смена адреса, пока графика запускается, сразу перезапрашивает мир (старый запрос вытесняется).
-  const load = (r: WorldRequest): Promise<GenResult> => requestWorld(r.seed, r.options, (s) => loading.setStage(s));
+  const load = (r: WorldParams): Promise<GenResult> => requestWorld(r, (s) => loading.setStage(s));
   let first = { req: initial, world: load(initial) };
   const onEarlyHash = (): void => {
     const next = parseWorldUrl(location.hash);
@@ -129,13 +123,13 @@ async function start(root: HTMLElement): Promise<void> {
   const tooltip = new ProvinceTooltip(root);
   view.onHover((id) => tooltip.setProvince(id));
   let clearError: (() => void) | null = null;
-  /** Последний запрошенный мир: новый сид из панели отладки сохраняет его опции. */
+  /** Последний запрошенный мир: новый сид из панели отладки сохраняет его паки и опции. */
   let current = first.req;
   const debug = new DebugPanel(
     root,
     () => app.ticker.FPS,
     (seed) => {
-      const next = { seed, options: current.options };
+      const next: WorldParams = { ...current, seed };
       // Тот же адрес не даёт hashchange — перестраиваем напрямую.
       if (requestKey(next) === requestKey(parseWorldUrl(location.hash))) regenerate(next);
       else location.hash = requestKey(next);
@@ -158,7 +152,7 @@ async function start(root: HTMLElement): Promise<void> {
     }
   };
 
-  const regenerate = (next: WorldRequest): void => {
+  const regenerate = (next: WorldParams): void => {
     clearError?.();
     clearError = null;
     current = next;

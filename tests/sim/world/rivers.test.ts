@@ -3,7 +3,10 @@ import { createRng } from '../../../src/sim/rng';
 import { generateHeight } from '../../../src/sim/world/heightmap';
 import { computeClimate } from '../../../src/sim/world/climate';
 import { computeRivers, fillDepressions } from '../../../src/sim/world/rivers';
-import { SEA_LEVEL, WORLD_H, WORLD_W } from '../../../src/sim/world/types';
+import { SIZE_PRESETS } from '../../../src/sim/world/params';
+import { SEA_LEVEL } from '../../../src/sim/world/types';
+
+const { w: WORLD_W, h: WORLD_H } = SIZE_PRESETS.medium;
 
 describe.each(['1', 'Бета-7'])('rivers (seed %j)', { timeout: 60000 }, (seed) => {
   const w = WORLD_W;

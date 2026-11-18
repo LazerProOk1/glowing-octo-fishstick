@@ -1,6 +1,6 @@
 import type { Rng } from '../rng';
 import { createNoise2D, fbm } from '../noise';
-import { SEA_LEVEL, MOUNTAIN_LEVEL, HILL_LEVEL } from './types';
+import { SEA_LEVEL, MOUNTAIN_LEVEL, HILL_LEVEL } from '../../content/terrainLevels';
 
 const TARGET_LAND = 0.38;
 const BINS = 4096;

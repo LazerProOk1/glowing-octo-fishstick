@@ -1,12 +1,15 @@
-import { SEA_LEVEL } from './types';
+import { SEA_LEVEL } from '../../content/terrainLevels';
 import type { RiverPath } from './types';
 import { MinHeap } from './minHeap';
+import { SIZE_PRESETS } from './params';
 
 const DX = [1, 1, 0, -1, -1, -1, 0, 1];
 const DY = [0, 1, 1, 1, 0, -1, -1, -1];
 /** Tiny slope added while flooding so flat areas and filled pits still drain. */
 const EPS = 1e-6;
+/** Headwaters on a medium map; other sizes in proportion to the map area. */
 const MAX_SOURCES = 110;
+const MEDIUM_AREA = SIZE_PRESETS.medium.w * SIZE_PRESETS.medium.h;
 const MIN_RIVER_CELLS = 30;
 
 interface Flow {
@@ -113,9 +116,10 @@ export function computeRivers(
   const n = w * h;
 
   // Choose the smallest threshold that keeps the number of headwaters bounded.
+  const maxSources = Math.round((MAX_SOURCES * (w * h)) / MEDIUM_AREA);
   let t = 40;
   let sources = findSources(flow, height, w, h, t);
-  while (sources.length > MAX_SOURCES && t < 1e7) {
+  while (sources.length > maxSources && t < 1e7) {
     t *= 1.5;
     sources = findSources(flow, height, w, h, t);
   }

@@ -9,7 +9,7 @@ import type { BiomeDef } from '../../biomes/types';
 export const FANTASY_BIOMES: BiomeDef[] = [
   {
     id: 'mushroom_forest',
-    name: 'грибной лес',
+    nameKey: 'biome.mushroom_forest',
     kind: 'land',
     fantasy: true,
     color: [128, 106, 118],
@@ -19,7 +19,7 @@ export const FANTASY_BIOMES: BiomeDef[] = [
   },
   {
     id: 'magic_forest',
-    name: 'магический лес',
+    nameKey: 'biome.magic_forest',
     kind: 'land',
     fantasy: true,
     color: [84, 118, 110],
@@ -29,7 +29,7 @@ export const FANTASY_BIOMES: BiomeDef[] = [
   },
   {
     id: 'ash_wastes',
-    name: 'пепельные пустоши',
+    nameKey: 'biome.ash_wastes',
     kind: 'land',
     fantasy: true,
     color: [124, 116, 108],
@@ -39,7 +39,7 @@ export const FANTASY_BIOMES: BiomeDef[] = [
   },
   {
     id: 'crystal_mountains',
-    name: 'кристальные горы',
+    nameKey: 'biome.crystal_mountains',
     kind: 'land',
     fantasy: true,
     color: [152, 152, 170],
