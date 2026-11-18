@@ -169,8 +169,8 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     const job: SurfaceJob | null = parallel;
     job?.startTimeout();
     enter('bake');
-    // Текстуры провинций и берега зависят от всей генерации — их печём здесь, пока вложенный
-    // воркер доделывает рельеф; потом ждём его результата.
+    // Текстуры провинций зависят от всей генерации — их печём здесь, пока вложенный воркер
+    // доделывает рельеф; потом ждём его результата.
     const own = bakeProvinces(world);
     const pending: Promise<SurfaceResult> | null = job ? job.result : null;
     let surface: SurfaceResult;

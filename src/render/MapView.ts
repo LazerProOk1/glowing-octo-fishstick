@@ -14,7 +14,8 @@ import {
 import { DEFAULT_SIZE, SIZE_PRESETS } from '../sim/world/params';
 import type { World } from '../sim/world/types';
 import { clampCamera, minZoom, screenToWorld, zoomAt, type Camera, type MapSize } from './camera';
-import type { WorldBake } from './bakeWorld';
+import { decodeProvinceIds } from './bake';
+import { bakeWorld, type WorldBake } from './bakeWorld';
 import type { Rect } from './derived';
 import { DEFAULT_FILL, MAP_MODES, mapModeById, type MapMode, type ProvinceRGBA } from './mapModes';
 import { MAP_FRAGMENT, MAP_VERTEX } from './mapShader';
@@ -54,6 +55,8 @@ export class MapView {
   private atlas: TextureSource;
   private textures: WorldTextures | null = null;
   private world: World | null = null;
+  /** Владелец клетки для показа (id из текстуры провинций, см. displayProvinceOf): по нему наведение. */
+  private owner: Uint16Array | null = null;
   /** Данные провинций (цвет заливки режима, флаги) и их текстура; есть, пока показан мир. */
   private provData: ProvinceData | null = null;
   private provSource: BufferImageSource | null = null;
@@ -92,7 +95,6 @@ export class MapView {
         uBiomeColor: this.blank,
         uProvince: this.blank,
         uBorder: this.blank,
-        uCoastSd: this.blank,
         uPalette: this.blank,
         uAtlas: this.atlas,
         uProvData: this.blank,
@@ -150,7 +152,7 @@ export class MapView {
    * Показывает мир; текстуры предыдущего мира освобождаются.
    * bake — текстуры, запечённые в воркере; без него печём в главном потоке (несколько секунд).
    */
-  setWorld(world: World, bake?: WorldBake): void {
+  setWorld(world: World, bake: WorldBake = bakeWorld(world)): void {
     const next = createWorldTextures(world, bake);
     const res = this.shader.resources;
     res.uTerrain = next.terrain;
@@ -159,7 +161,6 @@ export class MapView {
     res.uBiomeColor = next.biomeColor;
     res.uProvince = next.province;
     res.uBorder = next.border;
-    res.uCoastSd = next.coastSd;
     res.uPalette = next.palette;
     const resized = world.w !== this.map.w || world.h !== this.map.h;
     this.map = { w: world.w, h: world.h };
@@ -171,6 +172,7 @@ export class MapView {
     }
     this.textures = next;
     this.world = world;
+    this.owner = decodeProvinceIds(bake.provinceRG);
     this.worldU[0] = world.w;
     this.worldU[1] = world.h;
     this.rivers.setRivers(world.rivers);
@@ -258,6 +260,7 @@ export class MapView {
     if (this.textures) destroyWorldTextures(this.textures);
     this.textures = null;
     this.world = null;
+    this.owner = null;
     this.provSource?.destroy();
     this.provSource = null;
     this.provData = null;
@@ -319,16 +322,20 @@ export class MapView {
     };
   }
 
-  /** Наведение по CPU-копии provinceOf, без чтения с GPU. */
+  /**
+   * Наведение по CPU-копии владельцев клеток для показа (как в текстуре провинций), без чтения
+   * с GPU: клетка воды, видимая сушей у берега, выбирает сухопутную провинцию.
+   */
   private hoverAt(sx: number, sy: number): void {
     const world = this.world;
-    if (!world) return;
+    const owner = this.owner;
+    if (!world || !owner) return;
     const { width, height } = this.app.screen;
     const p = screenToWorld(this.cam, sx, sy, width, height);
     const cx = Math.floor(p.x);
     const cy = Math.floor(p.y);
     const inside = cx >= 0 && cy >= 0 && cx < world.w && cy < world.h;
-    const id = inside ? world.provinceOf[cy * world.w + cx] : undefined;
+    const id = inside ? owner[cy * world.w + cx] : undefined;
     this.setHoveredProvince(id !== undefined && world.provinces[id] ? id : null);
   }
 

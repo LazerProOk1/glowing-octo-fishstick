@@ -22,10 +22,14 @@ function clampByte(v: number): number {
   return v < 0 ? 0 : v > 255 ? 255 : v;
 }
 
-export function bakeTextures(world: World): BakedTextures {
-  const { w, h, provinceOf, provinces } = world;
+/**
+ * owner — id провинции каждой клетки для показа (по умолчанию provinceOf; рендер передаёт
+ * displayProvinceOf из bakeWorld.ts). По нему же считаются расстояния до границ.
+ */
+export function bakeTextures(world: World, owner: Uint16Array = world.provinceOf): BakedTextures {
+  const { w, h, provinces } = world;
   const n = w * h;
-  const dist = borderDistance(provinceOf, w, h);
+  const dist = borderDistance(owner, w, h);
   const provinceRG = new Uint8Array(n * 4);
   const terrain = new Uint8Array(n * 4);
   const border = new Uint8Array(n * 4);
@@ -34,7 +38,7 @@ export function bakeTextures(world: World): BakedTextures {
   provinces.forEach((p, id) => (landOf[id] = p.isLand ? 255 : 0));
   for (let i = 0; i < n; i++) {
     const o = i * 4;
-    const id = provinceOf[i] as number;
+    const id = owner[i] as number;
     if (id >= provinces.length) throw new Error(`нет провинции с id ${id} (клетка ${i})`);
     const [r, g] = encodeProvinceId(id);
     provinceRG[o] = r;
@@ -46,6 +50,15 @@ export function bakeTextures(world: World): BakedTextures {
     border[o + 3] = 255;
   }
   return { provinceRG, terrain, border };
+}
+
+/** id провинции каждой клетки обратно из RGBA-пикселей provinceRG. */
+export function decodeProvinceIds(provinceRG: Uint8Array): Uint16Array {
+  const out = new Uint16Array(provinceRG.length / 4);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = decodeProvinceId(provinceRG[i * 4] as number, provinceRG[i * 4 + 1] as number);
+  }
+  return out;
 }
 
 /** Один пиксель текстуры terrain (RGBA: высота, код биома, влажность, ширина реки · 63). */

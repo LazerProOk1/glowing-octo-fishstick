@@ -16,15 +16,10 @@ export interface WorldTextures {
   height: TextureSource;
   /**
    * RGBA16F LINEAR: RG — сглаженный градиент высоты (dh/dx, dh/dy на клетку) для отмывки,
-   * B — слегка размытая высота − SEA_LEVEL (глубина у берега для оттенка воды),
+   * B — слегка размытая высота − SEA_LEVEL для береговой линии,
    * A — размытая доля суши (σ 3.5) для полосы мелководья.
    */
   surface: TextureSource;
-  /**
-   * R16F: знаковое расстояние до берега в клетках (+ суша, − вода) по клеткам провинций.
-   * Только texelFetch: шейдер сам интерполирует четыре угла, как у границ провинций.
-   */
-  coastSd: TextureSource;
   /** RGBA8 LINEAR: размытый цвет биомов (RGB) и покрытие сушей (A), см. bakeBiomeColors. */
   biomeColor: TextureSource;
   /** Палитра биомов этого мира, см. createPaletteTexture. */
@@ -67,16 +62,6 @@ export function createWorldTextures(world: World, bake: WorldBake = bakeWorld(wo
       alphaMode: 'no-premultiply-alpha',
       autoGenerateMipmaps: false,
     }),
-    coastSd: new BufferImageSource({
-      resource: bake.coastSd,
-      width: w,
-      height: h,
-      format: 'r16float',
-      scaleMode: 'nearest',
-      addressMode: 'clamp-to-edge',
-      alphaMode: 'no-premultiply-alpha',
-      autoGenerateMipmaps: false,
-    }),
     biomeColor: rgba8(bake.biomeColor, w, h, true),
     palette: createPaletteTexture(world.biomes),
     surface: new BufferImageSource({
@@ -98,7 +83,6 @@ export function destroyWorldTextures(t: WorldTextures): void {
   t.border.destroy();
   t.height.destroy();
   t.surface.destroy();
-  t.coastSd.destroy();
   t.biomeColor.destroy();
   t.palette.destroy();
 }

@@ -29,7 +29,7 @@ function edgesBytes(world: World): Int32Array {
  * хэшами. Ловит любое изменение результата генерации или запекания, в том числе от «чистых»
  * оптимизаций. Если результат генерации меняется намеренно — поднимите GEN_VERSION
  * (src/sim/world/params.ts) и обновите здесь genVersion и хэши в том же коммите, с пояснением.
- * Хэши запекания (provinceRG … coastSd) меняются и без смены версии — при правке рендера.
+ * Хэши запекания (provinceRG … biomeColor) меняются и без смены версии — при правке рендера.
  */
 const FINGERPRINT = {
   // Поля климата — отдельными ключами, чтобы не менять эталон world выше.
@@ -47,13 +47,12 @@ const FINGERPRINT = {
     edges: '6230d3d0',
   },
   bake: {
-    provinceRG: 'f52e8e7b',
+    provinceRG: 'b9161d70',
     terrain: '698d898a',
-    border: '71e81ee6',
+    border: 'e29aa78f',
     bakeHeight: '8c184fb8',
     surface: 'a378f8da',
     biomeColor: '3033f7ed',
-    coastSd: '103b1ad9',
   },
 };
 
@@ -118,7 +117,6 @@ describe('отпечаток мира (сид "1", параметры по ум�
         bakeHeight: fnv1a(bake.height),
         surface: fnv1a(bake.surface),
         biomeColor: fnv1a(bake.biomeColor),
-        coastSd: fnv1a(bake.coastSd),
       },
       'запекание изменилось — обнови хэши, если так задумано',
     ).toEqual(FINGERPRINT.bake);

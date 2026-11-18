@@ -58,11 +58,10 @@ out vec4 finalColor;
 
 uniform sampler2D uTerrain;   // RGBA8 linear: G biome (texelFetch), B moisture
 uniform sampler2D uHeight;    // R16F linear: height - SEA_LEVEL (coast, water depth)
-uniform sampler2D uSurface;   // RGBA16F linear: RG blurred Sobel gradient per cell, B softly blurred height - SEA_LEVEL (water depth tint), A land nearness (sigma 3.5)
+uniform sampler2D uSurface;   // RGBA16F linear: RG blurred Sobel gradient per cell, B softly blurred height - SEA_LEVEL, A land nearness (sigma 3.5)
 uniform sampler2D uBiomeColor; // RGBA8 linear: blurred land palette colour, A land coverage
 uniform sampler2D uProvince;  // RGBA8: R,G id, B land
 uniform sampler2D uBorder;    // RGBA8: R distance * 32
-uniform sampler2D uCoastSd;   // R16F: signed distance to the land-sea cell border, cells (+ land). texelFetch only
 uniform sampler2D uPalette;   // ${PALETTE_SIZE}x1: rgb biome colour, a detail slot (255 = water)
 uniform sampler2D uAtlas;     // 4x4 grayscale detail tiles, mipmapped
 uniform sampler2D uProvData;  // RGBA8 per province id (row by row, uProvDataW wide): rgb fill, a flags
@@ -175,7 +174,6 @@ void main() {
   vec4 cLand;
   vec4 cHov;
   vec4 cId;
-  vec4 cs;
   for (int i = 0; i < 4; i++) {
     ivec2 c = cellAt(pc + vec2(float(i & 1), float(i >> 1)));
     vec4 t = texelFetch(uProvince, c, 0);
@@ -188,13 +186,7 @@ void main() {
     cLand[i] = t.b > 0.5 ? 1.0 : 0.0;
     cHov[i] = id == uHovered ? 1.0 : 0.0;
     cId[i] = id;
-    cs[i] = texelFetch(uCoastSd, c, 0).r;
   }
-  // Coastline: zero line of the signed distance to the land-sea border of the province cells,
-  // interpolated like the province borders. It follows the cells of land provinces exactly
-  // (smoothly, without their staircase), so hover and map mode fill reach the coast.
-  float coastPx = zeroDistPx(cs, pw, pxPerCell);
-  float landMask = clamp(coastPx + 0.5, 0.0, 1.0);
   // Hover: signed field like the borders. Where the hovered province meets the other medium
   // (land vs sea) its edge is the smooth coastline, not the cell staircase of the province.
   float anyHov = max(max(cHov.x, cHov.y), max(cHov.z, cHov.w));
@@ -232,11 +224,15 @@ void main() {
     seaFill = ownLand ? across : mine;
   }
 
-  // ---- raw height (relief, snow), CPU-baked smooth gradient (hillshade), soft height (water depth)
+  // ---- raw height (relief, snow), CPU-baked smooth gradient (hillshade), soft coast height
   float h = texture(uHeight, uv).r;
   vec4 surf = texture(uSurface, uv);
   vec2 grad = surf.rg;
+  // Coastline from the lightly blurred height: the raw shore is near-binary (+-SHORE_DELTA),
+  // whose bilinear isoline zigzags cell by cell on diagonal coasts.
   float hc = surf.b;
+  float coastPx = hc / max(length(vec2(dFdx(hc), dFdy(hc))), 1e-7);
+  float landMask = clamp(coastPx + 0.5, 0.0, 1.0);
 
   // ---- land colour: CPU-blurred biome colours (sigma 1.2 cells) looked up at a noise-warped
   // position (up to ~1.2 cells), so transitions are soft and never align to the cell grid.
@@ -292,7 +288,7 @@ void main() {
 
   vec3 col = mix(water, land, landMask);
 
-  // ---- coastline: thin dark line on the zero line of uCoastSd, anti-aliased in screen space
+  // ---- coastline: thin dark line on the SEA_LEVEL isoline, anti-aliased in screen space
   float coastW = uCam.w * clamp(0.6 + 0.07 * zoom, 0.8, 1.5);
   float coastLine = 1.0 - smoothstep(max(0.5 * coastW - 0.5, 0.0), 0.5 * coastW + 0.5, abs(coastPx));
   col = mix(col, COAST_LINE, 0.6 * coastLine);
