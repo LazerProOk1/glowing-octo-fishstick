@@ -1,0 +1,53 @@
+# Проект: стратегия про поселения (glowing-octo-fishstick)
+
+Браузерная стратегия: TypeScript strict, PixiJS 8 (WebGL2), Vite, Vitest, ESLint 9.
+Автор говорит по-русски и не технический эксперт: объяснять просто, без жаргона.
+Все ответы, коммиты и тексты интерфейса, по-русски.
+
+## Где что лежит
+- Спек: `docs/superpowers/specs/2026-11-16-settlement-strategy-design.md`
+- Планы: `docs/superpowers/plans/` (текущий: `2026-11-18-stage-1-5-feedback.md`)
+- Архитектура: `docs/architecture.md`
+- Решения этапа 1 и отложенные мелочи: `docs/superpowers/stage-1-decisions.md` (и `stage-*-decisions.md`)
+- Отзыв автора: `docs/feedback/stage-1.md`
+- Журнал SDD (локальный, не в git): `.superpowers/sdd/<план>/progress.md`, там же брифы и отчёты задач
+
+## Команды
+- `npm run dev` — дев-сервер (порт 5173, конфиг в `.claude/launch.json`)
+- `npm test` — Vitest
+- `npm run lint` — ESLint
+- `npx tsc --noEmit` — проверка типов
+- `npm run build` — типы и сборка в `dist`
+
+## Жёсткие правила
+- `strict: true`, `noUncheckedIndexedAccess: true`; `any` запрещён.
+- `src/sim/**` не импортирует `src/render`, `src/ui`, `src/worker`, `src/i18n`, `pixi.js`, DOM.
+  В sim нет `Math.random`, `Date`, `performance.now`, `crypto`, `setTimeout`, `fetch`, `self`.
+- Файл не длиннее ~450 строк.
+- Все тексты интерфейса в `src/i18n/ru.ts`, по-русски.
+- Интерфейс сдержанный: тёмные нейтральные панели, рамка 1px, PT Sans, без орнаментов, неона,
+  градиентных карточек и эмодзи.
+- Карта в духе HoI4, приглушённые «бумажные» цвета. На любом зуме нет пикселей.
+- Производительность: 60 кадров/с на 4000 провинций; генерация medium до 8 с, в воркере.
+
+## Правило GEN_VERSION
+`GEN_VERSION` (`src/sim/world/params.ts`) поднимается на 1 при любом изменении генерации, которое
+меняет результат для тех же `WorldParams` (массивы мира, провинции, соседство, состав `World`).
+В том же коммите обновляется отпечаток в `tests/sim/world/fingerprint.test.ts`, единственное место
+с ожидаемыми хешами. Оптимизации с тем же результатом и правки отрисовки версию не меняют.
+Чистые рефакторинги обязаны оставить отпечатки без изменений. Подробности: `docs/architecture.md`.
+В плане 1.5 версия поднимается ровно один раз, с 2 до 3 (Task 4).
+
+## Git
+- Рабочая ветка: `stage-1-map`. Коммиты по-русски, в конце строка
+  `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- После каждой завершённой задачи: `git push origin stage-1-map`.
+- `main` не трогать. Ветки не удалять (в том числе удалённую `arena/...`).
+- Не коммитить `.superpowers/`, `dist`, `node_modules`, локальные настройки.
+
+## После сжатия контекста
+1. Прочитать этот файл.
+2. Прочитать журнал `.superpowers/sdd/<план>/progress.md` и `git log --oneline -20`.
+3. Открыть текущий план и найти первую невыполненную задачу.
+4. Не переделывать то, что уже закоммичено. Перед правкой проверить `git status`.
+5. Перед сообщением «готово» прогнать `npm test`, `npm run lint`, `npx tsc --noEmit`.
