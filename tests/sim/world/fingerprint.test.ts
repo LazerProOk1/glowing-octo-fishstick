@@ -45,14 +45,14 @@ const FINGERPRINT = {
   world: {
     height: '9f842423',
     biome: '789cae80',
-    provinceOf: '32ef300b',
+    provinceOf: '0b52a221',
     riverMask: '61e3f25d',
-    edges: '4f1698da',
+    edges: 'fbbb425d',
   },
   bake: {
-    provinceRG: 'baf5456a',
+    provinceRG: '54dbd5f8',
     terrain: '6f9576fe',
-    border: '980430e1',
+    border: 'f8dd552b',
     bakeHeight: '8c184fb8',
     surface: 'a378f8da',
     biomeColor: '3033f7ed',
@@ -61,7 +61,7 @@ const FINGERPRINT = {
 
 /** Фэнтези включено (fantasy=1), размер small: ловит дрейф арканы и фэнтези-биомов. */
 const FANTASY_SMALL = {
-  world: { height: 'a62966d8', biome: '77a30566', provinceOf: 'a5fd326a', riverMask: '285b5862', edges: 'e2eea6cc' },
+  world: { height: 'a62966d8', biome: '77a30566', provinceOf: '96115c43', riverMask: '285b5862', edges: 'fd55c47d' },
   climate: { temperature: '7911d17e', moisture: 'c26fbf9e', arcana: 'a5ff6b92' },
 };
 

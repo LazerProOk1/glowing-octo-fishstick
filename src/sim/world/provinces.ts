@@ -6,24 +6,11 @@ import { mergeProvinces, splitImpure } from './provinceTerrain';
 import { jitterBiomes, noiseField } from './provinceNoise';
 import { KIND_CORRIDOR, KIND_LAND, KIND_WATER, poissonSeeds } from './provinceSeeds';
 import { labelByKey } from '../geom/label';
-import { borderDistance } from '../geom/edt';
+import { LAND_RADIUS, SEA_RADIUS_OPEN, seaRadiusAt } from './provinceRadii';
 import { findLakes } from './lakes';
 import { SEA_LEVEL } from '../../content/terrainLevels';
 import type { Province } from './types';
 
-/** Poisson-disk radius on land, tuned for ~3100-3200 land provinces (mean ~250 cells). */
-const LAND_RADIUS = 15.8;
-/**
- * Sea Poisson radius by distance to land d: COAST + (OPEN - COAST) * min(1, d / FAR)^1.5. Samples
- * stay max(r1, r2) apart, so an offshore seed blocks the coast within its larger radius; a linear
- * ramp made coastal provinces coarser than before (medium "1": mean ~5200 cells vs ~3300) and broke
- * the coast/open area ratio of 0.6; the 1.5 power keeps the coast finer (~4300, ratio ~0.57).
- */
-export const SEA_RADIUS_COAST = LAND_RADIUS * 2.2;
-export const SEA_RADIUS_OPEN = LAND_RADIUS * 6;
-export const SEA_RADIUS_FAR = 80;
-/** Lakes and land cells of the sea pattern (they keep sea seeds off the shore): the old radius, x3. */
-const OTHER_RADIUS = LAND_RADIUS * 3;
 /** Land pieces smaller than this merge into a land neighbour (lone islands are exempt). */
 const MIN_LAND_CELLS = 40;
 /**
@@ -181,24 +168,6 @@ export function computeProvinces(
   splitImpure(owner, kind, trueBiomes, isLand, SPEC_PURITY, MIN_LAND_CELLS, w, h);
   fixFragments(owner, kind, isLand, w, h);
   return finalize(owner, kind, lake, trueBiomes, defs, isLand.length, w, h);
-}
-
-/**
- * Poisson radius of the sea pattern per cell: sea water by its distance to land (SEA_RADIUS_*),
- * lakes and land OTHER_RADIUS. Distance to land = distance to the nearest water/non-water edge
- * (borderDistance on the water mask); lakes never touch the sea, so for sea cells that is land.
- */
-function seaRadiusAt(kind: Uint8Array, lake: Uint8Array, w: number, h: number): (cell: number) => number {
-  const n = w * h;
-  const water = new Uint16Array(n);
-  for (let i = 0; i < n; i++) water[i] = kind[i] === KIND_WATER ? 1 : 0;
-  const dist = borderDistance(water, w, h);
-  return (c) => {
-    if (kind[c] !== KIND_WATER || lake[c]) return OTHER_RADIUS;
-    const t = Math.min(1, dist[c]! / SEA_RADIUS_FAR);
-    // t^1.5 (sqrt is exact, so the result is the same on every engine).
-    return SEA_RADIUS_COAST + (SEA_RADIUS_OPEN - SEA_RADIUS_COAST) * t * Math.sqrt(t);
-  };
 }
 
 /**

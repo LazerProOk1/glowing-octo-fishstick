@@ -27,18 +27,23 @@ import { SEA_LEVEL } from '../../../src/content/terrainLevels';
  * климат заданы в долях карты, а провинции — в клетках (радиус Пуассона), поэтому на small пятна
  * биомов вдвое мельче относительно провинции: смешанных провинций и ступенек на границах
  * (растр биомов грубее) больше. Для small пороги ослаблены и записаны явно.
+ *
+ *
+ * Границы проверяются дважды. bumps и straight — доли по всем границам (суша и море), пороги
+ * прежние, кроме straight на small: крупные морские провинции открытого моря (Task 5 этапа 1.5)
+ * дают там пару прямых участков воды длиннее 12 клеток (0.0058 на "1", 0.0051 на "Бета-7"), отсюда
+ * 0.006. landBumps и landStraight — только границы суши, чтобы морские границы (они глаже) не
+ * разбавляли знаменатель и не прятали ухудшение на суше. Сухопутные провинции Task 5 не меняет;
+ * пороги — наблюдаемые максимумы с небольшим запасом (medium: бугорки до 0.0076, прямые до 0.0049;
+ * small: бугорки до 0.0119, прямые до 0.0060).
  */
-/**
- * Доли bumps и straight считаются от числа пограничных клеток. С крупными морскими провинциями в
- * открытом море (Task 5 этапа 1.5) морских границ меньше: число бугорков почти то же, а знаменатель
- * меньше на ~9% (medium "Бета-7" fantasy: 1427 бугорков на 235 тыс. клеток против 1434 на 257 тыс.),
- * отсюда 0.0065 вместо 0.006. На small крупные морские провинции дают и пару прямых участков воды
- * длиннее 12 клеток (small "1": 328 клеток против 285), отсюда straight 0.006.
- */
-const QUALITY: Record<WorldSize, { minPurity: number; pure90: number; bumps: number; straight: number }> = {
-  small: { minPurity: 0.75, pure90: 0.8, bumps: 0.01, straight: 0.006 },
-  medium: { minPurity: 0.8, pure90: 0.9, bumps: 0.0065, straight: 0.005 },
-  large: { minPurity: 0.8, pure90: 0.9, bumps: 0.0065, straight: 0.005 },
+const QUALITY: Record<
+  WorldSize,
+  { minPurity: number; pure90: number; bumps: number; straight: number; landBumps: number; landStraight: number }
+> = {
+  small: { minPurity: 0.75, pure90: 0.8, bumps: 0.01, straight: 0.006, landBumps: 0.0125, landStraight: 0.0065 },
+  medium: { minPurity: 0.8, pure90: 0.9, bumps: 0.006, straight: 0.005, landBumps: 0.008, landStraight: 0.005 },
+  large: { minPurity: 0.8, pure90: 0.9, bumps: 0.006, straight: 0.005, landBumps: 0.008, landStraight: 0.005 },
 };
 
 // Размер карты текущего набора: блоки describe выполняются по очереди, beforeAll ставит размер.
@@ -255,22 +260,26 @@ describe.each([
   it('borders have few long straight runs', () => {
     const r = longestStraightBorder(f.height, f.riverMask, f.provinceOf, W, H);
     const b = bumpShare(f.height, f.riverMask, f.provinceOf, W, H);
-    // Cells in axis or 45-degree runs longer than 12: at most 0.5% of border cells (small 0.6%);
-    // none over 30.
+    const rl = longestStraightBorder(f.height, f.riverMask, f.provinceOf, W, H, undefined, true);
+    const bl = bumpShare(f.height, f.riverMask, f.provinceOf, W, H, true);
+    // Cells in axis or 45-degree runs longer than 12: at most 0.5% of border cells (small 0.6%; land
+    // borders alone: landStraight); none over 30.
     expect(r.longCells / b.border).toBeLessThanOrEqual(QUALITY[size].straight);
+    expect(rl.longCells / bl.border).toBeLessThanOrEqual(QUALITY[size].landStraight);
     expect(r.axis).toBeLessThanOrEqual(30);
     expect(r.diagonal).toBeLessThanOrEqual(30);
   });
 
   it('borders are smooth at the cell scale (few 1-cell bumps or notches)', () => {
-    const r = bumpShare(f.height, f.riverMask, f.provinceOf, W, H);
-    expect(r.share).toBeLessThanOrEqual(QUALITY[size].bumps);
+    expect(bumpShare(f.height, f.riverMask, f.provinceOf, W, H).share).toBeLessThanOrEqual(QUALITY[size].bumps);
+    const land = bumpShare(f.height, f.riverMask, f.provinceOf, W, H, true).share;
+    expect(land).toBeLessThanOrEqual(QUALITY[size].landBumps);
   });
 
-  it.runIf(seed === '1' && size === 'medium')('fewer sea provinces: 150–300 on medium seed "1"', () => {
+  it.runIf(seed === '1' && size === 'medium')('fewer sea provinces: 150–350 on medium seed "1"', () => {
     const sea = f.provinces.filter((p) => p.water === 'sea').length;
     expect(sea).toBeGreaterThanOrEqual(150);
-    expect(sea).toBeLessThanOrEqual(300);
+    expect(sea).toBeLessThanOrEqual(350);
   });
 
   it.runIf(size === 'medium')('coastal sea stays fine: sea provinces at land are at most 0.6 of open-sea area', () => {
@@ -281,6 +290,8 @@ describe.each([
     expect(coast.length).toBeGreaterThan(0);
     expect(open.length).toBeGreaterThan(0);
     expect(mean(coast)).toBeLessThanOrEqual(0.6 * mean(open));
+    // Coastal sea at least as fine as before Task 5 of stage 1.5 (single radius x3: ~3300 cells).
+    if (seed === '1') expect(mean(coast)).toBeLessThanOrEqual(3400);
   });
 
   it.runIf(seed === '1' && size === 'medium')('is deterministic', { timeout: 30000 }, () => {

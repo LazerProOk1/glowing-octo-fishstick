@@ -146,9 +146,17 @@ export function nearCoastOrRiver(height: Float32Array, riverMask: Uint8Array, w:
   return near;
 }
 
+/** nearCoastOrRiver, plus every water cell when `landOnly` (metrics of land borders alone). */
+function excluded(height: Float32Array, riverMask: Uint8Array, w: number, h: number, landOnly: boolean): Uint8Array {
+  const near = nearCoastOrRiver(height, riverMask, w, h);
+  if (landOnly) for (let i = 0; i < w * h; i++) if (height[i]! <= SEA_LEVEL) near[i] = 1;
+  return near;
+}
+
 /**
  * Cell-scale border noise: among border cells (a 4-neighbour in another province) away from the
  * coast and major rivers, the share with at least 3 foreign 4-neighbours (1-cell bumps and notches).
+ * `landOnly`: land border cells only.
  */
 export function bumpShare(
   height: Float32Array,
@@ -156,8 +164,9 @@ export function bumpShare(
   provinceOf: Uint16Array,
   w: number,
   h: number,
+  landOnly = false,
 ): { share: number; bumps: number; border: number } {
-  const near = nearCoastOrRiver(height, riverMask, w, h);
+  const near = excluded(height, riverMask, w, h, landOnly);
   let border = 0;
   let bumps = 0;
   for (let y = 1; y < h - 1; y++) {
@@ -181,7 +190,7 @@ export function bumpShare(
 /**
  * Longest perfectly straight border run: consecutive border edges on one grid line (0/90 degrees)
  * or the exact 45-degree staircase, in cells. Edges touching a cell near the coast or a major river
- * (within one cell, 8-neighbourhood) are ignored.
+ * (within one cell, 8-neighbourhood) are ignored; with `landOnly`, edges touching water too.
  */
 export function longestStraightBorder(
   height: Float32Array,
@@ -190,9 +199,10 @@ export function longestStraightBorder(
   w: number,
   h: number,
   long?: Array<{ at: number; kind: string }>,
+  landOnly = false,
 ): { axis: number; diagonal: number; at: number; longCells: number } {
   const n = w * h;
-  const near = nearCoastOrRiver(height, riverMask, w, h);
+  const near = excluded(height, riverMask, w, h, landOnly);
   // R: border edge between (x,y) and (x+1,y); D: between (x,y) and (x,y+1); both valid (not near).
   const R = new Uint8Array(n);
   const D = new Uint8Array(n);

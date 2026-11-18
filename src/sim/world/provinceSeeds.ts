@@ -13,8 +13,10 @@ export const KIND_CORRIDOR = 2;
  * Land uses one pattern per biome over cells of biome patches with at least `minPatch` cells, and
  * every such patch is guaranteed a seed (its first visited cell). The sea pattern covers the whole
  * map and is kept only on water, so sea seeds do not pack densely along coastlines. Its radius varies
- * per cell (`seaRadiusAt`, at most `seaRadiusMax`): a candidate is accepted when every earlier sea
- * sample lies at least max(r(candidate), r(sample)) away.
+ * per cell (`seaRadiusAt`, at most `seaRadiusMax`): a candidate is accepted when no earlier sample of
+ * the sea pattern lies within the candidate's own radius. So the local density follows the local
+ * radius: with max(r1, r2) a large offshore seed blocked the coast within its radius and coastal
+ * provinces grew coarse; with min(r1, r2) open-sea seeds packed at their neighbours' smaller radius.
  */
 export function poissonSeeds(
   rng: Rng,
@@ -26,7 +28,9 @@ export function poissonSeeds(
   w: number,
   h: number,
   landRadius: number,
+  /** Sea-pattern radius at a cell (provinceRadii.ts), at most `seaRadiusMax`. */
   seaRadiusAt: (cell: number) => number,
+  /** Bucket size of the sea grid: no sample further than this can reject a candidate. */
   seaRadiusMax: number,
 ): number[] {
   // Candidates: every second cell in x and y (seed positions need no finer resolution; biome
@@ -122,19 +126,18 @@ function makeVarGrid(rMax: number, w: number, h: number): VarGrid {
   const next: number[] = [];
   const sx: number[] = [];
   const sy: number[] = [];
-  const sr: number[] = [];
   return {
     tryInsert(x, y, r) {
       if (!(r > 0 && r <= rMax)) throw new Error(`sea radius ${r} outside (0, ${rMax}]`);
       const gx = Math.floor(x / rMax);
       const gy = Math.floor(y / rMax);
+      const r2 = r * r;
       for (let yy = Math.max(0, gy - 1); yy <= Math.min(gh - 1, gy + 1); yy++) {
         for (let xx = Math.max(0, gx - 1); xx <= Math.min(gw - 1, gx + 1); xx++) {
           for (let s = head[yy * gw + xx]!; s >= 0; s = next[s]!) {
-            const m = Math.max(r, sr[s]!);
             const dx = sx[s]! - x;
             const dy = sy[s]! - y;
-            if (dx * dx + dy * dy < m * m) return false;
+            if (dx * dx + dy * dy < r2) return false;
           }
         }
       }
@@ -143,7 +146,6 @@ function makeVarGrid(rMax: number, w: number, h: number): VarGrid {
       head[b] = sx.length;
       sx.push(x);
       sy.push(y);
-      sr.push(r);
       return true;
     },
   };
