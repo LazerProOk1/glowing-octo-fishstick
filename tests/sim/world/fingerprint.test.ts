@@ -44,30 +44,32 @@ const FINGERPRINT = {
   // v3, Task 6 (та же версия): биом выбирается по температуре и влажности со смещением шумом
   // (classifyTemperatureJitter / classifyMoistureJitter) — меняются biome, provinceOf, рёбра и
   // запекание provinceRG, terrain, border, biomeColor. Поля климата не меняются.
+  // Там же, раунд правок: смещение влажности ±0.05 → ±0.15 — те же массивы плюс provinceSeaRG;
+  // масштаб смещения 40–120 клеток на любом размере (меняет только small/large, здесь FANTASY_SMALL).
   // Task 6b (рендер, версия та же): новая текстура provinceSeaRG — владельцы там, где на экране
   // вода (displaySeaProvinceOf). Остальные хэши не меняются.
   genVersion: 3,
   world: {
     height: '9f842423',
-    biome: 'fe8431e9',
-    provinceOf: '88e7095b',
+    biome: '1abe8225',
+    provinceOf: 'da129b5b',
     riverMask: '61e3f25d',
-    edges: 'bc5023ff',
+    edges: 'a972fa1e',
   },
   bake: {
-    provinceRG: '1744067d',
-    provinceSeaRG: '38ff157b',
-    terrain: '995ba005',
-    border: 'afd35dfa',
+    provinceRG: 'd2fb384e',
+    provinceSeaRG: 'febeaa62',
+    terrain: '75715fe9',
+    border: '54187388',
     bakeHeight: '8c184fb8',
     surface: 'a378f8da',
-    biomeColor: 'e0d3b77a',
+    biomeColor: '56c7e2f4',
   },
 };
 
 /** Фэнтези включено (fantasy=1), размер small: ловит дрейф арканы и фэнтези-биомов. */
 const FANTASY_SMALL = {
-  world: { height: 'a62966d8', biome: '05564c2d', provinceOf: 'a2443636', riverMask: '285b5862', edges: 'e7cafac7' },
+  world: { height: 'a62966d8', biome: 'af01c386', provinceOf: '457112f3', riverMask: '285b5862', edges: '6a0d52d3' },
   climate: { temperature: '7911d17e', moisture: 'c26fbf9e', arcana: 'a5ff6b92' },
 };
 

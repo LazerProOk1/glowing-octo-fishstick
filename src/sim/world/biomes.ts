@@ -4,7 +4,6 @@ import { SEA_LEVEL } from '../../content/terrainLevels';
 import { createNoise2D, fbm } from '../noise';
 import type { Rng } from '../rng';
 import { sampleCoarse } from './climate';
-import { MEDIUM_H } from './params';
 
 /** Измерения условий в порядке хранения: высота, температура, влажность, магичность. */
 const DIMS = 4;
@@ -89,28 +88,38 @@ export function classifyBiome(
 
 /** Наибольшее смещение температуры (°C) при выборе биома. */
 export const BIOME_JITTER_AMPLITUDE = 1.5;
-/** Наибольшее смещение влажности при выборе биома. */
-export const BIOME_MOISTURE_JITTER_AMPLITUDE = 0.05;
-/** Длины волн октав смещения на medium-карте, клеток: 120, ~69, 40. */
+/**
+ * Наибольшее смещение влажности при выборе биома. Край джунглей почти везде задаёт влажность
+ * (порог 0.7), а у экватора она меняется на ~0.005–0.009 за строку: ±0.15 сдвигает край на
+ * ±15–30 строк, и пятна джунглей перестают обрываться на одной широте. Доли биомов — в пределах 1 п.п.
+ */
+export const BIOME_MOISTURE_JITTER_AMPLITUDE = 0.15;
+/**
+ * Длины волн октав смещения, клеток: 120, ~69, 40 — на любом размере карты. Если масштабировать их
+ * по высоте карты, на small пятна становятся вдвое мельче и дробят провинции: суши-провинций на
+ * small "1" было 1020 при пределе 999.
+ */
 const JITTER_WAVELENGTH = 120;
 const JITTER_OCTAVES = 3;
 const JITTER_LACUNARITY = Math.sqrt(3);
 /**
  * Растяжка fbm перед обрезкой до [-1, 1]: у нормированного fbm стандартное отклонение ~0.3,
  * и без растяжки смещение было бы втрое меньше заявленной амплитуды (граница почти не изгибалась).
- * После растяжки ~20% клеток упираются в ±амплитуду.
+ * После растяжки ~20% клеток упираются в ±амплитуду. Проверено на medium "1" и "worldbox":
+ * растяжка 1–2 и мягкое насыщение s/√(1+s²) выравнивают край джунглей по широте сильнее (11–17%
+ * клеток края в одной полосе из 4 строк против 9–11% здесь).
  */
 const JITTER_GAIN = 2.5;
 
-/** Копия `field` плюс amp × fbm (масштаб 40–120 клеток на medium, в той же доле карты на других). */
+/** Копия `field` плюс amp × fbm (масштаб 40–120 клеток). */
 function jitter(rng: Rng, field: Float32Array, amp: number, w: number, h: number): Float32Array {
   const noise = createNoise2D(rng);
-  const cells = JITTER_WAVELENGTH * (h / MEDIUM_H);
+  const cells = JITTER_WAVELENGTH;
   const out = new Float32Array(w * h);
   sampleCoarse(
     (u, v) => {
-      const n = JITTER_GAIN * fbm(noise, (u * w) / cells, (v * h) / cells, JITTER_OCTAVES, JITTER_LACUNARITY);
-      return amp * (n < -1 ? -1 : n > 1 ? 1 : n);
+      const s = JITTER_GAIN * fbm(noise, (u * w) / cells, (v * h) / cells, JITTER_OCTAVES, JITTER_LACUNARITY);
+      return amp * (s < -1 ? -1 : s > 1 ? 1 : s);
     },
     w,
     h,

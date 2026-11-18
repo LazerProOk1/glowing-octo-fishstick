@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { resolveBiomes } from '../../../src/content/registry';
 import { createRng } from '../../../src/sim/rng';
 import { generateHeight } from '../../../src/sim/world/heightmap';
@@ -121,7 +121,7 @@ function longestStraightJungleEdge(biome: Uint8Array, list: readonly { id: strin
 
 describe('смещение климата для выбора биома', () => {
   const w = WORLD_W;
-  const h = 256;
+  const h = 256; // градиенты на строку как у medium; масштаб смещения задан в клетках
   const n = w * h;
   const height = new Float32Array(n).fill(0.65);
   const arcana = new Float32Array(n).fill(0.5);
@@ -136,6 +136,10 @@ describe('смещение климата для выбора биома', () =>
   const moisture = rows((y) => 0.7 + 0.005 * (y - h / 2));
   const wet = new Float32Array(n).fill(0.9);
   const hot = new Float32Array(n).fill(27);
+  // На гладком поле без шума у гребня волны шириной 40–120 клеток край на 30–45 клеток идёт ровно,
+  // и это не дефект: проверяется, что прямой отрезок стал во много раз короче ширины карты.
+  // В настоящем мире климат сам шумит; там предел 25 клеток и проверка выравнивания по широте.
+  const SMOOTH_MAX_RUN = 64;
 
   it('без смещения граница — прямая во всю ширину (воспроизводит дефект)', () => {
     expect(longestStraightJungleEdge(computeBiomes(defs, height, temperature, wet, arcana), defs, w, h)).toBe(w);
@@ -150,12 +154,12 @@ describe('смещение климата для выбора биома', () =>
     for (let i = 0; i < n; i++) max = Math.max(max, Math.abs(t[i]! - temperature[i]!));
     expect(max).toBeLessThanOrEqual(BIOME_JITTER_AMPLITUDE + 1e-4);
     expect(max).toBeGreaterThan(BIOME_JITTER_AMPLITUDE * 0.9);
-    expect(longestStraightJungleEdge(computeBiomes(defs, height, t, wet, arcana), defs, w, h)).toBeLessThanOrEqual(25);
+    expect(longestStraightJungleEdge(computeBiomes(defs, height, t, wet, arcana), defs, w, h)).toBeLessThanOrEqual(SMOOTH_MAX_RUN);
   });
 
   it('граница по влажности извилиста', () => {
     const m = classifyMoistureJitter(createRng('j').fork('biomeJitter').fork('moisture'), moisture, w, h);
-    expect(longestStraightJungleEdge(computeBiomes(defs, height, hot, m, arcana), defs, w, h)).toBeLessThanOrEqual(25);
+    expect(longestStraightJungleEdge(computeBiomes(defs, height, hot, m, arcana), defs, w, h)).toBeLessThanOrEqual(SMOOTH_MAX_RUN);
   });
 
   it('детерминизм', () => {
@@ -165,12 +169,70 @@ describe('смещение климата для выбора биома', () =>
   });
 });
 
+/** Полоса строк для проверки выравнивания края по широте: разброс в ней ≤ 3 строк. */
+const ALIGN_BAND = 4;
+/** Предел доли клеток края джунглей в одной полосе; без смещения климата на medium 13–16%. */
+const ALIGN_MAX_SHARE = 0.11;
+
+/**
+ * Насколько край джунглей выстроен по одной широте. Отдельно для южного края (джунгли в строке y,
+ * под ними в y + 1 суша без джунглей) и северного (наоборот): клетки края считаются по строкам,
+ * и берётся наибольшая доля клеток, попавших в одну полосу из ALIGN_BAND соседних строк.
+ * Возвращает больший из двух краёв. Ровная широтная граница у многих пятен даёт большую долю,
+ * даже если сплошной длинной прямой нигде нет.
+ */
+function jungleEdgeAlignment(biome: Uint8Array, list: readonly { id: string; kind: string }[], w: number, h: number): number {
+  const jungle = list.findIndex((d) => d.id === 'jungle');
+  const land = (c: number): boolean => list[c]?.kind === 'land';
+  let worst = 0;
+  for (const south of [true, false]) {
+    const rows = new Array<number>(h).fill(0);
+    let total = 0;
+    for (let y = 0; y + 1 < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const top = biome[y * w + x]!;
+        const bot = biome[(y + 1) * w + x]!;
+        const edge = south ? top === jungle && bot !== jungle && land(bot) : bot === jungle && top !== jungle && land(top);
+        if (edge) {
+          rows[y]!++;
+          total++;
+        }
+      }
+    }
+    let best = 0;
+    for (let y = 0; y + ALIGN_BAND <= h; y++) {
+      let s = 0;
+      for (let k = 0; k < ALIGN_BAND; k++) s += rows[y + k]!;
+      best = Math.max(best, s);
+    }
+    if (total > 0) worst = Math.max(worst, best / total);
+  }
+  return worst;
+}
+
 describe.each(['1', 'worldbox'])('no straight biome edges (medium, seed %j)', (seed) => {
+  let world: ReturnType<typeof generateWorld>;
+  beforeAll(() => {
+    world = generateWorld(defaultParams(seed));
+  }, 60000);
+
   it('граница джунглей не идёт прямой линией длиннее 25 клеток', () => {
-    const world = generateWorld(defaultParams(seed));
     const len = longestStraightJungleEdge(world.biome, world.biomes, world.w, world.h);
     expect(len).toBeLessThanOrEqual(25);
+  });
+
+  it('без смещения край джунглей выстроен по широте (воспроизводит дефект)', () => {
+    const { w, h } = world;
+    const rng = createRng(seed);
+    const height = generateHeight(rng.fork('height'), w, h);
+    const { temperature, moisture } = computeClimate(rng.fork('climate'), height, w, h);
+    const raw = computeBiomes(world.biomes, height, temperature, moisture, computeArcana(seed, w, h));
+    expect(jungleEdgeAlignment(raw, world.biomes, w, h)).toBeGreaterThan(ALIGN_MAX_SHARE);
   }, 60000);
+
+  it(`край джунглей не выстраивается по одной широте: ≤ ${ALIGN_MAX_SHARE * 100}% клеток края в полосе из ${ALIGN_BAND} строк`, () => {
+    expect(jungleEdgeAlignment(world.biome, world.biomes, world.w, world.h)).toBeLessThanOrEqual(ALIGN_MAX_SHARE);
+  });
 });
 
 describe.each(['1', 'Бета-7'])('world biomes (seed %j)', (seed) => {
