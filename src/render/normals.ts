@@ -72,6 +72,9 @@ export function blur(src: Float32Array, w: number, h: number, sigma: number): Fl
  * The same blur for `c` interleaved channels (src.length = w·h·c) in one sweep: per channel the
  * taps and their summation order are exactly those of `blur`, so each channel matches it bit for
  * bit; the loops over the map run once instead of c times.
+ * bakeBiomeColorsRect (biomeColors.ts) repeats this blur over a rectangle for map edits: same
+ * kernel, tap order, edge clamping and float32 rounding — keep the two in sync (guarded by
+ * tests/render/derived.test.ts).
  */
 export function blurInterleaved(src: Float32Array, w: number, h: number, c: number, sigma: number): Float32Array {
   const k = gaussianKernel(sigma);

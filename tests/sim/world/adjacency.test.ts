@@ -3,23 +3,20 @@ import { computeAdjacency, STRAIT_MAX_WATER } from '../../../src/sim/world/adjac
 import { generateWorld } from '../../../src/sim/world/generateWorld';
 import { defaultParams } from '../../../src/sim/world/params';
 import { SEA_LEVEL, type World } from '../../../src/sim/world/types';
-import { components, ENCLAVE_CELLS, MAJOR_RIVER } from './provinceMetrics';
+import { MAJOR_RIVER } from './provinceMetrics';
 
 const key = (a: number, b: number): string => `${Math.min(a, b)}:${Math.max(a, b)}`;
 
-/** Пограничные пары клеток и пары «через крупную реку» (одна из клеток — суша с рекой ≥ 2), по ключу пары провинций. */
-function borderPairs(world: World): { length: Map<string, number>; river: Map<string, number> } {
-  const { w, h, provinceOf, height, riverMask } = world;
+/** Число пограничных пар клеток по ключу пары провинций. */
+function borderPairs(world: World): { length: Map<string, number> } {
+  const { w, h, provinceOf } = world;
   const length = new Map<string, number>();
-  const river = new Map<string, number>();
-  const major = (i: number): boolean => height[i]! > SEA_LEVEL && riverMask[i]! >= MAJOR_RIVER;
   const visit = (i: number, j: number): void => {
     const p = provinceOf[i]!;
     const q = provinceOf[j]!;
     if (p === q) return;
     const k = key(p, q);
     length.set(k, (length.get(k) ?? 0) + 1);
-    if (major(i) || major(j)) river.set(k, (river.get(k) ?? 0) + 1);
   };
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -28,7 +25,58 @@ function borderPairs(world: World): { length: Map<string, number>; river: Map<st
       if (y < h - 1) visit(i, i + w);
     }
   }
-  return { length, river };
+  return { length };
+}
+
+/** Пары границы, где обе клетки — суша без крупной реки, по ключу пары провинций. */
+function freePairs(world: World): Map<string, number> {
+  const { w, h, height, riverMask, provinceOf } = world;
+  const free = (i: number): boolean => height[i]! > SEA_LEVEL && riverMask[i]! < MAJOR_RIVER;
+  const out = new Map<string, number>();
+  const visit = (i: number, j: number): void => {
+    const a = provinceOf[i]!;
+    const b = provinceOf[j]!;
+    if (a !== b && free(i) && free(j)) out.set(key(a, b), (out.get(key(a, b)) ?? 0) + 1);
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (x < w - 1) visit(y * w + x, y * w + x + 1);
+      if (y < h - 1) visit(y * w + x, (y + 1) * w + x);
+    }
+  }
+  return out;
+}
+
+/**
+ * Переправы через крупные реки по ключу пары провинций: лучи вправо и вниз из свободной клетки
+ * суши через 1..8 клеток крупной реки (суша, riverMask ≥ 2) до свободной клетки суши другой провинции.
+ */
+function crossings(world: Pick<World, 'w' | 'h' | 'height' | 'riverMask' | 'provinceOf'>): Map<string, number> {
+  const { w, h, height, riverMask, provinceOf } = world;
+  const major = (i: number): boolean => height[i]! > SEA_LEVEL && riverMask[i]! >= MAJOR_RIVER;
+  const free = (i: number): boolean => height[i]! > SEA_LEVEL && riverMask[i]! < MAJOR_RIVER;
+  const out = new Map<string, number>();
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (!free(i)) continue;
+      for (const [dx, dy] of [[1, 0], [0, 1]] as const) {
+        let cx = x + dx;
+        let cy = y + dy;
+        let n = 0;
+        while (cx < w && cy < h && major(cy * w + cx) && n <= 8) {
+          n++;
+          cx += dx;
+          cy += dy;
+        }
+        if (n === 0 || n > 8 || cx >= w || cy >= h || !free(cy * w + cx)) continue;
+        const a = provinceOf[i]!;
+        const b = provinceOf[cy * w + cx]!;
+        if (a !== b) out.set(key(a, b), (out.get(key(a, b)) ?? 0) + 1);
+      }
+    }
+  }
+  return out;
 }
 
 describe('рёбра соседства (сид "1")', () => {
@@ -63,34 +111,36 @@ describe('рёбра соседства (сид "1")', () => {
     for (const p of world.provinces) for (const q of p.neighbors) expect(byKey.has(key(p.id, q))).toBe(true);
   });
 
-  it('river — ровно у рёбер суша–суша, где не меньше половины границы идёт по крупной реке', () => {
-    let wrong = 0;
-    for (const e of world.adjacency) {
-      const land = world.provinces[e.a]!.isLand && world.provinces[e.b]!.isLand;
-      const r = pairs.river.get(key(e.a, e.b)) ?? 0;
-      const expected = land && e.length > 0 && r > 0 && 2 * r >= e.length;
-      if (e.river !== expected) wrong++;
-    }
-    expect(wrong).toBe(0);
-    expect(world.adjacency.filter((e) => e.river).length).toBeGreaterThan(0);
+  it('river ⇔ граница пересекает крупную реку (геометрическая проверка лучами)', () => {
+    // Независимо от реализации: луч по оси из свободной клетки суши A через 1..8 клеток крупной
+    // реки в свободную клетку суши B — переправа A→B. У рёбер-рек переправы есть; ребро, у
+    // которого переправ не меньше половины длины границы, — река, если только провинции не
+    // соприкасаются в основном по суше (больше половины пар границы — «суша без реки | суша без
+    // реки»): тогда река разделяет их где-то в стороне, а граница идёт не по ней.
+    const cross = crossings(world);
+    const landPairs = freePairs(world);
+    const landEdges = world.adjacency.filter(
+      (e) => e.length > 0 && world.provinces[e.a]!.isLand && world.provinces[e.b]!.isLand,
+    );
+    const riverNoCrossing = landEdges.filter((e) => e.river && !cross.get(key(e.a, e.b)));
+    expect(riverNoCrossing.map((e) => [e.a, e.b, e.length])).toEqual([]);
+    const missed = landEdges.filter(
+      (e) =>
+        !e.river &&
+        2 * (cross.get(key(e.a, e.b)) ?? 0) >= e.length &&
+        2 * (landPairs.get(key(e.a, e.b)) ?? 0) <= e.length,
+    );
+    expect(missed.map((e) => [e.a, e.b, e.length, cross.get(key(e.a, e.b))])).toEqual([]);
+    expect(landEdges.filter((e) => e.river).length).toBeGreaterThan(50);
   });
 
-  it('провинции по разные стороны крупной реки (разные «речные области») соединены ребром river', () => {
-    // Области: 4-компоненты суши без клеток крупных рек (обрезки < ENCLAVE_CELLS не считаются).
-    const { height, riverMask, provinceOf } = world;
-    const free = (i: number): boolean => height[i]! > SEA_LEVEL && riverMask[i]! < MAJOR_RIVER;
-    const { comp, sizes } = components(provinceOf.length, world.w, free);
-    const region = new Int32Array(world.provinces.length).fill(-1);
-    for (let i = 0; i < provinceOf.length; i++) {
-      const k = comp[i]!;
-      if (k >= 0 && sizes[k]! >= ENCLAVE_CELLS) region[provinceOf[i]!] = k;
+  it('riverLength — пары «река | не река» у рёбер суша–суша, 0 у остальных; river = 2·riverLength ≥ length', () => {
+    for (const e of world.adjacency) {
+      const land = world.provinces[e.a]!.isLand && world.provinces[e.b]!.isLand;
+      if (!land || e.length === 0) expect(e.riverLength).toBe(0);
+      expect(e.riverLength).toBeLessThanOrEqual(e.length);
+      expect(e.river).toBe(e.riverLength > 0 && 2 * e.riverLength >= e.length);
     }
-    const missed = world.adjacency.filter((e) => {
-      const ra = region[e.a]!;
-      const rb = region[e.b]!;
-      return e.length > 0 && ra >= 0 && rb >= 0 && ra !== rb && !e.river;
-    });
-    expect(missed.map((e) => [e.a, e.b])).toEqual([]);
   });
 
   it('проливы — только между сухопутными провинциями без общей границы', () => {
@@ -141,7 +191,7 @@ describe('проливы на синтетической карте', () => {
 
   it('два острова через 2 клетки воды — пролив', () => {
     const e = edgesFor(2).find((x) => x.a === 1 && x.b === 2);
-    expect(e).toEqual({ a: 1, b: 2, length: 0, river: false, strait: true });
+    expect(e).toEqual({ a: 1, b: 2, length: 0, riverLength: 0, river: false, strait: true });
   });
 
   it('через 3 клетки — пролив, через 4 и 5 — нет', () => {
@@ -157,6 +207,50 @@ describe('проливы на синтетической карте', () => {
 
   it('рёбра острова с морем: длина — периметр острова', () => {
     const list = edgesFor(5);
-    expect(list.find((x) => x.a === 0 && x.b === 1)).toEqual({ a: 0, b: 1, length: 16, river: false, strait: false });
+    expect(list.find((x) => x.a === 0 && x.b === 1)).toEqual({ a: 0, b: 1, length: 16, riverLength: 0, river: false, strait: false });
+  });
+});
+
+/**
+ * Синтетическая карта 20×12, вся суша: вертикальная крупная река шириной 2 (x = 9, 10).
+ * Левый берег — провинции 0 (y < 6) и 1 (y ≥ 6); клетки реки отданы левому берегу, как в
+ * assignCorridor; правый берег (x ≥ 11) — провинция 2.
+ */
+describe('реки на синтетической карте', () => {
+  const w = 20;
+  const h = 12;
+  const provinceOf = new Uint16Array(w * h);
+  const height = new Float32Array(w * h).fill(0.6);
+  const riverMask = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      provinceOf[i] = x >= 11 ? 2 : y < 6 ? 0 : 1;
+      if (x === 9 || x === 10) riverMask[i] = 2;
+    }
+  }
+  const provinces = [{ isLand: true }, { isLand: true }, { isLand: true }];
+  const { adjacency } = computeAdjacency(provinceOf, provinces, height, riverMask, w, h);
+  const edge = (a: number, b: number): (typeof adjacency)[number] | undefined =>
+    adjacency.find((e) => e.a === a && e.b === b);
+
+  it('провинции по разные берега реки ширины 2 — river, riverLength = длине границы', () => {
+    expect(edge(0, 2)).toEqual({ a: 0, b: 2, length: 6, riverLength: 6, river: true, strait: false });
+    expect(edge(1, 2)).toEqual({ a: 1, b: 2, length: 6, riverLength: 6, river: true, strait: false });
+  });
+
+  it('провинции одного берега у реки — не river, riverLength = 0', () => {
+    expect(edge(0, 1)).toEqual({ a: 0, b: 1, length: 11, riverLength: 0, river: false, strait: false });
+  });
+
+  it('лучевая проверка видит переправы ровно у рёбер через реку', () => {
+    const cross = crossings({ w, h, height, riverMask, provinceOf });
+    expect([...cross.keys()].sort()).toEqual(['0:2', '1:2']);
+  });
+
+  it('узкий ручей (riverMask 1) рекой не считается', () => {
+    const thin = riverMask.map((v) => (v > 0 ? 1 : 0));
+    const e = computeAdjacency(provinceOf, provinces, height, thin, w, h).adjacency.find((x) => x.a === 0 && x.b === 2);
+    expect(e).toEqual({ a: 0, b: 2, length: 6, riverLength: 0, river: false, strait: false });
   });
 });

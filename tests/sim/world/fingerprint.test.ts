@@ -15,11 +15,11 @@ function fnv1a(v: ArrayBufferView): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
-/** Рёбра соседства одним массивом: a, b, length, флаги (бит 0 — река, бит 1 — пролив). */
+/** Рёбра соседства одним массивом: a, b, length, riverLength, флаги (бит 0 — река, бит 1 — пролив). */
 function edgesBytes(world: World): Int32Array {
-  const out = new Int32Array(world.adjacency.length * 4);
+  const out = new Int32Array(world.adjacency.length * 5);
   world.adjacency.forEach((e, i) => {
-    out.set([e.a, e.b, e.length, (e.river ? 1 : 0) | (e.strait ? 2 : 0)], i * 4);
+    out.set([e.a, e.b, e.length, e.riverLength, (e.river ? 1 : 0) | (e.strait ? 2 : 0)], i * 5);
   });
   return out;
 }
@@ -38,7 +38,7 @@ const FINGERPRINT = {
     biome: 'f90fce94',
     provinceOf: '73a46d57',
     riverMask: '61e3f25d',
-    edges: '522b084f',
+    edges: '6230d3d0',
   },
   bake: {
     provinceRG: 'f52e8e7b',

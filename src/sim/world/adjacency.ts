@@ -21,10 +21,11 @@ const STRAIT_DIRS: ReadonlyArray<readonly [dx: number, dy: number, maxWater: num
 /**
  * Рёбра соседства по провинциям (`provinceOf`, суша — `height > SEA_LEVEL`).
  * - Ребро есть у каждой пары 4-соседних провинций; length — число пар клеток на их границе.
- * - river: обе провинции — суша и не меньше половины пар границы касаются клетки крупной реки
- *   (суша с riverMask ≥ MAJOR_RIVER — те же реки, что режут провинции). Клетки реки отданы одному
- *   берегу, поэтому граница по реке — это пары «клетка реки | другой берег»; стык двух провинций
- *   одного берега у реки даёт лишь пару таких пар и рекой не считается.
+ * - riverLength: у рёбер суша–суша — число пар границы «клетка крупной реки | клетка не реки»
+ *   (крупная река — суша с riverMask ≥ MAJOR_RIVER, те же реки, что режут провинции). Клетки реки
+ *   отданы одному берегу, поэтому граница по реке — это как раз пары «река | другой берег»; стык
+ *   двух провинций одного берега идёт поперёк реки (пары «река | река») и в riverLength не входит.
+ * - river: riverLength > 0 и не меньше половины границы (2·riverLength ≥ length).
  * - strait: две сухопутные провинции без общей границы, между клетками которых по прямой
  *   (по осям или диагонали) лежит от 1 до STRAIT_MAX_WATER клеток воды (по диагонали — не шире 3
  *   по евклидову расстоянию). Такие рёбра добавляются с length = 0.
@@ -41,6 +42,7 @@ export function computeAdjacency(
   // Пара (a < b) → номер в рабочих массивах. Ключ a·m + b < 2^32 — точное целое double.
   const slot = new Map<number, number>();
   const length: number[] = [];
+  /** Пары границы, где ровно одна клетка — крупная река (граница вдоль реки). */
   const riverPairs: number[] = [];
   const isMajor = (i: number): boolean => riverMask[i]! >= MAJOR_RIVER && height[i]! > SEA_LEVEL;
   const touch = (i: number, j: number): void => {
@@ -56,7 +58,7 @@ export function computeAdjacency(
       riverPairs.push(0);
     }
     length[s]!++;
-    if (isMajor(i) || isMajor(j)) riverPairs[s]!++;
+    if (isMajor(i) !== isMajor(j)) riverPairs[s]!++;
   };
   for (let y = 0; y < h; y++) {
     const row = y * w;
@@ -76,10 +78,10 @@ export function computeAdjacency(
     const b = k - a * m;
     const s = slot.get(k);
     const len = s === undefined ? 0 : length[s]!;
-    const r = s === undefined ? 0 : riverPairs[s]!;
     const land = provinces[a]!.isLand && provinces[b]!.isLand;
+    const r = s === undefined || !land ? 0 : riverPairs[s]!;
     const id = adjacency.length;
-    adjacency.push({ a, b, length: len, river: land && r > 0 && 2 * r >= len, strait: s === undefined });
+    adjacency.push({ a, b, length: len, riverLength: r, river: r > 0 && 2 * r >= len, strait: s === undefined });
     edgesOf[a]!.push(id);
     edgesOf[b]!.push(id);
   }
