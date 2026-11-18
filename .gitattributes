@@ -1,0 +1,16 @@
+# Текст хранится и выгружается с LF на любой ОС (иначе core.autocrlf на Windows даёт CRLF).
+* text=auto eol=lf
+
+# Бинарные файлы: без преобразования окончаний строк и без текстового diff.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.wasm binary
