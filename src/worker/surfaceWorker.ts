@@ -11,10 +11,10 @@ interface Scope {
 const scope = self as unknown as Scope;
 
 scope.onmessage = (e) => {
-  const { id, height, biome, w, h } = e.data;
+  const { id, height, biome, defs, w, h } = e.data;
   const start = performance.now();
   try {
-    const bake = bakeSurface(height, biome, w, h);
+    const bake = bakeSurface(height, biome, defs, w, h);
     scope.postMessage({ type: 'done', id, bake, ms: performance.now() - start }, surfaceTransferables(bake));
   } catch (err) {
     scope.postMessage({ type: 'error', id, message: err instanceof Error ? err.message : String(err) });

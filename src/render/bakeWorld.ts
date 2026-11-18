@@ -1,5 +1,6 @@
 // Подготовка данных всех текстур мира без pixi.js: выполняется в воркерах генерации,
 // чтобы главный поток только загружал готовые массивы на GPU.
+import type { BiomeDef } from '../content/biomes/types';
 import { SEA_LEVEL, type World } from '../sim/world/types';
 import { bakeTextures } from './bake';
 import { bakeBiomeColors } from './biomeColors';
@@ -40,11 +41,17 @@ function packSurface(height: Float32Array, w: number, h: number): Uint16Array {
   return out;
 }
 
-export function bakeSurface(height: Float32Array, biome: Uint8Array, w: number, h: number): SurfaceBake {
+export function bakeSurface(
+  height: Float32Array,
+  biome: Uint8Array,
+  defs: readonly BiomeDef[],
+  w: number,
+  h: number,
+): SurfaceBake {
   return {
     height: toHalfArray(height, SEA_LEVEL),
     surface: packSurface(height, w, h),
-    biomeColor: bakeBiomeColors(biome, w, h),
+    biomeColor: bakeBiomeColors(biome, defs, w, h),
   };
 }
 
@@ -55,7 +62,7 @@ export function bakeWorld(world: World, surface?: SurfaceBake): WorldBake {
     provinceRG: baked.provinceRG,
     terrain: baked.terrain,
     border: baked.border,
-    ...(surface ?? bakeSurface(world.height, world.biome, w, h)),
+    ...(surface ?? bakeSurface(world.height, world.biome, world.biomes, w, h)),
   };
 }
 

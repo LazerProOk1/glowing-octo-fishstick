@@ -1,3 +1,5 @@
+import type { BiomeDef } from '../../content/biomes/types';
+
 export const WORLD_W = 2048;
 export const WORLD_H = 1024;
 export const SEA_LEVEL = 0.5;
@@ -5,38 +7,6 @@ export const SEA_LEVEL = 0.5;
 export const MOUNTAIN_LEVEL = 0.85;
 /** Heights above this (and up to MOUNTAIN_LEVEL) are hills (~12% of land). */
 export const HILL_LEVEL = 0.72;
-
-export type Biome =
-  | 'ocean'
-  | 'coast'
-  | 'plains'
-  | 'forest'
-  | 'taiga'
-  | 'tundra'
-  | 'glacier'
-  | 'desert'
-  | 'steppe'
-  | 'swamp'
-  | 'hills'
-  | 'mountains'
-  | 'jungle';
-
-/** Index in this array is the biome code stored in a Uint8Array. */
-export const BIOMES: readonly Biome[] = [
-  'ocean',
-  'coast',
-  'plains',
-  'forest',
-  'taiga',
-  'tundra',
-  'glacier',
-  'desert',
-  'steppe',
-  'swamp',
-  'hills',
-  'mountains',
-  'jungle',
-];
 
 export interface RiverPath {
   points: Array<{ x: number; y: number }>;
@@ -51,8 +21,8 @@ export interface Province {
   cellCount: number;
   /** A cell of the province near its centroid (integer cell coordinates). */
   center: { x: number; y: number };
-  /** Most frequent biome among the province cells. */
-  biome: Biome;
+  /** id of the most frequent biome among the province cells. */
+  biome: string;
   /** Ids of 4-adjacent provinces (land and sea), ascending. */
   neighbors: number[];
   /** Land province bordering a sea province. */
@@ -66,7 +36,11 @@ export interface World {
   height: Float32Array;
   temperature: Float32Array;
   moisture: Float32Array;
-  /** Biome codes, index in BIOMES. */
+  /** «Магичность» 0..1 (см. computeArcana). */
+  arcana: Float32Array;
+  /** Включённые биомы этого мира; индекс — код биома. */
+  biomes: BiomeDef[];
+  /** Коды биомов: индекс в `biomes`. */
   biome: Uint8Array;
   riverMask: Uint8Array;
   rivers: RiverPath[];

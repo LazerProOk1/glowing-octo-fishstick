@@ -18,6 +18,8 @@ function fakeWorld(seed: string): World {
     height: new Float32Array(n),
     temperature: new Float32Array(n),
     moisture: new Float32Array(n),
+    arcana: new Float32Array(n),
+    biomes: [],
     biome: new Uint8Array(n),
     riverMask: new Uint8Array(n),
     rivers: [],
@@ -78,10 +80,11 @@ describe('genClient', () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     const stages: string[] = [];
-    const p = client.requestWorld('Альфа-1', (s) => stages.push(s));
+    const p = client.requestWorld('Альфа-1', { fantasy: true, disabledBiomes: ['swamp'] }, (s) => stages.push(s));
     const w = workers[0]!;
     const req = w.requests[0]!;
     expect(req.seed).toBe('Альфа-1');
+    expect(req.options).toEqual({ fantasy: true, disabledBiomes: ['swamp'] });
     w.emit({ type: 'stage', id: req.id, stage: 'height' });
     w.emit({ type: 'stage', id: req.id, stage: 'climate' });
     const world = fakeWorld('Альфа-1');
@@ -105,6 +108,7 @@ describe('genClient', () => {
     const secondWorker = workers[workers.length - 1]!;
     const secondReq = secondWorker.requests[0]!;
     expect(secondReq.seed).toBe('новый');
+    expect(secondReq.options).toEqual({});
     expect(secondReq.id).not.toBe(firstReq.id);
 
     // Запоздалый ответ на первый запрос ничего не ломает и не подменяет мир.
@@ -158,9 +162,10 @@ describe('collectTransferables', () => {
     expect(list).toContain(world.height.buffer);
     expect(list).toContain(world.temperature.buffer);
     expect(list).toContain(world.moisture.buffer);
+    expect(list).toContain(world.arcana.buffer);
     expect(list).toContain(world.provinceOf.buffer);
     expect(list).toContain(shared);
-    expect(list.length).toBe(5);
+    expect(list.length).toBe(6);
   });
 });
 

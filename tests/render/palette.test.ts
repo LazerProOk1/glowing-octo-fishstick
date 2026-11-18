@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MAP_COLORS, PALETTE, type RGB } from '../../src/render/palette';
-import { BIOMES } from '../../src/sim/world/types';
+import { BASE_PACK } from '../../src/content/packs/base/manifest';
+import { MAP_COLORS, type RGB } from '../../src/render/palette';
 
 function hsl([r, g, b]: RGB): { s: number; l: number } {
   const max = Math.max(r, g, b) / 255;
@@ -11,15 +11,11 @@ function hsl([r, g, b]: RGB): { s: number; l: number } {
 }
 
 const all: Array<[string, RGB]> = [
-  ...Object.entries(PALETTE),
+  ...BASE_PACK.biomes.map((b): [string, RGB] => [b.id, b.color]),
   ...Object.entries(MAP_COLORS).map(([k, v]): [string, RGB] => [`MAP_COLORS.${k}`, v]),
 ];
 
 describe('palette', () => {
-  it('у каждого биома есть цвет', () => {
-    for (const b of BIOMES) expect(PALETTE[b], b).toBeDefined();
-  });
-
   it('цвета — целые байты', () => {
     for (const [name, c] of all) {
       for (const v of c) {

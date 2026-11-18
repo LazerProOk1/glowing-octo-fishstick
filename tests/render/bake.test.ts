@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { resolveBiomes } from '../../src/content/registry';
 import { bakeTextures, decodeProvinceId, encodeProvinceId } from '../../src/render/bake';
 import type { Province, World } from '../../src/sim/world/types';
 
@@ -38,6 +39,8 @@ describe('bakeTextures', () => {
       height,
       temperature: new Float32Array(n),
       moisture: new Float32Array(n).fill(1),
+      arcana: new Float32Array(n),
+      biomes: resolveBiomes({}),
       biome: new Uint8Array(n).fill(5),
       riverMask,
       rivers: [],

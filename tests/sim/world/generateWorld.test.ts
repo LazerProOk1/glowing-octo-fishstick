@@ -25,6 +25,7 @@ describe('generateWorld', () => {
     const t = performance.now();
     a = generateWorld(
       'Бета-7',
+      {},
       (s) => stages.push(s),
       (height, biome) => (surface = { height, biome, stagesBefore: stages.length }),
     );

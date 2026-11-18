@@ -1,42 +1,102 @@
 import { describe, expect, it } from 'vitest';
+import { resolveBiomes } from '../../../src/content/registry';
 import { createRng } from '../../../src/sim/rng';
 import { generateHeight } from '../../../src/sim/world/heightmap';
-import { computeClimate } from '../../../src/sim/world/climate';
-import { classifyBiome, computeBiomes } from '../../../src/sim/world/biomes';
-import { BIOMES, SEA_LEVEL, WORLD_H, WORLD_W } from '../../../src/sim/world/types';
+import { computeArcana, computeClimate } from '../../../src/sim/world/climate';
+import { classifyBiome, compileBiomes, computeBiomes } from '../../../src/sim/world/biomes';
+import { SEA_LEVEL, WORLD_H, WORLD_W } from '../../../src/sim/world/types';
+
+/** Эталонная копия classifyBiome до задачи 12 (решающий список по именам). */
+function oldClassify(height: number, temperature: number, moisture: number): string {
+  if (height <= SEA_LEVEL) return height < SEA_LEVEL - 0.05 ? 'ocean' : 'coast';
+  if (height > 0.85) return 'mountains';
+  if (height > 0.72) return 'hills';
+  if (temperature < -10) return 'glacier';
+  if (temperature < -2) return 'tundra';
+  if (temperature > 24 && moisture > 0.7) return 'jungle';
+  if (temperature > 20 && moisture < 0.2) return 'desert';
+  if (temperature < 5) return moisture > 0.3 ? 'taiga' : 'steppe';
+  if (moisture < 0.35) return 'steppe';
+  if (moisture > 0.72 && temperature > 8 && height < 0.6) return 'swamp';
+  if (moisture > 0.5) return 'forest';
+  return 'plains';
+}
+/** Старый порядок кодов. */
+const OLD_BIOMES = [
+  'ocean', 'coast', 'plains', 'forest', 'taiga', 'tundra', 'glacier',
+  'desert', 'steppe', 'swamp', 'hills', 'mountains', 'jungle',
+];
+
+const defs = resolveBiomes({});
+const id = (h: number, t: number, m: number, a = 0.5): string => defs[classifyBiome(defs, h, t, m, a)]!.id;
 
 describe('classifyBiome', () => {
   it('water: ocean vs coast', () => {
-    expect(classifyBiome(SEA_LEVEL - 0.06, 10, 0.5)).toBe('ocean');
-    expect(classifyBiome(SEA_LEVEL - 0.01, 10, 0.5)).toBe('coast');
-    expect(classifyBiome(SEA_LEVEL, 10, 0.5)).toBe('coast');
+    expect(id(SEA_LEVEL - 0.06, 10, 0.5)).toBe('ocean');
+    expect(id(SEA_LEVEL - 0.01, 10, 0.5)).toBe('coast');
+    expect(id(SEA_LEVEL, 10, 0.5)).toBe('coast');
   });
   it('relief', () => {
-    expect(classifyBiome(0.9, 10, 0.5)).toBe('mountains');
-    expect(classifyBiome(0.8, 10, 0.5)).toBe('hills');
+    expect(id(0.9, 10, 0.5)).toBe('mountains');
+    expect(id(0.8, 10, 0.5)).toBe('hills');
   });
   it('climate', () => {
-    expect(classifyBiome(0.6, -15, 0.5)).toBe('glacier');
-    expect(classifyBiome(0.6, 26, 0.8)).toBe('jungle');
-    expect(classifyBiome(0.6, 25, 0.1)).toBe('desert');
+    expect(id(0.6, -15, 0.5)).toBe('glacier');
+    expect(id(0.6, 26, 0.8)).toBe('jungle');
+    expect(id(0.6, 25, 0.1)).toBe('desert');
+  });
+  it('границы строгих сравнений старого кода совпадают', () => {
+    const cases: Array<[number, number, number]> = [
+      [0.85, 10, 0.5], [0.72, 10, 0.5], [0.6, -10, 0.5], [0.6, -2, 0.5], [0.6, 24, 0.71], [0.6, 25, 0.7],
+      [0.6, 20, 0.1], [0.6, 21, 0.2], [0.6, 4.9, 0.3], [0.6, 5, 0.34], [0.6, 5, 0.35], [0.59, 9, 0.72],
+      [0.59, 8, 0.8], [0.6, 9, 0.8], [0.6, 10, 0.5], [0.6, 10, 0.51], [SEA_LEVEL - 0.05, 0, 1],
+    ];
+    for (const [h, t, m] of cases) expect(id(h, t, m), `${h} ${t} ${m}`).toBe(oldClassify(h, t, m));
+  });
+  it('выключенный биом: его ниша достаётся следующему по приоритету', () => {
+    const noMountains = resolveBiomes({ disabledBiomes: ['mountains'] });
+    expect(noMountains[classifyBiome(noMountains, 0.9, 10, 0.5, 0.5)]!.id).toBe('hills');
+    const noSwamp = resolveBiomes({ disabledBiomes: ['swamp'] });
+    expect(noSwamp[classifyBiome(noSwamp, 0.55, 10, 0.8, 0.5)]!.id).toBe('forest');
+  });
+  it('компиляция: приоритеты по убыванию, вода и суша раздельно, запасной последним', () => {
+    const c = compileBiomes(defs);
+    const land = [...c.code.slice(c.landStart)].map((k) => defs[k]!.id);
+    const water = [...c.code.slice(0, c.landStart)].map((k) => defs[k]!.id);
+    expect(water).toEqual(['ocean', 'coast']);
+    expect(land[0]).toBe('mountains');
+    expect(land[land.length - 1]).toBe('plains');
   });
 });
 
 describe.each(['1', 'Бета-7'])('world biomes (seed %j)', (seed) => {
   const w = WORLD_W;
   const h = WORLD_H;
-  const height = generateHeight(createRng(seed), w, h);
+  const height = generateHeight(createRng(seed).fork('height'), w, h);
   const { temperature, moisture } = computeClimate(createRng(seed).fork('climate'), height, w, h);
-  const biomes = computeBiomes(height, temperature, moisture);
-  const name = (i: number): string => BIOMES[biomes[i] ?? 0] ?? '';
+  const arcana = computeArcana(seed, w, h);
+  const biomes = computeBiomes(defs, height, temperature, moisture, arcana);
+  const name = (i: number): string => defs[biomes[i] ?? 0]?.id ?? '';
+
+  it('совместимость: коды поэлементно равны старому classifyBiome', () => {
+    let diff = 0;
+    for (let i = 0; i < biomes.length; i++) {
+      const old = OLD_BIOMES.indexOf(oldClassify(height[i]!, temperature[i]!, moisture[i]!));
+      if (biomes[i] !== old) diff++;
+    }
+    expect(diff).toBe(0);
+  });
 
   it('array sizes and ranges', () => {
     expect(temperature.length).toBe(w * h);
     expect(moisture.length).toBe(w * h);
     expect(biomes.length).toBe(w * h);
+    expect(arcana.length).toBe(w * h);
     for (let i = 0; i < moisture.length; i += 97) {
       expect(moisture[i]).toBeGreaterThanOrEqual(0);
       expect(moisture[i]).toBeLessThanOrEqual(1);
+      expect(arcana[i]).toBeGreaterThanOrEqual(0);
+      expect(arcana[i]).toBeLessThanOrEqual(1);
     }
   });
 
@@ -65,8 +125,7 @@ describe.each(['1', 'Бета-7'])('world biomes (seed %j)', (seed) => {
   it('water biomes only on water, land biomes only on land', () => {
     let wrong = 0;
     for (let i = 0; i < biomes.length; i++) {
-      const b = name(i);
-      const water = b === 'ocean' || b === 'coast';
+      const water = defs[biomes[i]!]!.kind === 'water';
       if (water !== (height[i] ?? 0) <= SEA_LEVEL) wrong++;
     }
     expect(wrong).toBe(0);

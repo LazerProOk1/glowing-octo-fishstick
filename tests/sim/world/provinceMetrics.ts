@@ -1,4 +1,6 @@
-import { BIOMES, SEA_LEVEL, type Province } from '../../../src/sim/world/types';
+import type { BiomeDef } from '../../../src/content/biomes/types';
+import { hasTag } from '../../../src/content/registry';
+import { SEA_LEVEL, type Province } from '../../../src/sim/world/types';
 
 /** Rivers at least this wide must separate provinces. */
 export const MAJOR_RIVER = 2;
@@ -58,7 +60,8 @@ export function riverViolations(
 
 /** Share of each province's cells in its majority biome. */
 export function purity(biomes: Uint8Array, provinceOf: Uint16Array, count: number): Float64Array {
-  const k = BIOMES.length;
+  let k = 1;
+  for (const b of biomes) if (b >= k) k = b + 1;
   const counts = new Int32Array(count * k);
   const total = new Int32Array(count);
   for (let i = 0; i < provinceOf.length; i++) {
@@ -75,17 +78,28 @@ export function purity(biomes: Uint8Array, provinceOf: Uint16Array, count: numbe
   return out;
 }
 
-/** Mountain cells outside enclaves (< ENCLAVE_CELLS) whose province is not mountains/hills. */
-export function strayMountainCells(biomes: Uint8Array, provinceOf: Uint16Array, provinces: Province[], w: number): number {
-  const mountains = BIOMES.indexOf('mountains');
-  const { comp, sizes } = components(biomes.length, w, (i) => biomes[i] === mountains);
+/**
+ * Cells of mountain massifs (tag `mountain`, components of one biome, enclaves under ENCLAVE_CELLS
+ * excluded) whose province biome is neither a mountain nor a hill biome.
+ */
+export function strayMountainCells(
+  biomes: Uint8Array,
+  provinceOf: Uint16Array,
+  provinces: Province[],
+  w: number,
+  defs: readonly BiomeDef[],
+): number {
+  const relief = new Set(defs.filter((d) => hasTag(d, 'mountain') || hasTag(d, 'hill')).map((d) => d.id));
   let bad = 0;
-  for (let i = 0; i < biomes.length; i++) {
-    const k = comp[i]!;
-    if (k < 0 || sizes[k]! < ENCLAVE_CELLS) continue;
-    const b = provinces[provinceOf[i]!]!.biome;
-    if (b !== 'mountains' && b !== 'hills') bad++;
-  }
+  defs.forEach((d, code) => {
+    if (!hasTag(d, 'mountain')) return;
+    const { comp, sizes } = components(biomes.length, w, (i) => biomes[i] === code);
+    for (let i = 0; i < biomes.length; i++) {
+      const k = comp[i]!;
+      if (k < 0 || sizes[k]! < ENCLAVE_CELLS) continue;
+      if (!relief.has(provinces[provinceOf[i]!]!.biome)) bad++;
+    }
+  });
   return bad;
 }
 

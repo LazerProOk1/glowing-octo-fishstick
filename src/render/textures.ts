@@ -1,8 +1,8 @@
 import { BufferImageSource, ImageSource, type TextureSource } from 'pixi.js';
-import { BIOMES, type World } from '../sim/world/types';
-import { ATLAS_URL, TERRAIN_TEXTURES } from './assets';
+import { MAX_BIOMES, type BiomeDef } from '../content/biomes/types';
+import type { World } from '../sim/world/types';
+import { ATLAS_URL, DETAIL_SLOT_OF } from './assets';
 import { bakeWorld, type WorldBake } from './bakeWorld';
-import { PALETTE } from './palette';
 
 /** GPU-текстуры одного мира. Все без мипмапов: читаются texelFetch или билинейно на нулевом уровне. */
 export interface WorldTextures {
@@ -22,11 +22,13 @@ export interface WorldTextures {
   surface: TextureSource;
   /** RGBA8 LINEAR: размытый цвет биомов (RGB) и покрытие сушей (A), см. bakeBiomeColors. */
   biomeColor: TextureSource;
+  /** Палитра биомов этого мира, см. createPaletteTexture. */
+  palette: TextureSource;
 }
 
 /** Альфа палитры: слот детали, а у водных биомов — этот маркер. */
 export const WATER_SLOT = 255;
-export const PALETTE_SIZE = 16;
+export const PALETTE_SIZE = MAX_BIOMES;
 
 function rgba8(data: Uint8Array, width: number, height: number, linear: boolean): BufferImageSource {
   return new BufferImageSource({
@@ -60,6 +62,7 @@ export function createWorldTextures(world: World, bake: WorldBake = bakeWorld(wo
       autoGenerateMipmaps: false,
     }),
     biomeColor: rgba8(bake.biomeColor, w, h, true),
+    palette: createPaletteTexture(world.biomes),
     surface: new BufferImageSource({
       resource: bake.surface,
       width: w,
@@ -80,20 +83,25 @@ export function destroyWorldTextures(t: WorldTextures): void {
   t.height.destroy();
   t.surface.destroy();
   t.biomeColor.destroy();
+  t.palette.destroy();
 }
 
-/** 16×1 RGBA8: RGB — цвет биома по коду, A — слот детали атласа (у воды WATER_SLOT). */
-export function createPaletteTexture(): BufferImageSource {
+/** Пиксели палитры: по коду биома RGB — цвет, A — слот детали атласа (у воды WATER_SLOT). */
+export function paletteData(biomes: readonly BiomeDef[]): Uint8Array {
   const data = new Uint8Array(PALETTE_SIZE * 4);
-  BIOMES.forEach((biome, code) => {
-    const [r, g, b] = PALETTE[biome];
+  biomes.forEach((def, code) => {
     const o = code * 4;
-    data[o] = r;
-    data[o + 1] = g;
-    data[o + 2] = b;
-    data[o + 3] = biome === 'ocean' || biome === 'coast' ? WATER_SLOT : TERRAIN_TEXTURES[biome];
+    data[o] = def.color[0];
+    data[o + 1] = def.color[1];
+    data[o + 2] = def.color[2];
+    data[o + 3] = def.kind === 'water' ? WATER_SLOT : DETAIL_SLOT_OF[def.detail];
   });
-  return rgba8(data, PALETTE_SIZE, 1, false);
+  return data;
+}
+
+/** PALETTE_SIZE×1 RGBA8 — палитра биомов мира (см. paletteData). */
+export function createPaletteTexture(biomes: readonly BiomeDef[]): BufferImageSource {
+  return rgba8(paletteData(biomes), PALETTE_SIZE, 1, false);
 }
 
 /** Нейтральная заглушка атласа (яркость 0.5 = «без детали»), пока PNG грузится. */

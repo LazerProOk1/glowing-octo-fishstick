@@ -7,27 +7,32 @@ import { DebugPanel } from './ui/debugPanel';
 import { errorDetail, showError } from './ui/errorScreen';
 import { LoadingScreen } from './ui/loading';
 import { ProvinceTooltip } from './ui/tooltip';
+import type { GenOptions } from './content/biomes/types';
 import { isSuperseded, requestWorld, type GenResult } from './worker/genClient';
+import { buildWorldUrl, parseWorldUrl } from './worldUrl';
 import './ui/styles.css';
 
-function seedFromHash(): string {
-  const raw = location.hash.slice(1);
-  try {
-    return decodeURIComponent(raw).trim();
-  } catch {
-    return raw.trim();
-  }
+/** Что сгенерировать: сид и опции (фэнтези, выключенные биомы) из адреса. */
+interface WorldRequest {
+  seed: string;
+  options: GenOptions;
 }
 
-/** Зерно из адреса; без него — случайное, записывается в адрес без новой записи в истории. */
-function initialSeed(): string {
-  const fromHash = seedFromHash();
-  if (fromHash) return fromHash;
+/** Ключ запроса: два запроса с одинаковым ключом дают один и тот же мир. */
+const requestKey = (r: WorldRequest): string => buildWorldUrl(r.seed, r.options);
+
+/**
+ * Запрос из адреса; без сида — случайный сид (опции из адреса сохраняются), записывается
+ * в адрес без новой записи в истории.
+ */
+function initialRequest(): WorldRequest {
+  const fromHash = parseWorldUrl(location.hash);
+  if (fromHash.seed) return fromHash;
   const words = t('seed.words').split(',');
   const word = words[Math.floor(Math.random() * words.length)] ?? words[0] ?? 'seed';
-  const seed = `${word}-${1 + Math.floor(Math.random() * 99)}`;
-  history.replaceState(null, '', `#${encodeURIComponent(seed)}`);
-  return seed;
+  const req = { seed: `${word}-${1 + Math.floor(Math.random() * 99)}`, options: fromHash.options };
+  history.replaceState(null, '', requestKey(req));
+  return req;
 }
 
 /** Шейдер карты написан на GLSL ES 3.00 — без WebGL 2 он не соберётся. */
@@ -75,8 +80,8 @@ async function createApp(): Promise<Application> {
 
 async function start(root: HTMLElement): Promise<void> {
   const loading = new LoadingScreen(root);
-  const seed = initialSeed();
-  loading.show(seed);
+  const initial = initialRequest();
+  loading.show(initial.seed);
 
   if (!browserHasWebGL2()) {
     loading.hide();
@@ -86,13 +91,14 @@ async function start(root: HTMLElement): Promise<void> {
 
   // Генерация стартует сразу и идёт в воркере параллельно с запуском графики.
   // Смена адреса, пока графика запускается, сразу перезапрашивает мир (старый запрос вытесняется).
-  let first = { seed, world: requestWorld(seed, (s) => loading.setStage(s)) };
+  const load = (r: WorldRequest): Promise<GenResult> => requestWorld(r.seed, r.options, (s) => loading.setStage(s));
+  let first = { req: initial, world: load(initial) };
   const onEarlyHash = (): void => {
-    const next = seedFromHash();
-    if (!next || next === first.seed) return;
+    const next = parseWorldUrl(location.hash);
+    if (!next.seed || requestKey(next) === requestKey(first.req)) return;
     first.world.catch(() => undefined);
-    loading.show(next);
-    first = { seed: next, world: requestWorld(next, (s) => loading.setStage(s)) };
+    loading.show(next.seed);
+    first = { req: next, world: load(next) };
   };
   window.addEventListener('hashchange', onEarlyHash);
   const abortStart = (): void => {
@@ -123,16 +129,19 @@ async function start(root: HTMLElement): Promise<void> {
   const tooltip = new ProvinceTooltip(root);
   view.onHover((id) => tooltip.setProvince(id));
   let clearError: (() => void) | null = null;
+  /** Последний запрошенный мир: новый сид из панели отладки сохраняет его опции. */
+  let current = first.req;
   const debug = new DebugPanel(
     root,
     () => app.ticker.FPS,
-    (next) => {
-      // То же зерно не меняет адрес и не даёт hashchange — перестраиваем напрямую.
-      if (next === seedFromHash()) regenerate(next);
-      else location.hash = encodeURIComponent(next);
+    (seed) => {
+      const next = { seed, options: current.options };
+      // Тот же адрес не даёт hashchange — перестраиваем напрямую.
+      if (requestKey(next) === requestKey(parseWorldUrl(location.hash))) regenerate(next);
+      else location.hash = requestKey(next);
     },
   );
-  debug.setSeed(first.seed);
+  debug.setSeed(first.req.seed);
 
   const show = async (pending: Promise<GenResult>): Promise<void> => {
     try {
@@ -149,19 +158,20 @@ async function start(root: HTMLElement): Promise<void> {
     }
   };
 
-  const regenerate = (next: string): void => {
+  const regenerate = (next: WorldRequest): void => {
     clearError?.();
     clearError = null;
+    current = next;
     tooltip.setWorld(null);
-    debug.setSeed(next);
-    loading.show(next);
-    void show(requestWorld(next, (s) => loading.setStage(s)));
+    debug.setSeed(next.seed);
+    loading.show(next.seed);
+    void show(load(next));
   };
 
   window.removeEventListener('hashchange', onEarlyHash);
   window.addEventListener('hashchange', () => {
-    const next = seedFromHash();
-    if (next) regenerate(next);
+    const next = parseWorldUrl(location.hash);
+    if (next.seed) regenerate(next);
   });
 
   // Для ручной проверки в браузере (счётчик текстур и т.п.).

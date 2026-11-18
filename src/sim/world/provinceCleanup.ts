@@ -1,3 +1,4 @@
+import { MAX_BIOMES } from '../../content/biomes/types';
 import {
   KIND_CORRIDOR as KIND_CORRIDOR_,
   KIND_LAND as KIND_LAND_,
@@ -17,8 +18,8 @@ const KIND_WATER = KIND_WATER_;
  * cross the land/water line or a major river.
  */
 
-/** Biome code slots (>= BIOMES.length). */
-export const BIOME_SLOTS = 16;
+/** Biome code slots (>= the number of biomes in a world). */
+export const BIOME_SLOTS = MAX_BIOMES;
 
 /** 4-neighbour index of c in direction k (0 E, 1 W, 2 N, 3 S), or -1 outside the map. */
 function nbr(c: number, k: number, w: number, n: number): number {

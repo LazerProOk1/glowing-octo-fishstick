@@ -1,3 +1,4 @@
+import type { BiomeDef, GenOptions } from '../content/biomes/types';
 import { uniqueBuffers, type SurfaceBake, type WorldBake } from '../render/bakeWorld';
 import { GEN_STAGES } from '../sim/world/generateWorld';
 import type { World } from '../sim/world/types';
@@ -27,6 +28,7 @@ export interface GenResult {
 export interface GenRequest {
   id: number;
   seed: string;
+  options: GenOptions;
 }
 
 export type GenResponse =
@@ -39,6 +41,8 @@ export interface SurfaceRequest {
   id: number;
   height: Float32Array;
   biome: Uint8Array;
+  /** Биомы мира: цвета и вид (вода/суша) по коду. */
+  defs: BiomeDef[];
   w: number;
   h: number;
 }
@@ -53,6 +57,7 @@ export function collectTransferables(world: World): ArrayBuffer[] {
     world.height,
     world.temperature,
     world.moisture,
+    world.arcana,
     world.biome,
     world.riverMask,
     world.provinceOf,

@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../../../src/sim/rng';
 import { generateHeight, countLandmasses } from '../../../src/sim/world/heightmap';
-import { SEA_LEVEL, MOUNTAIN_LEVEL, HILL_LEVEL, WORLD_W, WORLD_H, BIOMES } from '../../../src/sim/world/types';
+import { SEA_LEVEL, MOUNTAIN_LEVEL, HILL_LEVEL, WORLD_W, WORLD_H } from '../../../src/sim/world/types';
 
 const SEEDS = [...Array.from({ length: 17 }, (_, i) => String(i + 1)), '', 'Бета-7', 'worldbox'];
 
 describe('types', () => {
-  it('has constants and biome table', () => {
+  it('has constants', () => {
     expect(WORLD_W).toBe(2048);
     expect(WORLD_H).toBe(1024);
     expect(SEA_LEVEL).toBe(0.5);
-    expect(BIOMES[0]).toBe('ocean');
-    expect(BIOMES.length).toBe(13);
   });
 });
 

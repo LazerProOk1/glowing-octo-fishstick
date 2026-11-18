@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createRng } from '../../../src/sim/rng';
 import { generateHeight } from '../../../src/sim/world/heightmap';
-import { computeClimate } from '../../../src/sim/world/climate';
+import type { BiomeDef, GenOptions } from '../../../src/content/biomes/types';
+import { resolveBiomes } from '../../../src/content/registry';
+import { computeArcana, computeClimate } from '../../../src/sim/world/climate';
 import { computeBiomes } from '../../../src/sim/world/biomes';
 import { computeRivers } from '../../../src/sim/world/rivers';
 import { computeProvinces } from '../../../src/sim/world/provinces';
@@ -14,12 +16,13 @@ import {
   splittableIsland,
   strayMountainCells,
 } from './provinceMetrics';
-import { BIOMES, SEA_LEVEL, WORLD_H, WORLD_W, type Province } from '../../../src/sim/world/types';
+import { SEA_LEVEL, WORLD_H, WORLD_W, type Province } from '../../../src/sim/world/types';
 
 const W = WORLD_W;
 const H = WORLD_H;
 
 interface Fixture {
+  defs: BiomeDef[];
   height: Float32Array;
   biomes: Uint8Array;
   riverMask: Uint8Array;
@@ -36,15 +39,17 @@ function landOf(height: Float32Array): Uint8Array {
   return land;
 }
 
-function build(seed: string): Fixture {
+function build(seed: string, options: GenOptions): Fixture {
+  const defs = resolveBiomes(options);
   const rng = createRng(seed);
   const height0 = generateHeight(rng.fork('height'), W, H);
   const { temperature, moisture } = computeClimate(rng.fork('climate'), height0, W, H);
-  const shore = normalizeShoreline(height0, computeBiomes(height0, temperature, moisture), W, H);
-  const { height, biomes } = shore;
+  const arcana = computeArcana(seed, W, H);
+  const raw = computeBiomes(defs, height0, temperature, moisture, arcana);
+  const { height, biomes } = normalizeShoreline(height0, raw, W, H, defs);
   const { riverMask } = computeRivers(height, moisture, W, H);
-  const { provinceOf, provinces } = computeProvinces(rng.fork('provinces'), height, biomes, riverMask, W, H);
-  return { height, biomes, riverMask, provinceOf, provinces, land: landOf(height) };
+  const { provinceOf, provinces } = computeProvinces(rng.fork('provinces'), height, biomes, riverMask, W, H, defs);
+  return { defs, height, biomes, riverMask, provinceOf, provinces, land: landOf(height) };
 }
 
 /** Real 4-adjacency between provinces, as sorted id lists. */
@@ -74,10 +79,16 @@ function realNeighbors(f: Fixture): number[][] {
   return sets.map((s) => [...s].sort((a, b) => a - b));
 }
 
-describe.each(['1', 'Бета-7', 'tiny-islands', 'lakes-check'])('provinces (seed %j)', (seed) => {
+describe.each([
+  ['1', {}],
+  ['Бета-7', {}],
+  ['tiny-islands', {}],
+  ['lakes-check', {}],
+  ['Бета-7', { fantasy: true }],
+] as Array<[string, GenOptions]>)('provinces (seed %j, options %j)', (seed, options) => {
   let f: Fixture;
   beforeAll(() => {
-    f = build(seed);
+    f = build(seed, options);
   }, 60000);
 
   it('has sane land and sea province counts, ids equal indices', () => {
@@ -167,7 +178,7 @@ describe.each(['1', 'Бета-7', 'tiny-islands', 'lakes-check'])('provinces (se
   });
 
   it('biome is the most frequent biome of the province cells', () => {
-    const k = BIOMES.length;
+    const k = f.defs.length;
     const counts = new Int32Array(f.provinces.length * k);
     for (let i = 0; i < W * H; i++) {
       const j = f.provinceOf[i]! * k + f.biomes[i]!;
@@ -177,7 +188,7 @@ describe.each(['1', 'Бета-7', 'tiny-islands', 'lakes-check'])('provinces (se
     f.provinces.forEach((p, i) => {
       let max = 0;
       for (let b = 0; b < k; b++) max = Math.max(max, counts[i * k + b]!);
-      if (counts[i * k + BIOMES.indexOf(p.biome)]! !== max) wrong++;
+      if (counts[i * k + f.defs.findIndex((d) => d.id === p.biome)]! !== max) wrong++;
     });
     expect(wrong).toBe(0);
   });
@@ -208,7 +219,7 @@ describe.each(['1', 'Бета-7', 'tiny-islands', 'lakes-check'])('provinces (se
   });
 
   it('mountain massifs belong to mountain or hill provinces', () => {
-    expect(strayMountainCells(f.biomes, f.provinceOf, f.provinces, W)).toBe(0);
+    expect(strayMountainCells(f.biomes, f.provinceOf, f.provinces, W, f.defs)).toBe(0);
   });
 
   it('borders have few long straight runs', () => {
@@ -227,7 +238,7 @@ describe.each(['1', 'Бета-7', 'tiny-islands', 'lakes-check'])('provinces (se
 
   it.runIf(seed === '1')('is deterministic', { timeout: 30000 }, () => {
     const rng = createRng(seed);
-    const again = computeProvinces(rng.fork('provinces'), f.height, f.biomes, f.riverMask, W, H);
+    const again = computeProvinces(rng.fork('provinces'), f.height, f.biomes, f.riverMask, W, H, f.defs);
     expect(Buffer.from(again.provinceOf.buffer).equals(Buffer.from(f.provinceOf.buffer))).toBe(true);
     expect(again.provinces).toEqual(f.provinces);
   });

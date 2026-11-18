@@ -15,7 +15,6 @@ import { MAP_FRAGMENT, MAP_VERTEX } from './mapShader';
 import { RiverLayer } from './riverLayer';
 import {
   createAtlasPlaceholder,
-  createPaletteTexture,
   createWorldTextures,
   destroyWorldTextures,
   loadAtlas,
@@ -40,7 +39,6 @@ export class MapView {
   private readonly camU = new Float32Array(4);
   private readonly viewU = new Float32Array(2);
   private readonly worldU = new Float32Array([WORLD_W, WORLD_H]);
-  private readonly palette: TextureSource;
   /** Заглушка для текстур мира до первого setWorld. */
   private readonly blank: TextureSource;
   private atlas: TextureSource;
@@ -60,7 +58,6 @@ export class MapView {
       uWorldSize: { value: this.worldU, type: 'vec2<f32>' },
       uHovered: { value: -1, type: 'f32' },
     });
-    this.palette = createPaletteTexture();
     this.blank = createAtlasPlaceholder();
     this.atlas = createAtlasPlaceholder();
     this.shader = new Shader({
@@ -73,7 +70,7 @@ export class MapView {
         uBiomeColor: this.blank,
         uProvince: this.blank,
         uBorder: this.blank,
-        uPalette: this.palette,
+        uPalette: this.blank,
         uAtlas: this.atlas,
       },
     });
@@ -132,6 +129,7 @@ export class MapView {
     res.uBiomeColor = next.biomeColor;
     res.uProvince = next.province;
     res.uBorder = next.border;
+    res.uPalette = next.palette;
     if (this.textures) destroyWorldTextures(this.textures);
     else {
       const { width, height } = this.app.screen;
@@ -182,7 +180,6 @@ export class MapView {
     if (this.textures) destroyWorldTextures(this.textures);
     this.textures = null;
     this.world = null;
-    this.palette.destroy();
     this.blank.destroy();
     this.atlas.destroy();
     this.root.destroy();

@@ -1,10 +1,11 @@
 // Модульный воркер: генерация мира и запекание текстур карты, чтобы главный поток
 // не блокировался на несколько секунд. Текстуры рельефа запекает вложенный воркер
 // параллельно рекам и провинциям; без вложенных воркеров они пекутся здесь же, после генерации.
+import type { BiomeDef } from '../content/biomes/types';
 import { bakeTextures } from '../render/bake';
 import { bakeSurface, bakeTransferables, type SurfaceBake, type WorldBake } from '../render/bakeWorld';
 import { generateWorld } from '../sim/world/generateWorld';
-import { WORLD_H, WORLD_W } from '../sim/world/types';
+import { WORLD_H, WORLD_W, type World } from '../sim/world/types';
 import {
   collectTransferables,
   LOAD_STEPS,
@@ -77,10 +78,17 @@ function getSurfaceWorker(): Worker | null {
 }
 
 /** Отправляет копии высоты и биомов во вложенный воркер; null — если его нет. */
-function startSurfaceBake(id: number, height: Float32Array, biome: Uint8Array, w: number, h: number): Promise<SurfaceResult> | null {
+function startSurfaceBake(
+  id: number,
+  height: Float32Array,
+  biome: Uint8Array,
+  defs: BiomeDef[],
+  w: number,
+  h: number,
+): Promise<SurfaceResult> | null {
   const worker = getSurfaceWorker();
   if (!worker) return null;
-  const req: SurfaceRequest = { id, height: height.slice(), biome: biome.slice(), w, h };
+  const req: SurfaceRequest = { id, height: height.slice(), biome: biome.slice(), defs, w, h };
   return new Promise<SurfaceResult>((resolve, reject) => {
     const timer = setTimeout(
       () => dropSurfaceWorker(worker, new Error('surface worker timed out'), true),
@@ -104,7 +112,7 @@ scope.onmessage = (e) => {
   void handle(e.data);
 };
 
-async function handle({ id, seed }: GenRequest): Promise<void> {
+async function handle({ id, seed, options }: GenRequest): Promise<void> {
   const stages = Object.fromEntries(LOAD_STEPS.map((s) => [s, 0])) as Record<LoadStep, number>;
   const start = performance.now();
   let step: LoadStep | null = null;
@@ -118,8 +126,8 @@ async function handle({ id, seed }: GenRequest): Promise<void> {
   };
   try {
     let parallel: Promise<SurfaceResult> | null = null;
-    const world = generateWorld(seed, enter, (height, biome) => {
-      parallel = startSurfaceBake(id, height, biome, WORLD_W, WORLD_H);
+    const world = generateWorld(seed, options, enter, (height, biome, defs) => {
+      parallel = startSurfaceBake(id, height, biome, defs, WORLD_W, WORLD_H);
     });
     enter('bake');
     // Текстуры провинций зависят от всей генерации — их печём здесь, пока вложенный воркер
@@ -142,7 +150,7 @@ async function handle({ id, seed }: GenRequest): Promise<void> {
   }
 }
 
-function bakeHere(world: { height: Float32Array; biome: Uint8Array; w: number; h: number }): SurfaceResult {
+function bakeHere(world: World): SurfaceResult {
   const t = performance.now();
-  return { bake: bakeSurface(world.height, world.biome, world.w, world.h), ms: performance.now() - t };
+  return { bake: bakeSurface(world.height, world.biome, world.biomes, world.w, world.h), ms: performance.now() - t };
 }

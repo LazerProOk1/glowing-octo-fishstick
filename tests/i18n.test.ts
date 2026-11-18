@@ -4,7 +4,6 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { ru, t } from '../src/i18n/ru';
 import { LOAD_STEPS } from '../src/worker/protocol';
-import { BIOMES } from '../src/sim/world/types';
 
 const CYRILLIC = /[Ѐ-ӿ]/;
 const UI_DIR = join(process.cwd(), 'src', 'ui');
@@ -71,13 +70,12 @@ describe('i18n', () => {
     expect(missing).toEqual([]);
   });
 
-  it('есть названия всех биомов и этапов генерации', () => {
-    for (const b of BIOMES) expect(ru).toHaveProperty([`biome.${b}`]);
+  it('есть названия всех этапов генерации', () => {
     for (const s of LOAD_STEPS) {
       expect(ru).toHaveProperty([`stage.${s}`]);
       expect(ru).toHaveProperty([`stageShort.${s}`]);
     }
-    expect(t('biome.taiga')).toBe('тайга');
+    expect(t('stage.biomes')).toBe('Биомы…');
   });
 
   it('строки непустые', () => {

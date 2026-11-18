@@ -1,4 +1,4 @@
-import type { Rng } from '../rng';
+import { createRng, type Rng } from '../rng';
 import { createNoise2D, fbm } from '../noise';
 import { HILL_LEVEL, SEA_LEVEL } from './types';
 
@@ -115,6 +115,31 @@ function distanceToSea(height: Float32Array, w: number, h: number): Uint16Array 
     }
   }
   return dist;
+}
+
+/** Число «пятен» магичности по ширине карты (по высоте вдвое меньше: карта 2:1). */
+const ARCANA_FREQ = 9;
+/** Растяжка fbm вокруг 0.5: хвосты распределения (пятна) становятся достижимыми. */
+const ARCANA_GAIN = 1.6;
+
+/**
+ * Поле «магичности» arcana ∈ [0, 1]: низкочастотный fbm из отдельного потока ГСЧ
+ * (`seed + ':arcana'`), поэтому остальные поля мира от него не зависят. Фэнтези-биомы
+ * занимают его высокие и низкие значения внутри подходящего климата.
+ */
+export function computeArcana(seed: string, w: number, h: number): Float32Array {
+  const noise = createNoise2D(createRng(seed + ':arcana'));
+  const out = new Float32Array(w * h);
+  sampleCoarse(
+    (u, v) => {
+      const a = 0.5 + 0.5 * ARCANA_GAIN * fbm(noise, u * ARCANA_FREQ, v * (ARCANA_FREQ / 2), 4);
+      return a < 0 ? 0 : a > 1 ? 1 : a;
+    },
+    w,
+    h,
+    out,
+  );
+  return out;
 }
 
 export function computeClimate(

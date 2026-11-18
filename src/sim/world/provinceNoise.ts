@@ -1,7 +1,8 @@
 import type { Rng } from '../rng';
 import { createNoise2D, fbm } from '../noise';
+import type { BiomeDef } from '../../content/biomes/types';
+import { hasTag } from '../../content/registry';
 import { KIND_LAND as KIND_LAND_ } from './provinceSeeds';
-import { BIOMES } from './types';
 
 const KIND_LAND = KIND_LAND_;
 
@@ -10,7 +11,8 @@ const KIND_LAND = KIND_LAND_;
 /**
  * Biome map for partitioning: each land cell takes the biome of the land cell at a small noisy
  * offset, so smooth or straight biome/relief edges become wiggly province borders while purity
- * against the true biomes drops only along a thin strip. Mountain cells may only become hills.
+ * against the true biomes drops only along a thin strip. Mountain cells (tag `mountain`) may only
+ * become hills (tag `hill`).
  */
 export function jitterBiomes(
   biomes: Uint8Array,
@@ -20,12 +22,17 @@ export function jitterBiomes(
   scale: number,
   w: number,
   h: number,
+  defs: readonly BiomeDef[],
 ): Uint8Array {
-  const mountains = BIOMES.indexOf('mountains');
-  const hills = BIOMES.indexOf('hills');
+  const mountain = new Uint8Array(256);
+  const hill = new Uint8Array(256);
+  defs.forEach((d, code) => {
+    mountain[code] = hasTag(d, 'mountain') ? 1 : 0;
+    hill[code] = hasTag(d, 'hill') ? 1 : 0;
+  });
   // A mountain cell may only become hills (a massif never leaks into a lowland province); every
-  // other land cell may take the biome of its jittered source, including 'mountains'.
-  const allowed = (from: number, to: number): boolean => from !== mountains || to === hills;
+  // other land cell may take the biome of its jittered source, including mountains.
+  const allowed = (from: number, to: number): boolean => mountain[from] === 0 || hill[to] === 1;
   const out = new Uint8Array(biomes);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {

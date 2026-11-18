@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeShoreline } from '../../../src/sim/world/shoreline';
-import { BIOMES, SEA_LEVEL } from '../../../src/sim/world/types';
+import { resolveBiomes } from '../../../src/content/registry';
+import { normalizeShoreline as normalize } from '../../../src/sim/world/shoreline';
+import { SEA_LEVEL } from '../../../src/sim/world/types';
 
 const W = 40;
 const H = 20;
-const code = (b: (typeof BIOMES)[number]): number => BIOMES.indexOf(b);
+const defs = resolveBiomes({});
+const code = (id: string): number => defs.findIndex((d) => d.id === id);
+const normalizeShoreline = (height: Float32Array, biomes: Uint8Array, w: number, h: number) =>
+  normalize(height, biomes, w, h, defs);
 
 /** All-ocean grid with given cells raised to land of the given biome. */
 function grid(): { height: Float32Array; biomes: Uint8Array } {
   return { height: new Float32Array(W * H).fill(0.3), biomes: new Uint8Array(W * H).fill(code('ocean')) };
 }
-function setLand(g: { height: Float32Array; biomes: Uint8Array }, x0: number, y0: number, x1: number, y1: number, b = 'plains' as (typeof BIOMES)[number]): void {
+function setLand(g: { height: Float32Array; biomes: Uint8Array }, x0: number, y0: number, x1: number, y1: number, b = 'plains'): void {
   for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
     g.height[y * W + x] = 0.6;
     g.biomes[y * W + x] = code(b);

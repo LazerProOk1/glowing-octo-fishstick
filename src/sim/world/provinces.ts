@@ -1,9 +1,10 @@
+import type { BiomeDef } from '../../content/biomes/types';
 import type { Rng } from '../rng';
 import { assignCorridor, fixFragments, pruneTendrils, smoothOwners } from './provinceCleanup';
 import { mergeProvinces, splitIslands } from './provinceTerrain';
 import { jitterBiomes, noiseField } from './provinceNoise';
 import { KIND_CORRIDOR as KIND_CORRIDOR_, KIND_LAND as KIND_LAND_, KIND_WATER as KIND_WATER_, labelByKey, poissonSeeds } from './provinceSeeds';
-import { BIOMES, SEA_LEVEL as SEA_LEVEL_, type Province } from './types';
+import { SEA_LEVEL as SEA_LEVEL_, type Province } from './types';
 
 // Imported constants copied to module locals: in hot loops, live import bindings can be slow
 // (e.g. under Vite/Vitest module transforms).
@@ -62,6 +63,13 @@ const JITTER_WAVE = 16;
 /** Lower bound of a step length (keeps keys strictly increasing for the bucket queue). */
 const MIN_STEP = 0.05;
 
+/**
+ * Per-cell class = (kind << KIND_SHIFT) | biome code (land only): biome codes take bits 0-4
+ * (MAX_BIOMES = 32), kind bits 5-6, so a class fits a byte with bit 7 free.
+ */
+const KIND_SHIFT = 5;
+const KIND_MASK = 3 << KIND_SHIFT;
+
 const DX = [1, 0, -1, 0];
 const DY = [0, 1, 0, -1];
 
@@ -83,6 +91,7 @@ export function computeProvinces(
   riverMask: Uint8Array,
   w: number,
   h: number,
+  defs: readonly BiomeDef[],
 ): { provinceOf: Uint16Array; provinces: Province[] } {
   const trueBiomes = biomes;
   const n = w * h;
@@ -91,7 +100,7 @@ export function computeProvinces(
   // and relief edges bend too.
   const jitX = noiseField(rng.fork('jitter-x'), w, h, JITTER_WAVE, JITTER_AMP, 2, 2);
   const jitY = noiseField(rng.fork('jitter-y'), w, h, JITTER_WAVE, JITTER_AMP, 2, 2);
-  biomes = jitterBiomes(biomes, kind, jitX, jitY, 1, w, h);
+  biomes = jitterBiomes(biomes, kind, jitX, jitY, 1, w, h, defs);
   // Biome patches: 4-connected land cells of one biome (other kinds get keys that never match land).
   const patchKey = new Int32Array(n);
   for (let i = 0; i < n; i++) patchKey[i] = kind[i] === KIND_LAND ? biomes[i]! : -1 - kind[i]!;
@@ -126,7 +135,7 @@ export function computeProvinces(
   const isLand: number[] = seeds.map((s) => (kind[s] === KIND_LAND ? 1 : 0));
   seedUnreached(owner, kind, biomes, isLand, w, h);
   const cls = new Uint8Array(n);
-  for (let i = 0; i < n; i++) cls[i] = (kind[i]! << 4) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
+  for (let i = 0; i < n; i++) cls[i] = (kind[i]! << KIND_SHIFT) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
   // Smooth borders at the cell scale (3x3 mode), then drop remaining 1-cell bumps and tendril tips.
   smoothOwners(owner, cls, w, h);
   pruneTendrils(owner, kind, w, h);
@@ -151,7 +160,7 @@ export function computeProvinces(
   merge(SPEC_PURITY, true, -1);
   splitIslands(owner, kind, trueBiomes, isLand, SPEC_PURITY, MIN_LAND_CELLS, w, h);
   fixFragments(owner, kind, isLand, w, h);
-  return finalize(owner, kind, trueBiomes, isLand.length, w, h);
+  return finalize(owner, kind, trueBiomes, defs, isLand.length, w, h);
 }
 
 /**
@@ -278,7 +287,7 @@ function grow(
   const buf = new ArrayBuffer(n * S * 4);
   const f = new Float32Array(buf);
   const iv = new Int32Array(buf);
-  // Packed per-cell class: kind in bits 4-5, biome (land only) in bits 0-3, bit 7 = finalised.
+  // Packed per-cell class: kind in bits 5-6, biome (land only) in bits 0-4, bit 7 = finalised.
   // Growth only steps between cells of equal class, i.e. same kind and, on land, same biome.
   const DONE = 0x80;
   for (let i = 0, o = 0; i < n; i++, o += S) {
@@ -287,7 +296,7 @@ function grow(
     f[o + 2] = height[i]!;
     f[o + 3] = Infinity;
     iv[o + 5] = -1;
-    iv[o + 6] = (kind[i]! << 4) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
+    iv[o + 6] = (kind[i]! << KIND_SHIFT) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
     iv[o + 7] = riverMask[i]!;
   }
   const queue = new BucketQueue(n);
@@ -300,7 +309,7 @@ function grow(
     seedY[p] = wy[s]!;
     queue.push(0, s);
   });
-  const landCls = KIND_LAND << 4;
+  const landCls = KIND_LAND << KIND_SHIFT;
   for (;;) {
     const c = queue.pop();
     if (c < 0) break;
@@ -309,7 +318,7 @@ function grow(
     if (cc & DONE) continue;
     iv[co + 6] = cc | DONE;
     const p = iv[co + 5]!;
-    const isLandCell = (cc & 0x30) === landCls;
+    const isLandCell = (cc & KIND_MASK) === landCls;
     const cx = c % w;
     const cy = (c - cx) / w;
     const px = seedX[p]!;
@@ -388,6 +397,7 @@ function finalize(
   owner: Int32Array,
   kind: Uint8Array,
   biomes: Uint8Array,
+  defs: readonly BiomeDef[],
   count: number,
   w: number,
   h: number,
@@ -400,7 +410,7 @@ function finalize(
   for (let p = 0; p < count; p++) if (size[p]! > 0) remap[p] = m++;
   if (m > 65536) throw new Error(`too many provinces: ${m}`);
   const provinceOf = new Uint16Array(n);
-  const k = BIOMES.length;
+  const k = defs.length;
   const biomeCounts = new Int32Array(m * k);
   const sx = new Float64Array(m);
   const sy = new Float64Array(m);
@@ -452,7 +462,7 @@ function finalize(
       isLand: isLand[p] === 1,
       cellCount: cells[p]!,
       center: { x: cx, y: (c - cx) / w },
-      biome: BIOMES[bi]!,
+      biome: defs[bi]!.id,
       neighbors,
       coastal: isLand[p] === 1 && neighbors.some((q) => isLand[q] === 0),
     });

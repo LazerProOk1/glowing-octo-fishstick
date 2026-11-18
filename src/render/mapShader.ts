@@ -1,7 +1,7 @@
 import { ATLAS_GRID, DetailSlot } from './assets';
-import { MAP_COLORS, PALETTE, glslVec3 } from './palette';
+import { MAP_COLORS, glslVec3 } from './palette';
 import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../sim/world/types';
-import { WATER_SLOT } from './textures';
+import { PALETTE_SIZE, WATER_SLOT } from './textures';
 
 /** Число как литерал GLSL float. */
 const f = (n: number): string => n.toFixed(4);
@@ -61,7 +61,7 @@ uniform sampler2D uSurface;   // RGBA16F linear: RG blurred Sobel gradient per c
 uniform sampler2D uBiomeColor; // RGBA8 linear: blurred land palette colour, A land coverage
 uniform sampler2D uProvince;  // RGBA8: R,G id, B land
 uniform sampler2D uBorder;    // RGBA8: R distance * 32
-uniform sampler2D uPalette;   // 16x1: rgb biome colour, a detail slot (255 = water)
+uniform sampler2D uPalette;   // ${PALETTE_SIZE}x1: rgb biome colour, a detail slot (255 = water)
 uniform sampler2D uAtlas;     // 4x4 grayscale detail tiles, mipmapped
 
 uniform vec4 uCam;        // centre x, y (cells), zoom (CSS px per cell), devicePixelRatio
@@ -85,7 +85,7 @@ const vec3 SHALLOW = ${glslVec3(MAP_COLORS.waterShallow)};
 const vec3 COAST_LINE = ${glslVec3(MAP_COLORS.coastLine)};
 const vec3 BORDER = ${glslVec3(MAP_COLORS.border)};
 const vec3 VOID_COLOR = ${glslVec3(MAP_COLORS.void)};
-const vec3 SNOW = ${glslVec3(PALETTE.glacier)};
+const vec3 SNOW = ${glslVec3(MAP_COLORS.snow)};
 
 // Light from the north-west (screen y points south), ~56 deg above the horizon.
 const vec3 LIGHT = vec3(-0.4851, -0.4851, 0.7276);

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { resolveBiomes } from '../../src/content/registry';
 import { bakeBiomeColors } from '../../src/render/biomeColors';
-import { PALETTE } from '../../src/render/palette';
-import { BIOMES } from '../../src/sim/world/types';
 
 const W = 40;
 const H = 24;
-const code = (b: (typeof BIOMES)[number]): number => BIOMES.indexOf(b);
+const defs = resolveBiomes({});
+const code = (id: string): number => defs.findIndex((d) => d.id === id);
+const PALETTE = { plains: defs[code('plains')]!.color, desert: defs[code('desert')]!.color };
 
 /** Left third ocean, middle plains, right desert. */
 function map(): Uint8Array {
@@ -19,7 +20,7 @@ function map(): Uint8Array {
 const px = (out: Uint8Array, x: number, y: number): number[] => Array.from(out.slice((y * W + x) * 4, (y * W + x) * 4 + 4));
 
 describe('bakeBiomeColors', () => {
-  const out = bakeBiomeColors(map(), W, H);
+  const out = bakeBiomeColors(map(), defs, W, H);
 
   it('RGBA, по 4 байта на клетку', () => {
     expect(out).toHaveLength(W * H * 4);

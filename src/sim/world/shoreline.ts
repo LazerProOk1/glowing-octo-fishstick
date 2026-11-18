@@ -1,5 +1,7 @@
+import type { BiomeDef } from '../../content/biomes/types';
+import { hasTag } from '../../content/registry';
 import { labelComponents } from './provinceSeeds';
-import { BIOMES, SEA_LEVEL } from './types';
+import { SEA_LEVEL } from './types';
 
 /** Land components (4-connected) smaller than this sink into shallow water. */
 export const MIN_ISLAND_CELLS = 6;
@@ -8,12 +10,11 @@ export const MIN_LAKE_CELLS = 30;
 /** Offset from SEA_LEVEL given to reclassified cells. */
 const SHORE_DELTA = 0.005;
 
-const COAST = BIOMES.indexOf('coast');
-
 /**
- * Removes specks: islands under MIN_ISLAND_CELLS become 'coast' water just below SEA_LEVEL, then
- * enclosed lakes under MIN_LAKE_CELLS become land just above SEA_LEVEL with the most frequent land
- * biome of their 4-neighbours (ties: lowest code). Land is `height > SEA_LEVEL` everywhere.
+ * Removes specks: islands under MIN_ISLAND_CELLS become shallow water (the `shallowWater` biome)
+ * just below SEA_LEVEL, then enclosed lakes under MIN_LAKE_CELLS become land just above SEA_LEVEL
+ * with the most frequent land biome of their 4-neighbours (ties: lowest code). Land is
+ * `height > SEA_LEVEL` everywhere. `defs` — the world's biome list (codes are indices in it).
  * Returns new arrays; inputs are not modified.
  */
 export function normalizeShoreline(
@@ -21,8 +22,11 @@ export function normalizeShoreline(
   biomes: Uint8Array,
   w: number,
   h: number,
+  defs: readonly BiomeDef[],
 ): { height: Float32Array; biomes: Uint8Array } {
   const n = w * h;
+  const COAST = defs.findIndex((d) => hasTag(d, 'shallowWater'));
+  if (COAST < 0) throw new Error('нет биома с тегом shallowWater');
   const outH = new Float32Array(height);
   const outB = new Uint8Array(biomes);
   const isLand = (i: number): boolean => outH[i]! > SEA_LEVEL;
@@ -61,7 +65,7 @@ export function normalizeShoreline(
     cells.push(i);
   }
   const seen = new Int32Array(n).fill(-1);
-  const counts = new Int32Array(BIOMES.length);
+  const counts = new Int32Array(defs.length);
   for (const [k, cells] of lakes) {
     counts.fill(0);
     for (const c of cells) {
@@ -74,8 +78,8 @@ export function normalizeShoreline(
       }
     }
     let best = -1;
-    for (let b = 0; b < BIOMES.length; b++) {
-      if (b === COAST || BIOMES[b] === 'ocean') continue;
+    for (let b = 0; b < defs.length; b++) {
+      if (defs[b]!.kind === 'water') continue;
       if (best < 0 || counts[b]! > counts[best]!) best = b;
     }
     for (const c of cells) {

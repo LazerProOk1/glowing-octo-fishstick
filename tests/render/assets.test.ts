@@ -2,18 +2,22 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { ATLAS_GRID, DetailSlot, TERRAIN_TEXTURES } from '../../src/render/assets';
-import { BIOMES } from '../../src/sim/world/types';
+import { DETAIL_SLOT_NAMES } from '../../src/content/biomes/types';
+import { BASE_PACK } from '../../src/content/packs/base/manifest';
+import { ATLAS_GRID, DETAIL_SLOT_OF, DetailSlot } from '../../src/render/assets';
 
 const ROOT = join(__dirname, '..', '..');
 const ASSETS = join(ROOT, 'assets');
 const credits = readFileSync(join(ASSETS, 'CREDITS.md'), 'utf8');
 
-describe('TERRAIN_TEXTURES', () => {
-  it('maps every biome to a valid detail slot', () => {
-    for (const b of BIOMES) {
-      const slot = TERRAIN_TEXTURES[b];
-      expect(Number.isInteger(slot), b).toBe(true);
+describe('DETAIL_SLOT_OF', () => {
+  it('имя слота из данных биома — его номер в атласе', () => {
+    DETAIL_SLOT_NAMES.forEach((name, i) => expect(DETAIL_SLOT_OF[name], name).toBe(i));
+  });
+  it('каждый биом базового пака попадает в используемый слот атласа', () => {
+    for (const b of BASE_PACK.biomes) {
+      const slot = DETAIL_SLOT_OF[b.detail];
+      expect(Number.isInteger(slot), b.id).toBe(true);
       expect(slot).toBeGreaterThanOrEqual(0);
       expect(slot).toBeLessThanOrEqual(DetailSlot.PAPER);
       expect(slot).toBeLessThan(ATLAS_GRID * ATLAS_GRID);
