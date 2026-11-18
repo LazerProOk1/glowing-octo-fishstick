@@ -48,6 +48,7 @@ const FINGERPRINT = {
   // масштаб смещения 40–120 клеток на любом размере (меняет только small/large, здесь FANTASY_SMALL).
   // Task 6b (рендер, версия та же): новая текстура provinceSeaRG — владельцы там, где на экране
   // вода (displaySeaProvinceOf). Остальные хэши не меняются.
+  // Раунд правок 6b: поле расстояний border больше не запекается (шейдер его не читал) — хэш убран.
   genVersion: 3,
   world: {
     height: '9f842423',
@@ -60,7 +61,6 @@ const FINGERPRINT = {
     provinceRG: 'd2fb384e',
     provinceSeaRG: 'febeaa62',
     terrain: '75715fe9',
-    border: '54187388',
     bakeHeight: '8c184fb8',
     surface: 'a378f8da',
     biomeColor: '56c7e2f4',
@@ -125,7 +125,6 @@ describe('отпечаток мира (сид "1", параметры по ум�
         provinceRG: fnv1a(bake.provinceRG),
         provinceSeaRG: fnv1a(bake.provinceSeaRG),
         terrain: fnv1a(bake.terrain),
-        border: fnv1a(bake.border),
         bakeHeight: fnv1a(bake.height),
         surface: fnv1a(bake.surface),
         biomeColor: fnv1a(bake.biomeColor),

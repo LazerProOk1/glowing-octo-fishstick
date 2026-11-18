@@ -52,7 +52,7 @@ describe('bakeTextures', () => {
     };
   });
 
-  it('раскладка provinceRG, terrain, border', () => {
+  it('раскладка provinceRG, terrain; поля границ нет', () => {
     const t = bakeTextures(world);
     expect(t.provinceRG.length).toBe(w * h * 4);
     expect(Array.from(t.provinceRG.subarray(0, 4))).toEqual([0, 0, 255, 255]);
@@ -63,10 +63,7 @@ describe('bakeTextures', () => {
     expect(t.terrain[2]).toBe(255);
     expect(t.terrain[3]).toBe(0);
     expect(t.terrain[4 + 3]).toBe(252);
-    expect(t.border[3 * 4]).toBe(16); // 0.5 * 32
-    expect(t.border[3 * 4 + 1]).toBe(0);
-    expect(t.border[3]).toBe(255);
-    expect(t.border[0]).toBe(Math.min(255, Math.round(3.5 * 32)));
+    expect(Object.keys(t).sort()).toEqual(['provinceRG', 'terrain']);
   });
 
   it('бросает при отсутствующей провинции', () => {

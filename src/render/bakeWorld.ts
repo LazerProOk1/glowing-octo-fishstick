@@ -25,7 +25,6 @@ export interface WorldBake extends SurfaceBake {
   /** id для показа там, где на экране вода (displaySeaProvinceOf). */
   provinceSeaRG: Uint8Array;
   terrain: Uint8Array;
-  border: Uint8Array;
 }
 
 /**
@@ -185,7 +184,6 @@ export function bakeWorld(world: World, surface?: SurfaceBake): WorldBake {
     provinceRG: baked.provinceRG,
     provinceSeaRG: baked.provinceSeaRG,
     terrain: baked.terrain,
-    border: baked.border,
     ...(surface ?? bakeSurface(world.height, world.biome, world.biomes, w, h)),
   };
 }

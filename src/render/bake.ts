@@ -1,5 +1,4 @@
 import type { World } from '../sim/world/types';
-import { borderDistance } from '../sim/geom/edt';
 
 export function encodeProvinceId(id: number): [r: number, g: number] {
   return [id & 255, id >> 8];
@@ -14,8 +13,6 @@ export interface BakedTextures {
   provinceRG: Uint8Array;
   /** RGBA: R height, G biome code, B moisture, A river width * 63. */
   terrain: Uint8Array;
-  /** RGBA: R = border distance * 32 (clamped), G = country border (later), A = 255. */
-  border: Uint8Array;
 }
 
 function clampByte(v: number): number {
@@ -24,22 +21,15 @@ function clampByte(v: number): number {
 
 /**
  * owner — id провинции каждой клетки для показа (по умолчанию provinceOf; рендер передаёт
- * displayProvinceOf из bakeWorld.ts). По нему же считаются расстояния до границ.
+ * displayProvinceOf из bakeWorld.ts). Границы провинций шейдер строит сам по картам id
+ * (мягкая доля, см. softProvince.ts), поэтому поле расстояний до границ не запекается.
  */
 export function bakeTextures(world: World, owner: Uint16Array = world.provinceOf): BakedTextures {
-  const { w, h, provinces } = world;
-  const n = w * h;
-  const provinceRG = provinceIdPixels(owner, provinces);
-  const dist = borderDistance(owner, w, h);
+  const n = world.w * world.h;
+  const provinceRG = provinceIdPixels(owner, world.provinces);
   const terrain = new Uint8Array(n * 4);
-  const border = new Uint8Array(n * 4);
-  for (let i = 0; i < n; i++) {
-    const o = i * 4;
-    writeTerrainCell(terrain, world, i);
-    border[o] = Math.min(255, Math.round((dist[i] as number) * 32));
-    border[o + 3] = 255;
-  }
-  return { provinceRG, terrain, border };
+  for (let i = 0; i < n; i++) writeTerrainCell(terrain, world, i);
+  return { provinceRG, terrain };
 }
 
 /**

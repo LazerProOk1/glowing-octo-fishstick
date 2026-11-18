@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { bakeWorld, coastHeight, displayProvinceOf, displaySeaProvinceOf } from '../../src/render/bakeWorld';
 import { pickProvince, softProvince, type ProvinceMaps } from '../../src/render/softProvince';
 import { generateWorld } from '../../src/sim/world/generateWorld';
@@ -19,11 +19,16 @@ function nearVisibleLand(coast: Float32Array, w: number, h: number, i: number): 
   return false;
 }
 
+/** Один мир (сид "1", small) на все тесты файла: генерация — секунда-две. */
+let world: World;
+beforeAll(() => {
+  const p = defaultParams('1');
+  p.options.size = 'small';
+  world = generateWorld(p);
+}, 60000);
+
 describe('displayProvinceOf', () => {
   it('visible land picks a land province (сид "1", small)', () => {
-    const p = defaultParams('1');
-    p.options.size = 'small';
-    const world = generateWorld(p);
     const { w, h, provinces, provinceOf } = world;
     const coast = coastHeight(world.height, w, h);
     const shown = displayProvinceOf(world, coast);
@@ -53,8 +58,8 @@ describe('displayProvinceOf', () => {
     const h = 1;
     const provinces = [{ isLand: false }, { isLand: true }, { isLand: true }] as Province[];
     const provinceOf = new Uint16Array([1, 0, 0, 0, 0, 2]);
-    const world = { w, h, provinces, provinceOf } as unknown as World;
-    const shown = displayProvinceOf(world, new Float32Array(w).fill(0.01));
+    const tiny = { w, h, provinces, provinceOf } as unknown as World;
+    const shown = displayProvinceOf(tiny, new Float32Array(w).fill(0.01));
     expect(Array.from(shown)).toEqual([1, 1, 1, 2, 2, 2]);
     const odd = displayProvinceOf(
       { w: 5, h, provinces, provinceOf: new Uint16Array([2, 0, 0, 0, 1]) } as unknown as World,
@@ -90,9 +95,6 @@ function nearVisibleWater(coast: Float32Array, w: number, h: number, i: number):
 
 describe('displaySeaProvinceOf', () => {
   it('visible water picks a water province (сид "1", small)', () => {
-    const p = defaultParams('1');
-    p.options.size = 'small';
-    const world = generateWorld(p);
     const { w, h, provinces, provinceOf } = world;
     const coast = coastHeight(world.height, w, h);
     const shown = displaySeaProvinceOf(world, coast);
@@ -124,8 +126,8 @@ describe('displaySeaProvinceOf', () => {
       { isLand: false, water: 'lake' },
     ] as Province[];
     const provinceOf = new Uint16Array([1, 0, 0, 0, 0, 2]);
-    const world = { w: 6, h: 1, provinces, provinceOf } as unknown as World;
-    expect(Array.from(displaySeaProvinceOf(world, new Float32Array(6).fill(-0.01)))).toEqual([1, 1, 1, 2, 2, 2]);
+    const tiny = { w: 6, h: 1, provinces, provinceOf } as unknown as World;
+    expect(Array.from(displaySeaProvinceOf(tiny, new Float32Array(6).fill(-0.01)))).toEqual([1, 1, 1, 2, 2, 2]);
   });
 });
 
@@ -138,9 +140,6 @@ function rg(ids: number[], land: (id: number) => boolean): Uint8Array {
 
 describe('выбор провинции на CPU (как в шейдере)', () => {
   it('точка на воде у берега даёт водную провинцию, на суше — сухопутную (сид "1", small)', () => {
-    const p = defaultParams('1');
-    p.options.size = 'small';
-    const world = generateWorld(p);
     const bake = bakeWorld(world);
     const { w, h, provinces } = world;
     const coast = coastHeight(world.height, w, h);

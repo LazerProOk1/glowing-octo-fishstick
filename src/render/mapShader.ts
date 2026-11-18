@@ -216,6 +216,9 @@ struct Side {
 // provinces is their equal-share line: smooth, not the cell staircase. Its distance in px comes
 // from the analytic gradient of the shares, so no screen derivatives are needed. Candidates are
 // the provinces of the 4 nearest cells. 16 texel fetches.
+// Limits (same on the CPU): slivers a cell wide or thinner may vanish (their share never wins);
+// at junctions of 4+ provinces a fifth one is not a candidate, a small seam is possible; the CPU
+// coast side (exact half-float maths) may differ from the GPU one (filtering precision) by <= 1 px.
 Side softSide(bool landSide, vec2 pc, vec2 pw, float pxPerCell) {
   vec4 wx = bspline(pw.x);
   vec4 wy = bspline(pw.y);
