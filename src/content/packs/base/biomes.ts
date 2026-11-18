@@ -137,7 +137,7 @@ export const BASE_BIOMES: BiomeDef[] = [
     nameKey: 'biome.jungle',
     kind: 'land',
     fantasy: false,
-    color: [92, 118, 72],
+    color: [60, 100, 68],
     detail: 'forest',
     priority: 60,
     when: { temperature: [above(24), Infinity], moisture: [above(0.7), Infinity] },

@@ -32,6 +32,12 @@ function edgesBytes(world: World): Int32Array {
  * Хэши запекания (provinceRG … biomeColor) меняются и без смены версии — при правке рендера.
  */
 const FINGERPRINT = {
+  // Поля климата — отдельными ключами, чтобы не менять эталон world выше.
+  climate: {
+    temperature: '72579061',
+    moisture: 'df0babb0',
+    arcana: 'eaaa4394',
+  },
   genVersion: 2,
   world: {
     height: '9f842423',
@@ -46,9 +52,29 @@ const FINGERPRINT = {
     border: '71e81ee6',
     bakeHeight: '8c184fb8',
     surface: 'a378f8da',
-    biomeColor: 'af7d1df9',
+    biomeColor: '3033f7ed',
   },
 };
+
+/** Фэнтези включено (fantasy=1), размер small: ловит дрейф арканы и фэнтези-биомов. */
+const FANTASY_SMALL = {
+  world: { height: 'a62966d8', biome: '36782ea2', provinceOf: '73f1afc1', riverMask: '285b5862', edges: '7f60b8a5' },
+  climate: { temperature: '7911d17e', moisture: 'c26fbf9e', arcana: 'a5ff6b92' },
+};
+
+function climateHashes(world: World): Record<string, string> {
+  return { temperature: fnv1a(world.temperature), moisture: fnv1a(world.moisture), arcana: fnv1a(world.arcana) };
+}
+
+function worldHashes(world: World): Record<string, string> {
+  return {
+    height: fnv1a(world.height),
+    biome: fnv1a(world.biome),
+    provinceOf: fnv1a(world.provinceOf),
+    riverMask: fnv1a(world.riverMask),
+    edges: fnv1a(edgesBytes(world)),
+  };
+}
 
 const CHANGED = 'генерация изменилась — подними GEN_VERSION и обнови отпечаток (tests/sim/world/fingerprint.test.ts)';
 
@@ -78,6 +104,10 @@ describe('отпечаток мира (сид "1", параметры по ум�
     ).toEqual(FINGERPRINT.world);
   });
 
+  it('поля климата побитно совпадают с отпечатком', () => {
+    expect(climateHashes(world), CHANGED).toEqual(FINGERPRINT.climate);
+  });
+
   it('запечённые текстуры побитно совпадают с эталоном', () => {
     expect(
       {
@@ -91,4 +121,14 @@ describe('отпечаток мира (сид "1", параметры по ум�
       'запекание изменилось — обнови хэши, если так задумано',
     ).toEqual(FINGERPRINT.bake);
   });
+});
+
+describe('отпечаток мира с фэнтези (сид "1", small, fantasy=1)', () => {
+  it('массивы мира и климат побитно совпадают с отпечатком', () => {
+    const p = defaultParams('1');
+    p.options.fantasy = true;
+    p.options.size = 'small';
+    const world = generateWorld(p);
+    expect({ world: worldHashes(world), climate: climateHashes(world) }, CHANGED).toEqual(FANTASY_SMALL);
+  }, 60000);
 });
