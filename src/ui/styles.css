@@ -254,6 +254,19 @@ body {
   color: var(--text-faint);
 }
 
+/* ---------- Короткая надпись (режим карты) ---------- */
+
+.notice {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 15;
+  padding: 4px 12px 5px;
+  font-size: 13px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
 /* ---------- Ошибка ---------- */
 
 .error-screen {

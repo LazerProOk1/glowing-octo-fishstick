@@ -1,5 +1,12 @@
 import type { WorldParams } from '../sim/world/params';
-import type { GenRequest, GenResponse, GenResult, LoadStep } from './protocol';
+import {
+  PROTOCOL_VERSION,
+  protocolMismatch,
+  type GenRequest,
+  type GenResponse,
+  type GenResult,
+  type LoadStep,
+} from './protocol';
 
 export type { GenResult, GenTimings, LoadStep } from './protocol';
 
@@ -70,6 +77,12 @@ export function createGenClient(factory: WorkerFactory = viteWorkerFactory): Gen
   };
 
   const onMessage = (msg: GenResponse): void => {
+    const mismatch = protocolMismatch(msg);
+    if (mismatch !== null) {
+      // Воркер другой версии: его ответам нельзя доверять — останавливаем и отклоняем запрос.
+      onError(mismatch);
+      return;
+    }
     const p = current;
     if (!p || msg.id !== p.id) return; // ответ на вытесненный запрос
     if (msg.type === 'stage') {
@@ -104,7 +117,7 @@ export function createGenClient(factory: WorkerFactory = viteWorkerFactory): Gen
         current = { id, resolve, reject, onStage };
         try {
           port ??= factory(onMessage, onError);
-          port.post({ id, params });
+          port.post({ v: PROTOCOL_VERSION, id, params });
         } catch (err) {
           current = null;
           killPort();

@@ -9,6 +9,9 @@ import type { World } from '../sim/world/types';
 import {
   collectTransferables,
   LOAD_STEPS,
+  PROTOCOL_VERSION,
+  protocolMismatch,
+  versionErrorReply,
   type GenRequest,
   type GenResponse,
   type GenTimings,
@@ -56,6 +59,12 @@ function getSurfaceWorker(): Worker | null {
     const worker = new Worker(new URL('./surfaceWorker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (e: MessageEvent<SurfaceResponse>) => {
       const msg = e.data;
+      const mismatch = protocolMismatch(msg);
+      if (mismatch !== null) {
+        // Вложенный воркер другой версии: больше его не используем, рельеф печём здесь.
+        dropSurfaceWorker(worker, new Error(mismatch), false);
+        return;
+      }
       const p = surfacePending.get(msg.id);
       if (!p) return;
       surfacePending.delete(msg.id);
@@ -88,7 +97,15 @@ function startSurfaceBake(
 ): Promise<SurfaceResult> | null {
   const worker = getSurfaceWorker();
   if (!worker) return null;
-  const req: SurfaceRequest = { id, height: height.slice(), biome: biome.slice(), defs, w, h };
+  const req: SurfaceRequest = {
+    v: PROTOCOL_VERSION,
+    id,
+    height: height.slice(),
+    biome: biome.slice(),
+    defs,
+    w,
+    h,
+  };
   return new Promise<SurfaceResult>((resolve, reject) => {
     const timer = setTimeout(
       () => dropSurfaceWorker(worker, new Error('surface worker timed out'), true),
@@ -109,6 +126,11 @@ function startSurfaceBake(
 }
 
 scope.onmessage = (e) => {
+  const mismatch = versionErrorReply(e.data);
+  if (mismatch) {
+    scope.postMessage(mismatch);
+    return;
+  }
   void handle(e.data);
 };
 
@@ -122,7 +144,7 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     if (step) stages[step] = now - stepStart;
     step = next;
     stepStart = now;
-    if (next) scope.postMessage({ type: 'stage', id, stage: next });
+    if (next) scope.postMessage({ v: PROTOCOL_VERSION, type: 'stage', id, stage: next });
   };
   try {
     let parallel: Promise<SurfaceResult> | null = null;
@@ -144,9 +166,10 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     enter(null);
     const timings: GenTimings = { stages, total: performance.now() - start, surface: surface.ms };
     const transfer = [...new Set([...collectTransferables(world), ...bakeTransferables(bake)])];
-    scope.postMessage({ type: 'done', id, world, bake, timings }, transfer);
+    scope.postMessage({ v: PROTOCOL_VERSION, type: 'done', id, world, bake, timings }, transfer);
   } catch (err) {
-    scope.postMessage({ type: 'error', id, message: err instanceof Error ? err.message : String(err) });
+    const message = err instanceof Error ? err.message : String(err);
+    scope.postMessage({ v: PROTOCOL_VERSION, type: 'error', id, message });
   }
 }
 

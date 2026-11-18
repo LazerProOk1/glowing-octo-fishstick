@@ -1,7 +1,8 @@
-import { t } from '../i18n/ru';
+import { t, translate } from '../i18n/ru';
 import type { World } from '../sim/world/types';
 import { LOAD_STEPS, type GenTimings, type LoadStep } from '../worker/protocol';
 import { el, formatMs } from './dom';
+import { keyLabel, type Hotkey } from './hotkeys';
 
 const FPS_INTERVAL_MS = 500;
 const NONE = '-';
@@ -13,7 +14,10 @@ function row(label: string): { row: HTMLElement; value: HTMLElement } {
   return { row: r, value };
 }
 
-/** Панель отладки (F3): зерно, время этапов, FPS, провинции, ввод нового зерна. */
+/**
+ * Панель отладки (F3): зерно, время этапов, FPS, провинции, режим карты, список клавиш,
+ * ввод нового зерна. Сама клавиш не слушает — открывается из реестра (hotkeys.ts).
+ */
 export class DebugPanel {
   private readonly root: HTMLElement;
   private readonly seedValue: HTMLElement;
@@ -23,6 +27,8 @@ export class DebugPanel {
   private readonly seaValue: HTMLElement;
   private readonly totalValue: HTMLElement;
   private readonly surfaceValue: HTMLElement;
+  private readonly modeValue: HTMLElement;
+  private readonly keys: HTMLElement;
   private readonly stageValues = new Map<LoadStep, HTMLElement>();
   private readonly input: HTMLInputElement;
   private timer = 0;
@@ -49,6 +55,8 @@ export class DebugPanel {
     this.landValue = land.value;
     const sea = row(t('debug.sea'));
     this.seaValue = sea.value;
+    const mode = row(t('debug.mapMode'));
+    this.modeValue = mode.value;
     land.row.classList.add('debug__row--sub');
     sea.row.classList.add('debug__row--sub');
 
@@ -75,11 +83,13 @@ export class DebugPanel {
     this.input.placeholder = t('debug.placeholder');
     field.append(this.input);
 
-    this.root.append(head, seed.row, fps.row, prov.row, land.row, sea.row, timings, field);
+    this.keys = el('div', 'debug__group');
+
+    this.root.append(head, seed.row, fps.row, prov.row, land.row, sea.row, mode.row, timings, this.keys, field);
     parent.append(this.root);
 
+    // Enter в поле зерна — поведение самого поля, не горячая клавиша.
     this.input.addEventListener('keydown', this.onInputKey);
-    window.addEventListener('keydown', this.onKey);
   }
 
   get visible(): boolean {
@@ -93,6 +103,21 @@ export class DebugPanel {
     if (this.visible) {
       this.tickFps();
       this.timer = window.setInterval(this.tickFps, FPS_INTERVAL_MS);
+    }
+  }
+
+  /** Название текущего режима карты (ключ перевода). */
+  setMapMode(nameKey: string): void {
+    this.modeValue.textContent = translate(nameKey);
+  }
+
+  /** Список горячих клавиш: клавиша — действие. */
+  setHotkeys(list: readonly Hotkey[]): void {
+    this.keys.replaceChildren(el('div', 'debug__section', t('debug.keys')));
+    for (const h of list) {
+      const r = el('div', 'debug__row');
+      r.append(el('span', 'debug__label', t(h.nameKey)), el('span', 'debug__value', keyLabel(h.code)));
+      this.keys.append(r);
     }
   }
 
@@ -118,18 +143,11 @@ export class DebugPanel {
 
   destroy(): void {
     window.clearInterval(this.timer);
-    window.removeEventListener('keydown', this.onKey);
     this.root.remove();
   }
 
   private readonly tickFps = (): void => {
     this.fpsValue.textContent = String(Math.round(this.getFps()));
-  };
-
-  private readonly onKey = (e: KeyboardEvent): void => {
-    if (e.key !== 'F3') return;
-    e.preventDefault(); // F3 в браузере — поиск по странице
-    this.toggle();
   };
 
   private readonly onInputKey = (e: KeyboardEvent): void => {

@@ -1,11 +1,14 @@
 // Точка входа (этап 1): мир генерируется в воркере, интерфейс — экран загрузки,
-// подсказка у курсора и панель отладки (F3).
+// подсказка у курсора, панель отладки (F3) и режимы карты (M). Клавиши — в ui/hotkeys.ts.
 import { Application, RendererType, type WebGLRenderer } from 'pixi.js';
-import { t } from './i18n/ru';
+import { t, translate } from './i18n/ru';
+import { nextMapMode } from './render/mapModes';
 import { MapView } from './render/MapView';
 import { DebugPanel } from './ui/debugPanel';
 import { errorDetail, showError } from './ui/errorScreen';
+import { appHotkeys, registerHotkeys } from './ui/hotkeys';
 import { LoadingScreen } from './ui/loading';
+import { Notice } from './ui/notice';
 import { ProvinceTooltip } from './ui/tooltip';
 import type { WorldParams } from './sim/world/params';
 import { isSuperseded, requestWorld, type GenResult } from './worker/genClient';
@@ -136,6 +139,20 @@ async function start(root: HTMLElement): Promise<void> {
     },
   );
   debug.setSeed(first.req.seed);
+  debug.setMapMode(view.mapMode.nameKey);
+
+  const notice = new Notice(root);
+  const hotkeys = appHotkeys({
+    toggleDebug: () => debug.toggle(),
+    nextMapMode: () => {
+      const mode = nextMapMode(view.mapMode.id);
+      view.setMapMode(mode.id);
+      debug.setMapMode(mode.nameKey);
+      notice.show(translate(mode.nameKey));
+    },
+  });
+  registerHotkeys(hotkeys);
+  debug.setHotkeys(hotkeys);
 
   const show = async (pending: Promise<GenResult>): Promise<void> => {
     try {

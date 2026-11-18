@@ -30,7 +30,8 @@ export interface WorldTextures {
 export const WATER_SLOT = 255;
 export const PALETTE_SIZE = MAX_BIOMES;
 
-function rgba8(data: Uint8Array, width: number, height: number, linear: boolean): BufferImageSource {
+/** RGBA8-источник из массива пикселей (альфа — данные, без премультипликации, без мипмапов). */
+export function rgba8(data: Uint8Array, width: number, height: number, linear: boolean): BufferImageSource {
   return new BufferImageSource({
     resource: data,
     width,

@@ -2,6 +2,10 @@
 
 Браузерная стратегия про развитие поселения (TypeScript + PixiJS). Подробный дизайн: [docs/superpowers/specs/2026-11-16-settlement-strategy-design.md](docs/superpowers/specs/2026-11-16-settlement-strategy-design.md).
 
+Устройство кода (модули, поток данных, режимы карты, горячие клавиши): [docs/architecture.md](docs/architecture.md).
+
+Клавиши: F3 — панель отладки, M — следующий режим карты.
+
 ## Запуск
 
 ```

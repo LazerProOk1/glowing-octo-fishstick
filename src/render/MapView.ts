@@ -1,24 +1,31 @@
 import {
+  BufferImageSource,
   Container,
   GlProgram,
   Mesh,
   MeshGeometry,
+  RendererType,
   Shader,
   UniformGroup,
   type Application,
   type TextureSource,
+  type WebGLRenderer,
 } from 'pixi.js';
 import { DEFAULT_SIZE, SIZE_PRESETS } from '../sim/world/params';
 import type { World } from '../sim/world/types';
 import { clampCamera, minZoom, screenToWorld, zoomAt, type Camera, type MapSize } from './camera';
 import type { WorldBake } from './bakeWorld';
+import type { Rect } from './derived';
+import { DEFAULT_FILL, MAP_MODES, mapModeById, type MapMode, type ProvinceRGBA } from './mapModes';
 import { MAP_FRAGMENT, MAP_VERTEX } from './mapShader';
+import { PROVINCE_FLAGS, ProvinceData, WEBGL2_MIN_TEXTURE_SIZE } from './provinceData';
 import { RiverLayer } from './riverLayer';
 import {
   createAtlasPlaceholder,
   createWorldTextures,
   destroyWorldTextures,
   loadAtlas,
+  rgba8,
   type WorldTextures,
 } from './textures';
 
@@ -47,6 +54,11 @@ export class MapView {
   private atlas: TextureSource;
   private textures: WorldTextures | null = null;
   private world: World | null = null;
+  /** Данные провинций (цвет заливки режима, флаги) и их текстура; есть, пока показан мир. */
+  private provData: ProvinceData | null = null;
+  private provSource: BufferImageSource | null = null;
+  private mode: MapMode;
+  private readonly maxTextureSize: number;
   private cam: Camera = { x: this.map.w / 2, y: this.map.h / 2, zoom: 1 };
   private hovered: number | null = null;
   private readonly hoverListeners = new Set<(id: number | null) => void>();
@@ -60,7 +72,14 @@ export class MapView {
       uView: { value: this.viewU, type: 'vec2<f32>' },
       uWorldSize: { value: this.worldU, type: 'vec2<f32>' },
       uHovered: { value: -1, type: 'f32' },
+      uFill: { value: 0, type: 'f32' },
+      uProvDataW: { value: 1, type: 'f32' },
     });
+    const first = MAP_MODES[0];
+    if (!first) throw new Error('MAP_MODES is empty');
+    this.mode = first;
+    const gl = app.renderer.type === RendererType.WEBGL ? (app.renderer as WebGLRenderer).gl : null;
+    this.maxTextureSize = gl ? (gl.getParameter(gl.MAX_TEXTURE_SIZE) as number) : WEBGL2_MIN_TEXTURE_SIZE;
     this.blank = createAtlasPlaceholder();
     this.atlas = createAtlasPlaceholder();
     this.shader = new Shader({
@@ -75,6 +94,7 @@ export class MapView {
         uBorder: this.blank,
         uPalette: this.blank,
         uAtlas: this.atlas,
+        uProvData: this.blank,
       },
     });
     const quad = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
@@ -98,6 +118,7 @@ export class MapView {
     canvas.addEventListener('pointerleave', this.onPointerLeave);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
     app.renderer.on('resize', this.onResize);
+    app.ticker.add(this.flushProvinceData);
 
     loadAtlas()
       .then((source) => {
@@ -112,6 +133,11 @@ export class MapView {
       })
       .catch((err: unknown) => console.error('не удалось загрузить атлас рельефа', err));
     this.sync();
+  }
+
+  /** Текущий режим карты. */
+  get mapMode(): MapMode {
+    return this.mode;
   }
 
   /** Текущая камера (копия). */
@@ -146,9 +172,52 @@ export class MapView {
     this.worldU[0] = world.w;
     this.worldU[1] = world.h;
     this.rivers.setRivers(world.rivers);
+    this.setProvinceTexture(world);
     this.setHoveredProvince(null);
     this.mesh.visible = true;
     this.sync();
+  }
+
+  /**
+   * Включает режим карты: пересчитывает цвета всех провинций по mode.color и загружает
+   * текстуру данных один раз. Неизвестный id — ошибка.
+   */
+  setMapMode(modeId: string): void {
+    const mode = mapModeById(modeId);
+    if (!mode) throw new Error(`unknown map mode ${modeId}`);
+    this.mode = mode;
+    const data = this.provData;
+    const world = this.world;
+    if (!data || !world || !this.provSource) return;
+    this.applyFill(data.applyMode(mode, world));
+    this.provSource.update();
+  }
+
+  /**
+   * Меняет тексель одной провинции (RGB — цвет заливки, A — флаги, см. PROVINCE_FLAGS).
+   * На GPU уходит только изменённый диапазон, один раз за кадр. Смена режима карты
+   * пересчитывает цвета заново (флаги состояния — биты 0–2 — сохраняются).
+   */
+  setProvinceData(id: number, rgba: ProvinceRGBA): void {
+    if (!this.provData) return;
+    this.provData.set(id, rgba);
+    // Заливка в режиме без заливки: шейдер начинает читать текстуру данных.
+    if ((rgba[3] & PROVINCE_FLAGS.FILL) !== 0 && this.uniforms.uniforms.uFill === 0) this.applyFill(true);
+  }
+
+  /**
+   * Загружает на GPU строки текстур рельефа, цветов биомов и высоты, которые задевает rect —
+   * после updateDerivedRect над теми же массивами, что были переданы в setWorld (bake).
+   */
+  updateRegion(rect: Rect): void {
+    const t = this.textures;
+    if (!t || rect.w <= 0 || rect.h <= 0) return;
+    const w = this.map.w;
+    const start = rect.y * w;
+    const end = (rect.y + rect.h) * w;
+    for (const src of [t.terrain, t.height, t.biomeColor]) {
+      if (src instanceof BufferImageSource) src.update(start, end);
+    }
   }
 
   setHoveredProvince(id: number | null): void {
@@ -178,6 +247,7 @@ export class MapView {
     canvas.removeEventListener('pointerleave', this.onPointerLeave);
     canvas.removeEventListener('wheel', this.onWheel);
     this.app.renderer.off('resize', this.onResize);
+    this.app.ticker.remove(this.flushProvinceData);
     this.root.removeFromParent();
     this.rivers.destroy();
     this.mesh.destroy();
@@ -186,10 +256,38 @@ export class MapView {
     if (this.textures) destroyWorldTextures(this.textures);
     this.textures = null;
     this.world = null;
+    this.provSource?.destroy();
+    this.provSource = null;
+    this.provData = null;
     this.blank.destroy();
     this.atlas.destroy();
     this.root.destroy();
   }
+
+  /** Новая текстура данных провинций под мир, сразу с цветами текущего режима. */
+  private setProvinceTexture(world: World): void {
+    const data = new ProvinceData(world.provinces.length, this.maxTextureSize);
+    const anyFill = data.applyMode(this.mode, world);
+    const source = rgba8(data.data, data.width, data.height, false);
+    this.shader.resources.uProvData = source;
+    this.provSource?.destroy();
+    this.provSource = source;
+    this.provData = data;
+    this.uniforms.uniforms.uProvDataW = data.width;
+    this.applyFill(anyFill);
+  }
+
+  private applyFill(anyFill: boolean): void {
+    // Режим без заливки — шейдер вовсе не читает текстуру данных: карта как без режимов.
+    this.uniforms.uniforms.uFill = anyFill ? (this.mode.fill ?? DEFAULT_FILL) : 0;
+    this.uniforms.update();
+  }
+
+  /** Раз в кадр: загрузка текселей, изменённых setProvinceData (один диапазон). */
+  private readonly flushProvinceData = (): void => {
+    const range = this.provData?.takeDirty();
+    if (range && this.provSource) this.provSource.update(range.start, range.end);
+  };
 
   /** Применяет ограничения камеры и обновляет uniform-ы, quad и слой рек. */
   private sync(): void {

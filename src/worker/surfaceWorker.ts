@@ -1,7 +1,13 @@
 // Вложенный воркер: запекает текстуры рельефа (высота, нормали, берег, цвета биомов),
 // пока воркер генерации прокладывает реки и делит карту на провинции.
 import { bakeSurface } from '../render/bakeWorld';
-import { surfaceTransferables, type SurfaceRequest, type SurfaceResponse } from './protocol';
+import {
+  PROTOCOL_VERSION,
+  surfaceTransferables,
+  versionErrorReply,
+  type SurfaceRequest,
+  type SurfaceResponse,
+} from './protocol';
 
 interface Scope {
   onmessage: ((e: MessageEvent<SurfaceRequest>) => void) | null;
@@ -11,12 +17,19 @@ interface Scope {
 const scope = self as unknown as Scope;
 
 scope.onmessage = (e) => {
+  const mismatch = versionErrorReply(e.data);
+  if (mismatch) {
+    scope.postMessage(mismatch);
+    return;
+  }
   const { id, height, biome, defs, w, h } = e.data;
   const start = performance.now();
   try {
     const bake = bakeSurface(height, biome, defs, w, h);
-    scope.postMessage({ type: 'done', id, bake, ms: performance.now() - start }, surfaceTransferables(bake));
+    const ms = performance.now() - start;
+    scope.postMessage({ v: PROTOCOL_VERSION, type: 'done', id, bake, ms }, surfaceTransferables(bake));
   } catch (err) {
-    scope.postMessage({ type: 'error', id, message: err instanceof Error ? err.message : String(err) });
+    const message = err instanceof Error ? err.message : String(err);
+    scope.postMessage({ v: PROTOCOL_VERSION, type: 'error', id, message });
   }
 };

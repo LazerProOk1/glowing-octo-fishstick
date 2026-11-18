@@ -38,6 +38,14 @@ export const ru = {
   'debug.surface': 'Рельеф, паралл.',
   'debug.newSeed': 'Новый сид',
   'debug.placeholder': 'сид, Enter',
+  'debug.mapMode': 'Режим карты',
+  'debug.keys': 'Клавиши',
+
+  'key.debug': 'Панель отладки',
+  'key.mapMode': 'Следующий режим карты',
+
+  'mapMode.terrain': 'Рельеф',
+  'mapMode.provinces': 'Провинции',
 
   'unit.s': 'с',
 

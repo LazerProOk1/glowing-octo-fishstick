@@ -1,6 +1,7 @@
 import { ATLAS_GRID, DetailSlot } from './assets';
 import { MAP_COLORS, glslVec3 } from './palette';
 import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../content/terrainLevels';
+import { PROVINCE_FLAGS } from './provinceData';
 import { PALETTE_SIZE, WATER_SLOT } from './textures';
 
 /** Число как литерал GLSL float. */
@@ -63,11 +64,14 @@ uniform sampler2D uProvince;  // RGBA8: R,G id, B land
 uniform sampler2D uBorder;    // RGBA8: R distance * 32
 uniform sampler2D uPalette;   // ${PALETTE_SIZE}x1: rgb biome colour, a detail slot (255 = water)
 uniform sampler2D uAtlas;     // 4x4 grayscale detail tiles, mipmapped
+uniform sampler2D uProvData;  // RGBA8 per province id (row by row, uProvDataW wide): rgb fill, a flags
 
 uniform vec4 uCam;        // centre x, y (cells), zoom (CSS px per cell), devicePixelRatio
 uniform vec2 uView;       // viewport, CSS px
 uniform vec2 uWorldSize;  // cells
 uniform float uHovered;   // hovered province id, -1 = none
+uniform float uFill;      // map mode fill strength over the relief, 0 = no fill (uProvData not read)
+uniform float uProvDataW; // width of uProvData
 
 const float HILL_REL = ${f(HILL_LEVEL - SEA_LEVEL)};
 const float MOUNT_REL = ${f(MOUNTAIN_LEVEL - SEA_LEVEL)};
@@ -79,6 +83,7 @@ const float PAPER_SLOT = ${f(DetailSlot.PAPER)};
 const float WATER_SLOT = ${f(WATER_SLOT)};
 const float MAX_LOD = 5.0;
 const float SLOT_GAIN[7] = float[7](${gains});
+const int FLAG_FILL = ${PROVINCE_FLAGS.FILL};
 
 const vec3 DEEP = ${glslVec3(MAP_COLORS.waterDeep)};
 const vec3 SHALLOW = ${glslVec3(MAP_COLORS.waterShallow)};
@@ -131,6 +136,16 @@ float atlasSample(float slot, vec2 p, float span, float lod) {
   return textureLod(uAtlas, base + 0.5 * texel + t * (tile - texel), lod).r;
 }
 
+// Map mode fill of a province, premultiplied: rgb colour * a, a = 1 if the mode fills it.
+// Premultiplied, so blending a filled and an unfilled province across a border does not darken.
+vec4 provFill(float id) {
+  int i = int(id);
+  int w = int(uProvDataW);
+  vec4 d = texelFetch(uProvData, ivec2(i % w, i / w), 0);
+  float on = (int(round(d.a * 255.0)) & FLAG_FILL) != 0 ? 1.0 : 0.0;
+  return vec4(d.rgb * on, on);
+}
+
 float bilin(vec4 v, vec2 w) {
   return mix(mix(v.x, v.y, w.x), mix(v.z, v.w, w.x), w.y);
 }
@@ -148,6 +163,67 @@ void main() {
   vec2 inv = 1.0 / uWorldSize;
   vec2 uv = p * inv;
 
+  // ---- provinces: signed bilinear distance relative to the own province (no staircase)
+  vec2 pc = floor(p - 0.5);
+  vec2 pw = p - 0.5 - pc;
+  vec4 ownT = texelFetch(uProvince, cellAt(p), 0);
+  float ownId = decodeId(ownT);
+  bool ownLand = ownT.b > 0.5;
+  vec4 vb;
+  vec4 vh;
+  vec4 cLand;
+  vec4 cHov;
+  vec4 cId;
+  for (int i = 0; i < 4; i++) {
+    ivec2 c = cellAt(pc + vec2(float(i & 1), float(i >> 1)));
+    vec4 t = texelFetch(uProvince, c, 0);
+    float id = decodeId(t);
+    float d = texelFetch(uBorder, c, 0).r * 255.0 / 32.0;
+    // Land-sea borders are left to the coastline.
+    bool same = id == ownId || ((t.b > 0.5) != ownLand);
+    vb[i] = same ? d : -d;
+    vh[i] = d;
+    cLand[i] = t.b > 0.5 ? 1.0 : 0.0;
+    cHov[i] = id == uHovered ? 1.0 : 0.0;
+    cId[i] = id;
+  }
+  // Hover: signed field like the borders. Where the hovered province meets the other medium
+  // (land vs sea) its edge is the smooth coastline, not the cell staircase of the province.
+  float anyHov = max(max(cHov.x, cHov.y), max(cHov.z, cHov.w));
+  float hovLand = dot(cHov, cLand) > 0.0 ? 1.0 : 0.0;
+  for (int i = 0; i < 4; i++) {
+    bool inside = cHov[i] > 0.5 || (anyHov > 0.5 && abs(cLand[i] - hovLand) > 0.5);
+    vh[i] = inside ? vh[i] : -vh[i];
+  }
+
+  // ---- map mode fill. The fill switches between provinces on the same smooth zero line as the
+  // borders (not on the cell staircase); land and water each take the fill of a province of
+  // their own medium, so the coastline stays the smooth one.
+  vec4 landFill = vec4(0.0);
+  vec4 seaFill = vec4(0.0);
+  if (uFill > 0.0) {
+    vec4 own = provFill(ownId);
+    vec4 other = own;
+    vec4 across = vec4(0.0);
+    bool haveOther = false;
+    bool haveAcross = false;
+    for (int i = 0; i < 4; i++) {
+      bool sameMedium = (cLand[i] > 0.5) == ownLand;
+      if (sameMedium && !haveOther && cId[i] != ownId) {
+        other = provFill(cId[i]);
+        haveOther = true;
+      }
+      if (!sameMedium && !haveAcross) {
+        across = provFill(cId[i]);
+        haveAcross = true;
+      }
+    }
+    float ownSide = clamp(zeroDistPx(vb, pw, pxPerCell) + 0.5, 0.0, 1.0);
+    vec4 mine = mix(other, own, ownSide);
+    landFill = ownLand ? mine : across;
+    seaFill = ownLand ? across : mine;
+  }
+
   // ---- raw height (relief, snow), CPU-baked smooth gradient (hillshade), soft coast height
   float h = texture(uHeight, uv).r;
   vec4 surf = texture(uSurface, uv);
@@ -164,6 +240,8 @@ void main() {
   warp += 0.45 * (vec2(vnoise(p * 0.9 + 3.1), vnoise(p * 0.9 + vec2(9.7, 1.3))) - 0.5);
   warp *= 1.6;
   vec3 land = texture(uBiomeColor, (p + warp) * inv).rgb;
+  // Fill replaces part of the biome tint; detail, moisture and hillshade still apply on top.
+  land = land * (1.0 - uFill * landFill.a) + uFill * landFill.rgb;
 
   // Detail luminance: slots of the 4 cells around the same warped point, bilinear weights.
   vec2 bq = p - 0.5 + warp;
@@ -206,6 +284,7 @@ void main() {
   vec3 water = mix(DEEP, SHALLOW, smoothstep(0.004, 0.45, near));
   float depth = max(-hc, 0.0);
   water *= 1.0 - 0.05 * smoothstep(0.1, 0.4, depth) * (1.0 - smoothstep(0.0, 0.1, near));
+  water = water * (1.0 - uFill * seaFill.a) + uFill * seaFill.rgb;
 
   vec3 col = mix(water, land, landMask);
 
@@ -214,36 +293,6 @@ void main() {
   float coastLine = 1.0 - smoothstep(max(0.5 * coastW - 0.5, 0.0), 0.5 * coastW + 0.5, abs(coastPx));
   col = mix(col, COAST_LINE, 0.6 * coastLine);
 
-  // ---- provinces: signed bilinear distance relative to the own province (no staircase)
-  vec2 pc = floor(p - 0.5);
-  vec2 pw = p - 0.5 - pc;
-  vec4 ownT = texelFetch(uProvince, cellAt(p), 0);
-  float ownId = decodeId(ownT);
-  bool ownLand = ownT.b > 0.5;
-  vec4 vb;
-  vec4 vh;
-  vec4 cLand;
-  vec4 cHov;
-  for (int i = 0; i < 4; i++) {
-    ivec2 c = cellAt(pc + vec2(float(i & 1), float(i >> 1)));
-    vec4 t = texelFetch(uProvince, c, 0);
-    float id = decodeId(t);
-    float d = texelFetch(uBorder, c, 0).r * 255.0 / 32.0;
-    // Land-sea borders are left to the coastline.
-    bool same = id == ownId || ((t.b > 0.5) != ownLand);
-    vb[i] = same ? d : -d;
-    vh[i] = d;
-    cLand[i] = t.b > 0.5 ? 1.0 : 0.0;
-    cHov[i] = id == uHovered ? 1.0 : 0.0;
-  }
-  // Hover: signed field like the borders. Where the hovered province meets the other medium
-  // (land vs sea) its edge is the smooth coastline, not the cell staircase of the province.
-  float anyHov = max(max(cHov.x, cHov.y), max(cHov.z, cHov.w));
-  float hovLand = dot(cHov, cLand) > 0.0 ? 1.0 : 0.0;
-  for (int i = 0; i < 4; i++) {
-    bool inside = cHov[i] > 0.5 || (anyHov > 0.5 && abs(cLand[i] - hovLand) > 0.5);
-    vh[i] = inside ? vh[i] : -vh[i];
-  }
   float borderW = uCam.w;
   float borderPx = abs(zeroDistPx(vb, pw, pxPerCell));
   float line = 1.0 - smoothstep(max(0.5 * borderW - 0.5, 0.0), 0.5 * borderW + 0.5, borderPx);

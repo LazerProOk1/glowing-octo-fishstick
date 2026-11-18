@@ -5,7 +5,13 @@ import {
   type WorkerFactory,
   type WorkerPort,
 } from '../../src/worker/genClient';
-import { collectTransferables, type GenRequest, type GenResponse } from '../../src/worker/protocol';
+import {
+  collectTransferables,
+  PROTOCOL_VERSION,
+  versionErrorReply,
+  type GenRequest,
+  type GenResponse,
+} from '../../src/worker/protocol';
 import type { World } from '../../src/sim/world/types';
 import { bakeTransferables, type WorldBake } from '../../src/render/bakeWorld';
 import { defaultParams, type WorldParams } from '../../src/sim/world/params';
@@ -92,10 +98,10 @@ describe('genClient', () => {
     const w = workers[0]!;
     const req = w.requests[0]!;
     expect(req.params).toEqual(params);
-    w.emit({ type: 'stage', id: req.id, stage: 'height' });
-    w.emit({ type: 'stage', id: req.id, stage: 'climate' });
+    w.emit({ v: PROTOCOL_VERSION, type: 'stage', id: req.id, stage: 'height' });
+    w.emit({ v: PROTOCOL_VERSION, type: 'stage', id: req.id, stage: 'climate' });
     const world = fakeWorld('Альфа-1');
-    w.emit({ type: 'done', id: req.id, world, bake, timings });
+    w.emit({ v: PROTOCOL_VERSION, type: 'done', id: req.id, world, bake, timings });
     const result = await p;
     expect(result.world).toBe(world);
     expect(result.bake).toBe(bake);
@@ -119,10 +125,10 @@ describe('genClient', () => {
 
     // Запоздалый ответ на первый запрос ничего не ломает и не подменяет мир.
     const stale = fakeWorld('старый');
-    workers[0]!.emit({ type: 'done', id: firstReq.id, world: stale, bake, timings });
-    secondWorker.emit({ type: 'done', id: firstReq.id, world: stale, bake, timings });
+    workers[0]!.emit({ v: PROTOCOL_VERSION, type: 'done', id: firstReq.id, world: stale, bake, timings });
+    secondWorker.emit({ v: PROTOCOL_VERSION, type: 'done', id: firstReq.id, world: stale, bake, timings });
     const fresh = fakeWorld('новый');
-    secondWorker.emit({ type: 'done', id: secondReq.id, world: fresh, bake, timings });
+    secondWorker.emit({ v: PROTOCOL_VERSION, type: 'done', id: secondReq.id, world: fresh, bake, timings });
     expect((await second).world).toBe(fresh);
   });
 
@@ -130,11 +136,11 @@ describe('genClient', () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     const p1 = client.requestWorld(P('a'));
-    workers[0]!.emit({ type: 'done', id: workers[0]!.requests[0]!.id, world: fakeWorld('a'), bake, timings });
+    workers[0]!.emit({ v: PROTOCOL_VERSION, type: 'done', id: workers[0]!.requests[0]!.id, world: fakeWorld('a'), bake, timings });
     await p1;
     const p2 = client.requestWorld(P('b'));
     expect(workers.length).toBe(1);
-    workers[0]!.emit({ type: 'done', id: workers[0]!.requests[1]!.id, world: fakeWorld('b'), bake, timings });
+    workers[0]!.emit({ v: PROTOCOL_VERSION, type: 'done', id: workers[0]!.requests[1]!.id, world: fakeWorld('b'), bake, timings });
     expect((await p2).world.params.seed).toBe('b');
   });
 
@@ -142,7 +148,7 @@ describe('genClient', () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     const p1 = client.requestWorld(P('a'));
-    workers[0]!.emit({ type: 'error', id: workers[0]!.requests[0]!.id, message: 'boom' });
+    workers[0]!.emit({ v: PROTOCOL_VERSION, type: 'error', id: workers[0]!.requests[0]!.id, message: 'boom' });
     await expect(p1).rejects.toThrow('boom');
 
     const p2 = client.requestWorld(P('b'));
@@ -154,6 +160,40 @@ describe('genClient', () => {
     const before = workers.length;
     void client.requestWorld(P('c')).catch(() => undefined);
     expect(workers.length).toBe(before + 1);
+  });
+
+  it('запрос несёт версию протокола', () => {
+    const { factory, workers } = fakeFactory();
+    const client = createGenClient(factory);
+    void client.requestWorld(P('a')).catch(() => undefined);
+    expect(workers[0]!.requests[0]!.v).toBe(PROTOCOL_VERSION);
+  });
+
+  it('ответ другой версии протокола отклоняет запрос понятной ошибкой', async () => {
+    const { factory, workers } = fakeFactory();
+    const client = createGenClient(factory);
+    const p = client.requestWorld(P('a'));
+    const id = workers[0]!.requests[0]!.id;
+    const alien = { v: PROTOCOL_VERSION + 1, type: 'done', id, world: fakeWorld('a'), bake, timings };
+    workers[0]!.emit(alien as unknown as GenResponse);
+    await expect(p).rejects.toThrow(/protocol version/);
+    // Воркер другой версии не переиспользуется.
+    expect(workers[0]!.terminated).toBe(true);
+
+    const p2 = client.requestWorld(P('b'));
+    workers[1]!.emit({ id: workers[1]!.requests[0]!.id, type: 'stage', stage: 'height' } as unknown as GenResponse);
+    await expect(p2).rejects.toThrow(/protocol version/);
+  });
+});
+
+describe('versionErrorReply (сторона воркера)', () => {
+  it('своя версия — ответа нет; чужая или без версии — сообщение об ошибке с id запроса', () => {
+    expect(versionErrorReply({ v: PROTOCOL_VERSION, id: 3 })).toBeNull();
+    const reply = versionErrorReply({ v: PROTOCOL_VERSION + 1, id: 3 });
+    expect(reply).toMatchObject({ v: PROTOCOL_VERSION, type: 'error', id: 3 });
+    expect(reply?.message).toMatch(/protocol version/);
+    expect(versionErrorReply({ id: 4 })).toMatchObject({ type: 'error', id: 4 });
+    expect(versionErrorReply(null)).toMatchObject({ type: 'error', id: -1 });
   });
 });
 
