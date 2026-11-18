@@ -301,10 +301,14 @@ export function mergeSmallOn(g: MergeGraph, isLand: number[], minLand: number, m
 }
 
 /**
- * Gives every corridor cell (major river, owner -1) to a land province. Each cell copies the owner
- * of its first assigned land (then corridor) 4-neighbour in a fixed order: north, west, south,
- * east. A whole river cross-section therefore goes to the same bank (the north or west one) instead
- * of zig-zagging cell by cell. Each step copies a 4-neighbour's owner, so provinces stay connected.
+ * Gives every corridor cell (major river, owner -1) to a land province, in passes decided on a
+ * snapshot of the previous pass. Pass 0: a cell copies the owner of its first LAND 4-neighbour,
+ * checked in the fixed order north, west, south, east (water neighbours never count). Later passes:
+ * a still-unassigned cell copies the first already-assigned 4-neighbour in the same order (a land
+ * cell, or a corridor cell assigned in an earlier pass), so wide rivers are filled inwards from the
+ * banks. The fixed order biases ties to the north/west bank rather than zig-zagging cell by cell.
+ * Each step copies a 4-neighbour's owner, so provinces stay connected. Corridor pieces that touch
+ * no land province at all (an islet that is all river) become new provinces of their own.
  */
 export function assignCorridor(owner: Int32Array, kind: Uint8Array, isLand: number[], w: number, h: number): void {
   const n = w * h;
