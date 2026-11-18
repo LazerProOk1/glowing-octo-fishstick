@@ -3,7 +3,7 @@ import { MAP_COLORS, glslVec3 } from './palette';
 import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../content/terrainLevels';
 import { PROVINCE_FLAGS } from './provinceData';
 import { LAKE_SLOT, PALETTE_SIZE, WATER_SLOT } from './textures';
-import { DEPTH_TONE_K, ISOBATH_ALPHA, ISOBATH_DEPTHS, ISOBATH_FADE_ZOOM, SEA_DEPTH_MAX } from './seaDepth';
+import { DEPTH_TONE_K, ISOBATH_ALPHA, ISOBATH_DEPTHS, ISOBATH_FADE_RATIO, SEA_DEPTH_MAX } from './seaDepth';
 
 /** Число как литерал GLSL float. */
 const f = (n: number): string => n.toFixed(4);
@@ -61,6 +61,7 @@ uniform sampler2D uTerrain;   // RGBA8 linear: G biome (texelFetch), B moisture
 uniform sampler2D uHeight;    // R16F linear: height - SEA_LEVEL (coast, water depth)
 uniform sampler2D uSurface;   // RGBA16F linear: RG blurred Sobel gradient per cell, B softly blurred height - SEA_LEVEL, A land nearness (sigma 3.5)
 uniform sampler2D uBiomeColor; // RGBA8 linear: blurred land palette colour, A land coverage
+uniform sampler2D uSeaDepth;  // R16F linear: smooth sea depth 0..DEPTH_MAX (shelf at coasts, even open sea)
 uniform sampler2D uProvince;  // RGBA8: R,G id, B land. Owners where the screen shows land
 uniform sampler2D uProvinceSea; // same layout. Owners where the screen shows water
 uniform sampler2D uPalette;   // ${PALETTE_SIZE}x1: rgb biome colour, a detail slot (255 = sea, 254 = lake)
@@ -73,6 +74,7 @@ uniform vec2 uWorldSize;  // cells
 uniform float uHovered;   // hovered province id, -1 = none
 uniform float uFill;      // map mode fill strength over the relief, 0 = no fill (uProvData not read)
 uniform float uProvDataW; // width of uProvData
+uniform float uZoomMin;   // zoom of the whole-map overview (the camera's minimum)
 
 const float HILL_REL = ${f(HILL_LEVEL - SEA_LEVEL)};
 const float MOUNT_REL = ${f(MOUNTAIN_LEVEL - SEA_LEVEL)};
@@ -95,7 +97,8 @@ const float DEPTH_MAX = ${f(SEA_DEPTH_MAX)};
 const float TONE_K = ${f(DEPTH_TONE_K)};
 const vec2 ISOBATHS = vec2(${ISOBATH_DEPTHS.map(f).join(', ')});
 const float ISOBATH_ALPHA = ${f(ISOBATH_ALPHA)};
-const vec2 ISOBATH_FADE = vec2(${ISOBATH_FADE_ZOOM.map(f).join(', ')});
+const float WATER_GRAIN = 0.35; // paper grain on water, share of the land grain
+const vec2 ISOBATH_FADE = vec2(${ISOBATH_FADE_RATIO.map(f).join(', ')});
 const vec3 LAKE_DEEP = ${glslVec3(MAP_COLORS.lakeDeep)};
 const vec3 LAKE_SHALLOW = ${glslVec3(MAP_COLORS.lakeShallow)};
 const vec3 COAST_LINE = ${glslVec3(MAP_COLORS.coastLine)};
@@ -314,8 +317,7 @@ void main() {
   // Coastline from the lightly blurred height: the raw shore is near-binary (+-SHORE_DELTA),
   // whose bilinear isoline zigzags cell by cell on diagonal coasts.
   float hc = surf.b;
-  float hcPerPx = max(length(vec2(dFdx(hc), dFdy(hc))), 1e-7);
-  float coastPx = hc / hcPerPx;
+  float coastPx = hc / max(length(vec2(dFdx(hc), dFdy(hc))), 1e-7);
   float landMask = clamp(coastPx + 0.5, 0.0, 1.0);
 
   // ---- provinces: land shows the land owner map, water the sea owner map, so each side reaches
@@ -379,23 +381,26 @@ void main() {
   land *= mix(1.0, shade, 0.8);
   land *= 1.0 + (shade - 1.0) * vec3(0.06, 0.0, -0.06);
 
-  // ---- sea: tone by depth (softly blurred height), shallow shelf to deep slate, half of the
-  // change within the first 25% of the depth (depthTone in seaDepth.ts). A lighter teal-grey band
-  // hugs the coast and fades within ~3-6 cells (blurred land mask, sigma 3.5). Two very pale
-  // isobaths, ~1 px, anti-aliased by the screen gradient of the height; gone at the overview zoom.
+  // ---- sea: tone by the smooth depth (CPU: depth blurred sigma 8 with land as 0, so a shelf
+  // follows every coast; even deep water far from land; smoothSeaDepth), shallow shelf to deep
+  // slate, half of the change within the first 25% of the depth (depthTone). A lighter teal-grey
+  // band hugs the coast and fades within ~3-6 cells (blurred land mask, sigma 3.5). Two very pale
+  // isobaths on the same smooth depth, ~1 px, anti-aliased by its screen gradient; gone at the
+  // overview zoom.
   // Lakes: own lighter, greener tint, no depth tone and no isobaths, the shore band within ~2
   // cells (near is ~0.5 on the coastline and ~0.28 two cells out on a straight shore).
   float near = surf.a;
-  float depth = max(-hc, 0.0);
-  float t = min(depth / DEPTH_MAX, 1.0);
+  float depth = texture(uSeaDepth, uv).r;
+  float depthPerPx = max(length(vec2(dFdx(depth), dFdy(depth))), 1e-7);
+  float t = clamp(depth / DEPTH_MAX, 0.0, 1.0);
   vec3 water = mix(SEA_SHALLOW, SEA_DEEP, t * (1.0 + TONE_K) / (t + TONE_K));
   water = mix(water, SEA_COAST, smoothstep(0.004, 0.45, near));
-  vec2 isoPx = abs(depth - ISOBATHS) / hcPerPx;
+  vec2 isoPx = abs(depth - ISOBATHS) / depthPerPx;
   float iso = 1.0 - smoothstep(max(0.5 * uCam.w - 0.5, 0.0), 0.5 * uCam.w + 0.5, min(isoPx.x, isoPx.y));
   // Lake lookup (up to 13 texel pairs) only where water shows at all: at landMask 1 the water
   // colour is multiplied by 0 below, so skipping it there leaves the picture identical.
   float lake = landMask < 1.0 ? lakeShare(pc, pw, p) : 0.0;
-  iso *= ISOBATH_ALPHA * smoothstep(ISOBATH_FADE.x, ISOBATH_FADE.y, zoom) * (1.0 - lake);
+  iso *= ISOBATH_ALPHA * smoothstep(ISOBATH_FADE.x, ISOBATH_FADE.y, zoom / uZoomMin) * (1.0 - lake);
   water = mix(water, SEA_CONTOUR, iso);
   if (lake > 0.0) water = mix(water, mix(LAKE_DEEP, LAKE_SHALLOW, smoothstep(0.28, 0.5, near)), lake);
   water = water * (1.0 - uFill * seaFill.a) + uFill * seaFill.rgb;
@@ -427,11 +432,11 @@ void main() {
   }
   col = mix(col, vec3(1.0), 0.13 * hovered);
 
-  // ---- paper grain over land and, at 60% strength, over water (calmer than the land)
+  // ---- paper grain over land and, at 35% strength, over water (calm, even sea)
   float paperLod = clamp(atlasLod(PAPER_SPAN, pxPerCell), 0.0, MAX_LOD);
   float paper = atlasSample(PAPER_SLOT, p, PAPER_SPAN, paperLod) - 0.5;
   float mottle = vnoise(p / 70.0) + 0.5 * vnoise(p / 23.0) - 0.75;
-  col *= 1.0 + mix(0.6, 1.0, landMask) * (paper * SLOT_GAIN[int(PAPER_SLOT)] + 0.035 * mottle);
+  col *= 1.0 + mix(WATER_GRAIN, 1.0, landMask) * (paper * SLOT_GAIN[int(PAPER_SLOT)] + 0.035 * mottle);
 
   // ---- outside the map
   vec2 edge = min(p, uWorldSize - p);

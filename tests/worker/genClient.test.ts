@@ -48,6 +48,7 @@ function fakeBake(): WorldBake {
     height: new Uint16Array(8),
     surface: new Uint16Array(32),
     biomeColor: new Uint8Array(32),
+    seaDepth: new Uint16Array(8),
   };
 }
 
@@ -216,10 +217,11 @@ describe('collectTransferables', () => {
 });
 
 describe('bakeTransferables', () => {
-  it('отдаёт все шесть буферов запечённых текстур', () => {
+  it('отдаёт все семь буферов запечённых текстур', () => {
     const b = fakeBake();
     const list = bakeTransferables(b);
-    expect(list.length).toBe(6);
+    expect(list.length).toBe(7);
+    expect(list).toContain(b.seaDepth.buffer);
     expect(list).toContain(b.surface.buffer);
     expect(list).toContain(b.provinceSeaRG.buffer);
   });

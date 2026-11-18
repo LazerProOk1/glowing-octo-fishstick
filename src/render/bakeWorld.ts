@@ -8,6 +8,7 @@ import { bakeBiomeColors } from './biomeColors';
 import { toHalf, toHalfArray } from './halfFloat';
 import { blur } from '../sim/geom/blur';
 import { COAST_SIGMA, bakeGradient, coastNearness } from './normals';
+import { smoothSeaDepth } from './seaDepth';
 
 /** Текстуры, которые зависят только от высоты и биомов (готовы сразу после этапа берегов). */
 export interface SurfaceBake {
@@ -16,6 +17,8 @@ export interface SurfaceBake {
   /** RGBA16F: градиент, береговая высота, близость берега. */
   surface: Uint16Array;
   biomeColor: Uint8Array;
+  /** R16F: гладкая глубина моря для цвета воды и изобат (smoothSeaDepth). */
+  seaDepth: Uint16Array;
 }
 
 /** Готовые пиксели текстур мира (раскладка каналов — см. WorldTextures в textures.ts). */
@@ -174,6 +177,7 @@ export function bakeSurface(
     height: toHalfArray(height, SEA_LEVEL),
     surface: packSurface(height, w, h),
     biomeColor: bakeBiomeColors(biome, defs, w, h),
+    seaDepth: toHalfArray(smoothSeaDepth(height, w, h), 0),
   };
 }
 

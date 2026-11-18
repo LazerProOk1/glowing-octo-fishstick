@@ -23,6 +23,8 @@ export interface WorldTextures {
   surface: TextureSource;
   /** RGBA8 LINEAR: размытый цвет биомов (RGB) и покрытие сушей (A), см. bakeBiomeColors. */
   biomeColor: TextureSource;
+  /** R16F LINEAR: гладкая глубина моря 0..SEA_LEVEL (seaDepth.ts): тон воды и изобаты. */
+  seaDepth: TextureSource;
   /** Палитра биомов этого мира, см. createPaletteTexture. */
   palette: TextureSource;
 }
@@ -51,6 +53,20 @@ export function rgba8(data: Uint8Array, width: number, height: number, linear: b
   });
 }
 
+/** R16F-источник, билинейный, без мипмапов. */
+function r16f(data: Uint16Array, width: number, height: number): BufferImageSource {
+  return new BufferImageSource({
+    resource: data,
+    width,
+    height,
+    format: 'r16float',
+    scaleMode: 'linear',
+    addressMode: 'clamp-to-edge',
+    alphaMode: 'no-premultiply-alpha',
+    autoGenerateMipmaps: false,
+  });
+}
+
 /** bake — данные, запечённые заранее (в воркере); без него печём здесь, в главном потоке. */
 export function createWorldTextures(world: World, bake: WorldBake = bakeWorld(world)): WorldTextures {
   const { w, h } = world;
@@ -58,16 +74,8 @@ export function createWorldTextures(world: World, bake: WorldBake = bakeWorld(wo
     province: rgba8(bake.provinceRG, w, h, false),
     provinceSea: rgba8(bake.provinceSeaRG, w, h, false),
     terrain: rgba8(bake.terrain, w, h, true),
-    height: new BufferImageSource({
-      resource: bake.height,
-      width: w,
-      height: h,
-      format: 'r16float',
-      scaleMode: 'linear',
-      addressMode: 'clamp-to-edge',
-      alphaMode: 'no-premultiply-alpha',
-      autoGenerateMipmaps: false,
-    }),
+    height: r16f(bake.height, w, h),
+    seaDepth: r16f(bake.seaDepth, w, h),
     biomeColor: rgba8(bake.biomeColor, w, h, true),
     palette: createPaletteTexture(world.biomes),
     surface: new BufferImageSource({
@@ -90,6 +98,7 @@ export function destroyWorldTextures(t: WorldTextures): void {
   t.height.destroy();
   t.surface.destroy();
   t.biomeColor.destroy();
+  t.seaDepth.destroy();
   t.palette.destroy();
 }
 

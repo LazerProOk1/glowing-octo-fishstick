@@ -49,6 +49,7 @@ const FINGERPRINT = {
   // Task 6b (рендер, версия та же): новая текстура provinceSeaRG — владельцы там, где на экране
   // вода (displaySeaProvinceOf). Остальные хэши не меняются.
   // Раунд правок 6b: поле расстояний border больше не запекается (шейдер его не читал) — хэш убран.
+  // Task 7, раунд правок (рендер): новая текстура seaDepth — гладкая глубина моря. Остальные не меняются.
   genVersion: 3,
   world: {
     height: '9f842423',
@@ -64,6 +65,7 @@ const FINGERPRINT = {
     bakeHeight: '8c184fb8',
     surface: 'a378f8da',
     biomeColor: '56c7e2f4',
+    seaDepth: '3fd25dee',
   },
 };
 
@@ -128,6 +130,7 @@ describe('отпечаток мира (сид "1", параметры по ум�
         bakeHeight: fnv1a(bake.height),
         surface: fnv1a(bake.surface),
         biomeColor: fnv1a(bake.biomeColor),
+        seaDepth: fnv1a(bake.seaDepth),
       },
       'запекание изменилось — обнови хэши, если так задумано',
     ).toEqual(FINGERPRINT.bake);

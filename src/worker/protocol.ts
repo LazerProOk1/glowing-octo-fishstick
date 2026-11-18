@@ -31,7 +31,7 @@ export interface GenResult {
  * Поднимать при любом изменении формы сообщений. Сообщение другой версии (например, воркер из
  * старой вкладки или кэша) отклоняется с понятной ошибкой, а не разбирается вслепую.
  */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Общая часть всех сообщений. */
 interface Versioned {
@@ -101,5 +101,5 @@ export function collectTransferables(world: World): ArrayBuffer[] {
 }
 
 export function surfaceTransferables(bake: SurfaceBake): ArrayBuffer[] {
-  return uniqueBuffers([bake.height, bake.surface, bake.biomeColor]);
+  return uniqueBuffers([bake.height, bake.surface, bake.biomeColor, bake.seaDepth]);
 }

@@ -77,6 +77,7 @@ export class MapView {
       uHovered: { value: -1, type: 'f32' },
       uFill: { value: 0, type: 'f32' },
       uProvDataW: { value: 1, type: 'f32' },
+      uZoomMin: { value: 1, type: 'f32' },
     });
     const first = MAP_MODES[0];
     if (!first) throw new Error('MAP_MODES is empty');
@@ -93,6 +94,7 @@ export class MapView {
         uHeight: this.blank,
         uSurface: this.blank,
         uBiomeColor: this.blank,
+        uSeaDepth: this.blank,
         uProvince: this.blank,
         uProvinceSea: this.blank,
         uPalette: this.blank,
@@ -159,6 +161,7 @@ export class MapView {
     res.uHeight = next.height;
     res.uSurface = next.surface;
     res.uBiomeColor = next.biomeColor;
+    res.uSeaDepth = next.seaDepth;
     res.uProvince = next.province;
     res.uProvinceSea = next.provinceSea;
     res.uPalette = next.palette;
@@ -306,6 +309,7 @@ export class MapView {
     this.camU[3] = this.app.renderer.resolution;
     this.viewU[0] = width;
     this.viewU[1] = height;
+    this.uniforms.uniforms.uZoomMin = minZoom(width, height, this.map);
     this.uniforms.update();
     this.rivers.container.scale.set(zoom);
     this.rivers.container.position.set(width / 2 - x * zoom, height / 2 - y * zoom);
