@@ -24,15 +24,15 @@ export function createNoise2D(rng: Rng): Noise2D {
   }
   const perm = new Uint8Array(512);
   for (let i = 0; i < 512; i++) perm[i] = p[i & 255] ?? 0;
-
-  const contrib = (gi: number, x: number, y: number): number => {
-    let t = 0.5 - x * x - y * y;
-    if (t < 0) return 0;
-    const g = GRADS[gi % 8] ?? GRADS[0];
-    if (!g) return 0;
-    t *= t;
-    return t * t * (g[0] * x + g[1] * y);
-  };
+  // Gradient components per permutation entry (GRADS[perm % 8]) in flat tables: no per-call
+  // closures or nested arrays. Arithmetic is unchanged (g·(x, y) with g ∈ {−1, 0, 1}).
+  const gx = new Int8Array(512);
+  const gy = new Int8Array(512);
+  for (let i = 0; i < 512; i++) {
+    const g = GRADS[(perm[i] ?? 0) % 8] ?? [0, 0];
+    gx[i] = g[0];
+    gy[i] = g[1];
+  }
 
   return (xin, yin) => {
     const s = (xin + yin) * F2;
@@ -49,10 +49,28 @@ export function createNoise2D(rng: Rng): Noise2D {
     const y2 = y0 - 1 + 2 * G2;
     const ii = i & 255;
     const jj = j & 255;
-    const g0 = perm[ii + (perm[jj] ?? 0)] ?? 0;
-    const g1 = perm[ii + i1 + (perm[jj + j1] ?? 0)] ?? 0;
-    const g2 = perm[ii + 1 + (perm[jj + 1] ?? 0)] ?? 0;
-    const v = SCALE * (contrib(g0, x0, y0) + contrib(g1, x1, y1) + contrib(g2, x2, y2));
+    const g0 = ii + perm[jj]!;
+    const g1 = ii + i1 + perm[jj + j1]!;
+    const g2 = ii + 1 + perm[jj + 1]!;
+    let n0 = 0;
+    let t0 = 0.5 - x0 * x0 - y0 * y0;
+    if (t0 >= 0) {
+      t0 *= t0;
+      n0 = t0 * t0 * (gx[g0]! * x0 + gy[g0]! * y0);
+    }
+    let n1 = 0;
+    let t1 = 0.5 - x1 * x1 - y1 * y1;
+    if (t1 >= 0) {
+      t1 *= t1;
+      n1 = t1 * t1 * (gx[g1]! * x1 + gy[g1]! * y1);
+    }
+    let n2 = 0;
+    let t2 = 0.5 - x2 * x2 - y2 * y2;
+    if (t2 >= 0) {
+      t2 *= t2;
+      n2 = t2 * t2 * (gx[g2]! * x2 + gy[g2]! * y2);
+    }
+    const v = SCALE * (n0 + n1 + n2);
     return Math.max(-1, Math.min(1, v));
   };
 }

@@ -72,7 +72,12 @@ export function generateHeight(rng: Rng, w: number, h: number): Float32Array {
 
       let base = 0;
       for (const b of blobs) {
-        const d = Math.hypot(px - b.cx, py - b.cy) / b.r;
+        // Beyond d = 1/0.9 a blob contributes exactly 0 and can never raise `base`; the cheap
+        // squared-distance test (with margin) skips Math.hypot there. Inside it, the same formula.
+        const ex = px - b.cx;
+        const ey = py - b.cy;
+        if (ex * ex + ey * ey > b.r * b.r * 1.44) continue;
+        const d = Math.hypot(ex, ey) / b.r;
         const val = b.weight * (1 - smooth(d * 0.9));
         if (val > base) base = val;
       }

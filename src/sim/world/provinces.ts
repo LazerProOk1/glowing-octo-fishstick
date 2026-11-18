@@ -192,30 +192,61 @@ const MAX_STEP = 40;
  * 1 / INV_BUCKET_WIDTH; within a bucket, order is LIFO. Every push must be within MAX_STEP of the last pop.
  */
 class BucketQueue {
-  private readonly lists: number[][] = [];
+  // Each bucket is a singly linked LIFO stack over typed arrays (head per bucket, `next` per node);
+  // popped nodes go to a free list. Same order as per-bucket JS arrays, without their overhead.
+  private readonly heads = new Int32Array(BUCKETS).fill(-1);
+  private next: Int32Array;
+  private ids: Int32Array;
+  private used = 0;
+  private free = -1;
   private cur = 0;
   private count = 0;
-  constructor() {
-    for (let i = 0; i < BUCKETS; i++) this.lists.push([]);
+  constructor(capacity: number) {
+    const c = Math.max(16, capacity);
+    this.next = new Int32Array(c);
+    this.ids = new Int32Array(c);
   }
   /** Priority of the bucket the last `pop` came from (quantised). */
   lastKey = 0;
   push(key: number, id: number): void {
-    this.lists[((key * INV_BUCKET_WIDTH) | 0) & (BUCKETS - 1)]!.push(id);
+    let node = this.free;
+    if (node >= 0) {
+      this.free = this.next[node]!;
+    } else {
+      if (this.used === this.ids.length) this.grow();
+      node = this.used++;
+    }
+    const b = ((key * INV_BUCKET_WIDTH) | 0) & (BUCKETS - 1);
+    this.ids[node] = id;
+    this.next[node] = this.heads[b]!;
+    this.heads[b] = node;
     this.count++;
   }
   /** Returns the id of an entry with (approximately) minimal key, or -1 when empty. */
   pop(): number {
     if (this.count === 0) return -1;
+    const heads = this.heads;
     for (;;) {
-      const list = this.lists[this.cur & (BUCKETS - 1)]!;
-      if (list.length > 0) {
+      const b = this.cur & (BUCKETS - 1);
+      const node = heads[b]!;
+      if (node >= 0) {
+        heads[b] = this.next[node]!;
+        this.next[node] = this.free;
+        this.free = node;
         this.count--;
         this.lastKey = this.cur / INV_BUCKET_WIDTH;
-        return list.pop()!;
+        return this.ids[node]!;
       }
       this.cur++;
     }
+  }
+  private grow(): void {
+    const next = new Int32Array(this.ids.length * 2);
+    next.set(this.next);
+    const ids = new Int32Array(this.ids.length * 2);
+    ids.set(this.ids);
+    this.next = next;
+    this.ids = ids;
   }
 }
 
@@ -239,20 +270,32 @@ function grow(
   h: number,
 ): Int32Array {
   const n = w * h;
-  const key = new Float32Array(n).fill(Infinity);
-  const pen = new Float32Array(n);
-  const owner = new Int32Array(n).fill(-1);
+  // All per-cell growth state in one interleaved record (8 x 4 bytes), so a visit touches one
+  // cache line instead of one per array: the bucket order jumps across the whole map.
+  // Floats: wx, wy, height, key, pen; ints: owner, class, river. Values and their float32
+  // rounding are the same as with separate typed arrays.
+  const S = 8;
+  const buf = new ArrayBuffer(n * S * 4);
+  const f = new Float32Array(buf);
+  const iv = new Int32Array(buf);
   // Packed per-cell class: kind in bits 4-5, biome (land only) in bits 0-3, bit 7 = finalised.
   // Growth only steps between cells of equal class, i.e. same kind and, on land, same biome.
   const DONE = 0x80;
-  const cls = new Uint8Array(n);
-  for (let i = 0; i < n; i++) cls[i] = (kind[i]! << 4) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
-  const queue = new BucketQueue();
+  for (let i = 0, o = 0; i < n; i++, o += S) {
+    f[o] = wx[i]!;
+    f[o + 1] = wy[i]!;
+    f[o + 2] = height[i]!;
+    f[o + 3] = Infinity;
+    iv[o + 5] = -1;
+    iv[o + 6] = (kind[i]! << 4) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
+    iv[o + 7] = riverMask[i]!;
+  }
+  const queue = new BucketQueue(n);
   const seedX = new Float32Array(seeds.length);
   const seedY = new Float32Array(seeds.length);
   seeds.forEach((s, p) => {
-    key[s] = 0;
-    owner[s] = p;
+    f[s * S + 3] = 0;
+    iv[s * S + 5] = p;
     seedX[p] = wx[s]!;
     seedY[p] = wy[s]!;
     queue.push(0, s);
@@ -261,46 +304,50 @@ function grow(
   for (;;) {
     const c = queue.pop();
     if (c < 0) break;
-    const cc = cls[c]!;
+    const co = c * S;
+    const cc = iv[co + 6]!;
     if (cc & DONE) continue;
-    cls[c] = cc | DONE;
-    const p = owner[c]!;
+    iv[co + 6] = cc | DONE;
+    const p = iv[co + 5]!;
     const isLandCell = (cc & 0x30) === landCls;
     const cx = c % w;
     const cy = (c - cx) / w;
     const px = seedX[p]!;
     const py = seedY[p]!;
     const interior = cx > 0 && cy > 0 && cx < w - 1 && cy < h - 1;
-    const hc = height[c]!;
-    const rc = riverMask[c]!;
+    const hc = f[co + 2]!;
+    const rc = iv[co + 7]!;
     const kc = queue.lastKey;
-    const pc = pen[c]!;
+    const pc = f[co + 4]!;
     for (let k = 0; k < 4; k++) {
       const x = cx + DX[k]!;
       const y = cy + DY[k]!;
       if (!interior && (x < 0 || y < 0 || x >= w || y >= h)) continue;
       const d = y * w + x;
+      const o = d * S;
       // Same class and not finalised (a finalised cell has bit 7 set, so it never compares equal).
-      if (cls[d] !== cc) continue;
+      if (iv[o + 6] !== cc) continue;
       let pd = pc;
       if (isLandCell) {
-        pd += UPHILL_COST * Math.max(0, height[d]! - hc);
-        const rd = riverMask[d]!;
+        pd += UPHILL_COST * Math.max(0, f[o + 2]! - hc);
+        const rd = iv[o + 7]!;
         if ((rc > 0) !== (rd > 0)) pd += RIVER_COST * Math.max(rc, rd);
       }
-      const fx = wx[d]! - px;
-      const fy = wy[d]! - py;
+      const fx = f[o]! - px;
+      const fy = f[o + 1]! - py;
       const nd = Math.sqrt(fx * fx + fy * fy) + pd;
-      if (nd < key[d]!) {
-        key[d] = nd;
-        pen[d] = pd;
-        owner[d] = p;
+      if (nd < f[o + 3]!) {
+        f[o + 3] = nd;
+        f[o + 4] = pd;
+        iv[o + 5] = p;
         // Ownership compares the true keys; only the queue priority is clamped to stay monotone
         // (where the warp folds, a neighbour can be closer to the seed than the current cell).
         queue.push(Math.min(kc + MAX_STEP, Math.max(kc + MIN_STEP, nd)), d);
       }
     }
   }
+  const owner = new Int32Array(n);
+  for (let i = 0; i < n; i++) owner[i] = iv[i * S + 5]!;
   return owner;
 }
 

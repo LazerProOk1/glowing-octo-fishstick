@@ -1,5 +1,5 @@
 import { BIOMES } from '../sim/world/types';
-import { blur } from './normals';
+import { blurInterleaved } from './normals';
 import { MAP_COLORS, PALETTE, type RGB } from './palette';
 
 /**
@@ -20,29 +20,32 @@ const isWater = (code: number): boolean => {
  */
 export function bakeBiomeColors(biome: Uint8Array, w: number, h: number, sigma = BIOME_SIGMA): Uint8Array {
   const n = w * h;
-  const r = new Float32Array(n);
-  const g = new Float32Array(n);
-  const b = new Float32Array(n);
-  const c = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const code = biome[i] as number;
-    if (isWater(code)) continue;
+  // RGB и покрытие чередуются в одном массиве и размываются за один проход.
+  const rgbc = new Float32Array(n * 4);
+  // Таблица по коду биома: цвет и признак воды, без поиска по имени в цикле.
+  const lut = new Float32Array(256 * 4);
+  for (let code = 0; code < 256; code++) {
     const biomeName = BIOMES[code];
     const col: RGB = biomeName ? PALETTE[biomeName] : MAP_COLORS.beach;
-    r[i] = col[0];
-    g[i] = col[1];
-    b[i] = col[2];
-    c[i] = 1;
+    lut[code * 4] = col[0];
+    lut[code * 4 + 1] = col[1];
+    lut[code * 4 + 2] = col[2];
+    lut[code * 4 + 3] = isWater(code) ? 0 : 1;
   }
-  const br = blur(r, w, h, sigma);
-  const bg = blur(g, w, h, sigma);
-  const bb = blur(b, w, h, sigma);
-  const bc = blur(c, w, h, sigma);
+  for (let i = 0; i < n; i++) {
+    const o = (biome[i] as number) * 4;
+    if (lut[o + 3] === 0) continue;
+    rgbc[i * 4] = lut[o] as number;
+    rgbc[i * 4 + 1] = lut[o + 1] as number;
+    rgbc[i * 4 + 2] = lut[o + 2] as number;
+    rgbc[i * 4 + 3] = 1;
+  }
+  const blurred = blurInterleaved(rgbc, w, h, 4, sigma);
   const out = new Uint8Array(n * 4);
   const [fr, fg, fb] = MAP_COLORS.beach;
   for (let i = 0; i < n; i++) {
-    const cov = bc[i] as number;
     const o = i * 4;
+    const cov = blurred[o + 3] as number;
     if (cov < 1e-6) {
       out[o] = fr;
       out[o + 1] = fg;
@@ -50,9 +53,9 @@ export function bakeBiomeColors(biome: Uint8Array, w: number, h: number, sigma =
       out[o + 3] = 0;
       continue;
     }
-    out[o] = Math.round((br[i] as number) / cov);
-    out[o + 1] = Math.round((bg[i] as number) / cov);
-    out[o + 2] = Math.round((bb[i] as number) / cov);
+    out[o] = Math.round((blurred[o] as number) / cov);
+    out[o + 1] = Math.round((blurred[o + 1] as number) / cov);
+    out[o + 2] = Math.round((blurred[o + 2] as number) / cov);
     out[o + 3] = Math.round(Math.min(1, cov) * 255);
   }
   return out;

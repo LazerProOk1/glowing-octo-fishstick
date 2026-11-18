@@ -44,27 +44,61 @@ function dt1d(
  */
 export function borderDistance(provinceOf: Uint16Array, w: number, h: number): Float32Array {
   const gw = 2 * w;
-  const gh = 2 * h;
-  const g = new Float32Array(gw * gh).fill(INF);
+  // Column pass. The input is binary (0 on border points, INF elsewhere), so the 1D transform
+  // along a column is just the squared distance to the nearest zero in that column: two linear
+  // scans instead of the parabola envelope. Only even grid rows (cell centres) are kept, as the
+  // row pass needs nothing else. The scans run row by row, so memory access stays sequential.
+  // Grid column 2x (cell centres) has zeros on odd rows 2y+1 where cells (x,y) and (x,y+1) differ;
+  // grid column 2x+1 has zeros on even rows 2y where cells (x,y) and (x+1,y) differ.
+  const g = new Float32Array(gw * h);
+  const NONE = -1e9;
+  const last = new Float64Array(gw).fill(NONE);
   for (let y = 0; y < h; y++) {
+    const row = y * w;
+    const gy = 2 * y;
+    const o = y * gw;
     for (let x = 0; x < w; x++) {
-      const p = provinceOf[y * w + x] as number;
-      if (x + 1 < w && p !== provinceOf[y * w + x + 1]) g[2 * y * gw + 2 * x + 1] = 0;
-      if (y + 1 < h && p !== provinceOf[(y + 1) * w + x]) g[(2 * y + 1) * gw + 2 * x] = 0;
+      const p = provinceOf[row + x] as number;
+      if (x + 1 < w && p !== provinceOf[row + x + 1]) last[2 * x + 1] = gy;
+    }
+    for (let gx = 0; gx < gw; gx++) g[o + gx] = gy - (last[gx] as number);
+    if (y + 1 < h) {
+      const below = row + w;
+      for (let x = 0; x < w; x++) {
+        if (provinceOf[row + x] !== provinceOf[below + x]) last[2 * x] = gy + 1;
+      }
     }
   }
-  const m = Math.max(gw, gh);
-  const v = new Int32Array(m);
-  const z = new Float32Array(m + 1);
-  const d = new Float32Array(m);
-  // Columns pass over all grid columns; rows pass only for even rows (the outputs).
-  for (let x = 0; x < gw; x++) dt1d(g, x, gw, gh, v, z, d);
+  last.fill(-NONE);
+  for (let y = h - 1; y >= 0; y--) {
+    const row = y * w;
+    const gy = 2 * y;
+    const o = y * gw;
+    if (y + 1 < h) {
+      const below = row + w;
+      for (let x = 0; x < w; x++) {
+        if (provinceOf[row + x] !== provinceOf[below + x]) last[2 * x] = gy + 1;
+      }
+    }
+    for (let x = 0; x + 1 < w; x++) {
+      if (provinceOf[row + x] !== provinceOf[row + x + 1]) last[2 * x + 1] = gy;
+    }
+    for (let gx = 0; gx < gw; gx++) {
+      const up = g[o + gx] as number;
+      const down = (last[gx] as number) - gy;
+      const dd = up < down ? up : down;
+      g[o + gx] = dd >= -NONE / 2 ? INF : dd * dd;
+    }
+  }
+  const v = new Int32Array(gw);
+  const z = new Float32Array(gw + 1);
+  const d = new Float32Array(gw);
   const out = new Float32Array(w * h);
   const cap = w + h;
   for (let y = 0; y < h; y++) {
-    dt1d(g, 2 * y * gw, 1, gw, v, z, d);
+    dt1d(g, y * gw, 1, gw, v, z, d);
     for (let x = 0; x < w; x++) {
-      const sq = g[2 * y * gw + 2 * x] as number;
+      const sq = g[y * gw + 2 * x] as number;
       out[y * w + x] = sq >= INF / 2 ? cap : Math.sqrt(sq) / 2;
     }
   }

@@ -24,32 +24,93 @@ function gaussianKernel(sigma: number): Float32Array {
   return k;
 }
 
-/** Separable Gaussian blur with edge clamping. */
+/**
+ * Separable Gaussian blur with edge clamping.
+ * Interior taps run without bounds checks; the vertical pass accumulates whole rows
+ * (contiguous memory) in a Float64 row buffer, so precision matches a scalar double sum.
+ */
 export function blur(src: Float32Array, w: number, h: number, sigma: number): Float32Array {
   const k = gaussianKernel(sigma);
   const r = (k.length - 1) / 2;
+  const taps = k.length;
   const tmp = new Float32Array(w * h);
   const out = new Float32Array(w * h);
+  const clampX = (x: number): number => (x < 0 ? 0 : x >= w ? w - 1 : x);
+  const edge = (row: number, x: number): number => {
+    let s = 0;
+    for (let i = -r; i <= r; i++) s += (k[i + r] as number) * (src[row + clampX(x + i)] as number);
+    return s;
+  };
+  const lo = Math.min(r, w);
+  const hi = Math.max(lo, w - r);
   for (let y = 0; y < h; y++) {
     const row = y * w;
-    for (let x = 0; x < w; x++) {
+    for (let x = 0; x < lo; x++) tmp[row + x] = edge(row, x);
+    for (let x = lo; x < hi; x++) {
+      const base = row + x - r;
       let s = 0;
-      for (let i = -r; i <= r; i++) {
-        const xx = x + i < 0 ? 0 : x + i >= w ? w - 1 : x + i;
-        s += (k[i + r] as number) * (src[row + xx] as number);
-      }
+      for (let i = 0; i < taps; i++) s += (k[i] as number) * (src[base + i] as number);
       tmp[row + x] = s;
     }
+    for (let x = hi; x < w; x++) tmp[row + x] = edge(row, x);
   }
+  const acc = new Float64Array(w);
   for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let s = 0;
-      for (let i = -r; i <= r; i++) {
-        const yy = y + i < 0 ? 0 : y + i >= h ? h - 1 : y + i;
-        s += (k[i + r] as number) * (tmp[yy * w + x] as number);
-      }
-      out[y * w + x] = s;
+    acc.fill(0);
+    for (let i = -r; i <= r; i++) {
+      const yy = y + i < 0 ? 0 : y + i >= h ? h - 1 : y + i;
+      const ki = k[i + r] as number;
+      const srow = yy * w;
+      for (let x = 0; x < w; x++) acc[x] = (acc[x] as number) + ki * (tmp[srow + x] as number);
     }
+    out.set(acc, y * w);
+  }
+  return out;
+}
+
+/**
+ * The same blur for `c` interleaved channels (src.length = w·h·c) in one sweep: per channel the
+ * taps and their summation order are exactly those of `blur`, so each channel matches it bit for
+ * bit; the loops over the map run once instead of c times.
+ */
+export function blurInterleaved(src: Float32Array, w: number, h: number, c: number, sigma: number): Float32Array {
+  const k = gaussianKernel(sigma);
+  const r = (k.length - 1) / 2;
+  const taps = k.length;
+  const rowLen = w * c;
+  const tmp = new Float32Array(rowLen * h);
+  const out = new Float32Array(rowLen * h);
+  const lo = Math.min(r, w);
+  const hi = Math.max(lo, w - r);
+  for (let y = 0; y < h; y++) {
+    const row = y * rowLen;
+    for (let x = 0; x < w; x++) {
+      const interior = x >= lo && x < hi;
+      for (let ch = 0; ch < c; ch++) {
+        let s = 0;
+        if (interior) {
+          const base = row + (x - r) * c + ch;
+          for (let i = 0; i < taps; i++) s += (k[i] as number) * (src[base + i * c] as number);
+        } else {
+          for (let i = -r; i <= r; i++) {
+            const xx = x + i < 0 ? 0 : x + i >= w ? w - 1 : x + i;
+            s += (k[i + r] as number) * (src[row + xx * c + ch] as number);
+          }
+        }
+        tmp[row + x * c + ch] = s;
+      }
+    }
+  }
+  const acc = new Float64Array(rowLen);
+  for (let y = 0; y < h; y++) {
+    acc.fill(0);
+    for (let i = -r; i <= r; i++) {
+      const yy = y + i < 0 ? 0 : y + i >= h ? h - 1 : y + i;
+      const ki = k[i + r] as number;
+      const srow = yy * rowLen;
+      for (let x = 0; x < rowLen; x++) acc[x] = (acc[x] as number) + ki * (tmp[srow + x] as number);
+    }
+    out.set(acc, y * rowLen);
   }
   return out;
 }
@@ -61,18 +122,21 @@ export function blur(src: Float32Array, w: number, h: number, sigma: number): Fl
 export function bakeGradient(height: Float32Array, w: number, h: number, sigma = NORMAL_SIGMA): Float32Array {
   const b = blur(height, w, h, sigma);
   const out = new Float32Array(w * h * 2);
-  const at = (x: number, y: number): number =>
-    b[(y < 0 ? 0 : y >= h ? h - 1 : y) * w + (x < 0 ? 0 : x >= w ? w - 1 : x)] as number;
   for (let y = 0; y < h; y++) {
+    const up = (y > 0 ? y - 1 : 0) * w;
+    const mid = y * w;
+    const dn = (y + 1 < h ? y + 1 : h - 1) * w;
     for (let x = 0; x < w; x++) {
-      const tl = at(x - 1, y - 1);
-      const tc = at(x, y - 1);
-      const tr = at(x + 1, y - 1);
-      const ml = at(x - 1, y);
-      const mr = at(x + 1, y);
-      const bl = at(x - 1, y + 1);
-      const bc = at(x, y + 1);
-      const br = at(x + 1, y + 1);
+      const xl = x > 0 ? x - 1 : 0;
+      const xr = x + 1 < w ? x + 1 : w - 1;
+      const tl = b[up + xl] as number;
+      const tc = b[up + x] as number;
+      const tr = b[up + xr] as number;
+      const ml = b[mid + xl] as number;
+      const mr = b[mid + xr] as number;
+      const bl = b[dn + xl] as number;
+      const bc = b[dn + x] as number;
+      const br = b[dn + xr] as number;
       const o = (y * w + x) * 2;
       out[o] = (tr + 2 * mr + br - tl - 2 * ml - bl) / 8;
       out[o + 1] = (bl + 2 * bc + br - tl - 2 * tc - tr) / 8;

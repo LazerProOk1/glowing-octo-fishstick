@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bakeGradient, coastNearness } from '../../src/render/normals';
+import { bakeGradient, blur, blurInterleaved, coastNearness } from '../../src/render/normals';
 
 const W = 32;
 const H = 16;
@@ -57,5 +57,23 @@ describe('coastNearness', () => {
     expect(at(8)).toBeLessThan(0.03);
     expect(at(28)).toBeCloseTo(1, 5);
     for (const v of near) expect(v >= 0 && v <= 1 + 1e-6).toBe(true);
+  });
+});
+
+describe('blurInterleaved', () => {
+  it('каждый канал побитно совпадает с blur', () => {
+    let s = 3;
+    const rnd = (): number => ((s = (s * 16807) % 2147483647) / 2147483647);
+    const ch = 4;
+    const planes = Array.from({ length: ch }, () => field(() => rnd() * 200));
+    const inter = new Float32Array(W * H * ch);
+    for (let i = 0; i < W * H; i++) for (let c = 0; c < ch; c++) inter[i * ch + c] = planes[c]![i]!;
+    for (const sigma of [0.7, 1.2, 3.5]) {
+      const out = blurInterleaved(inter, W, H, ch, sigma);
+      for (let c = 0; c < ch; c++) {
+        const ref = blur(planes[c]!, W, H, sigma);
+        for (let i = 0; i < W * H; i++) expect(out[i * ch + c]).toBe(ref[i]);
+      }
+    }
   });
 });

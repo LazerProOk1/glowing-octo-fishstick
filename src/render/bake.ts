@@ -29,15 +29,16 @@ export function bakeTextures(world: World): BakedTextures {
   const provinceRG = new Uint8Array(n * 4);
   const terrain = new Uint8Array(n * 4);
   const border = new Uint8Array(n * 4);
+  // Суша по id провинции заранее: без поиска объекта провинции в цикле по 2 млн клеток.
+  const landOf = new Uint8Array(provinces.length);
+  provinces.forEach((p, id) => (landOf[id] = p.isLand ? 255 : 0));
   for (let i = 0; i < n; i++) {
     const o = i * 4;
     const id = provinceOf[i] as number;
-    const [r, g] = encodeProvinceId(id);
-    provinceRG[o] = r;
-    provinceRG[o + 1] = g;
-    const province = provinces[id];
-    if (!province) throw new Error(`нет провинции с id ${id} (клетка ${i})`);
-    provinceRG[o + 2] = province.isLand ? 255 : 0;
+    if (id >= provinces.length) throw new Error(`нет провинции с id ${id} (клетка ${i})`);
+    provinceRG[o] = id & 255; // = encodeProvinceId
+    provinceRG[o + 1] = id >> 8;
+    provinceRG[o + 2] = landOf[id] as number;
     provinceRG[o + 3] = 255;
     terrain[o] = clampByte(Math.round((height[i] as number) * 255));
     terrain[o + 1] = biome[i] as number;

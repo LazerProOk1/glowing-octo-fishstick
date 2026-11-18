@@ -91,20 +91,28 @@ function distanceToSea(height: Float32Array, w: number, h: number): Uint16Array 
       queue[tail++] = i;
     }
   }
+  // Соседи обходятся без замыкания на каждую клетку: замыкание в цикле по 2 млн клеток
+  // стоило больше полсекунды. Порядок обхода тот же — результат побитно совпадает.
   while (head < tail) {
-    const i = queue[head++] ?? 0;
-    const d = (dist[i] ?? 0) + 1;
+    const i = queue[head++]!;
+    const d = dist[i]! + 1;
     const x = i % w;
-    const push = (j: number): void => {
-      if ((dist[j] ?? 0) > d) {
-        dist[j] = d;
-        queue[tail++] = j;
-      }
-    };
-    if (x > 0) push(i - 1);
-    if (x < w - 1) push(i + 1);
-    if (i >= w) push(i - w);
-    if (i < n - w) push(i + w);
+    if (x > 0 && dist[i - 1]! > d) {
+      dist[i - 1] = d;
+      queue[tail++] = i - 1;
+    }
+    if (x < w - 1 && dist[i + 1]! > d) {
+      dist[i + 1] = d;
+      queue[tail++] = i + 1;
+    }
+    if (i >= w && dist[i - w]! > d) {
+      dist[i - w] = d;
+      queue[tail++] = i - w;
+    }
+    if (i < n - w && dist[i + w]! > d) {
+      dist[i + w] = d;
+      queue[tail++] = i + w;
+    }
   }
   return dist;
 }
