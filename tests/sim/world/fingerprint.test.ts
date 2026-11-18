@@ -38,20 +38,21 @@ const FINGERPRINT = {
     moisture: 'df0babb0',
     arcana: 'eaaa4394',
   },
-  // v3 (озёра): биом lake на клетках замкнутых водоёмов — меняются biome и terrain (канал G);
-  // разбиение на провинции, высота, реки и рёбра те же.
+  // v3 (озёра): биом lake на клетках замкнутых водоёмов — меняются biome и terrain (канал G).
+  // v3, Task 5 этапа 1.5 (та же версия): морские провинции крупнее вдали от берега — меняются
+  // provinceOf, рёбра и запекание provinceRG и border.
   genVersion: 3,
   world: {
     height: '9f842423',
     biome: '789cae80',
-    provinceOf: '73a46d57',
+    provinceOf: '32ef300b',
     riverMask: '61e3f25d',
-    edges: '6230d3d0',
+    edges: '4f1698da',
   },
   bake: {
-    provinceRG: 'b9161d70',
+    provinceRG: 'baf5456a',
     terrain: '6f9576fe',
-    border: 'e29aa78f',
+    border: '980430e1',
     bakeHeight: '8c184fb8',
     surface: 'a378f8da',
     biomeColor: '3033f7ed',
@@ -60,7 +61,7 @@ const FINGERPRINT = {
 
 /** Фэнтези включено (fantasy=1), размер small: ловит дрейф арканы и фэнтези-биомов. */
 const FANTASY_SMALL = {
-  world: { height: 'a62966d8', biome: '77a30566', provinceOf: '73f1afc1', riverMask: '285b5862', edges: '7f60b8a5' },
+  world: { height: 'a62966d8', biome: '77a30566', provinceOf: 'a5fd326a', riverMask: '285b5862', edges: 'e2eea6cc' },
   climate: { temperature: '7911d17e', moisture: 'c26fbf9e', arcana: 'a5ff6b92' },
 };
 

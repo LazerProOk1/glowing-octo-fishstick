@@ -8,6 +8,7 @@ import { computeBiomes } from '../../../src/sim/world/biomes';
 import { computeRivers } from '../../../src/sim/world/rivers';
 import { computeProvinces } from '../../../src/sim/world/provinces';
 import { normalizeShoreline } from '../../../src/sim/world/shoreline';
+import { findLakes } from '../../../src/sim/world/lakes';
 import {
   bumpShare,
   longestStraightBorder,
@@ -27,10 +28,17 @@ import { SEA_LEVEL } from '../../../src/content/terrainLevels';
  * биомов вдвое мельче относительно провинции: смешанных провинций и ступенек на границах
  * (растр биомов грубее) больше. Для small пороги ослаблены и записаны явно.
  */
-const QUALITY: Record<WorldSize, { minPurity: number; pure90: number; bumps: number }> = {
-  small: { minPurity: 0.75, pure90: 0.8, bumps: 0.01 },
-  medium: { minPurity: 0.8, pure90: 0.9, bumps: 0.006 },
-  large: { minPurity: 0.8, pure90: 0.9, bumps: 0.006 },
+/**
+ * Доли bumps и straight считаются от числа пограничных клеток. С крупными морскими провинциями в
+ * открытом море (Task 5 этапа 1.5) морских границ меньше: число бугорков почти то же, а знаменатель
+ * меньше на ~9% (medium "Бета-7" fantasy: 1427 бугорков на 235 тыс. клеток против 1434 на 257 тыс.),
+ * отсюда 0.0065 вместо 0.006. На small крупные морские провинции дают и пару прямых участков воды
+ * длиннее 12 клеток (small "1": 328 клеток против 285), отсюда straight 0.006.
+ */
+const QUALITY: Record<WorldSize, { minPurity: number; pure90: number; bumps: number; straight: number }> = {
+  small: { minPurity: 0.75, pure90: 0.8, bumps: 0.01, straight: 0.006 },
+  medium: { minPurity: 0.8, pure90: 0.9, bumps: 0.0065, straight: 0.005 },
+  large: { minPurity: 0.8, pure90: 0.9, bumps: 0.0065, straight: 0.005 },
 };
 
 // Размер карты текущего набора: блоки describe выполняются по очереди, beforeAll ставит размер.
@@ -247,8 +255,9 @@ describe.each([
   it('borders have few long straight runs', () => {
     const r = longestStraightBorder(f.height, f.riverMask, f.provinceOf, W, H);
     const b = bumpShare(f.height, f.riverMask, f.provinceOf, W, H);
-    // Cells in axis or 45-degree runs longer than 12: at most 0.5% of border cells; none over 30.
-    expect(r.longCells / b.border).toBeLessThanOrEqual(0.005);
+    // Cells in axis or 45-degree runs longer than 12: at most 0.5% of border cells (small 0.6%);
+    // none over 30.
+    expect(r.longCells / b.border).toBeLessThanOrEqual(QUALITY[size].straight);
     expect(r.axis).toBeLessThanOrEqual(30);
     expect(r.diagonal).toBeLessThanOrEqual(30);
   });
@@ -258,10 +267,48 @@ describe.each([
     expect(r.share).toBeLessThanOrEqual(QUALITY[size].bumps);
   });
 
+  it.runIf(seed === '1' && size === 'medium')('fewer sea provinces: 150–300 on medium seed "1"', () => {
+    const sea = f.provinces.filter((p) => p.water === 'sea').length;
+    expect(sea).toBeGreaterThanOrEqual(150);
+    expect(sea).toBeLessThanOrEqual(300);
+  });
+
+  it.runIf(size === 'medium')('coastal sea stays fine: sea provinces at land are at most 0.6 of open-sea area', () => {
+    const sea = f.provinces.filter((p) => p.water === 'sea');
+    const mean = (ps: Province[]): number => ps.reduce((s, p) => s + p.cellCount, 0) / ps.length;
+    const coast = sea.filter((p) => p.neighbors.some((q) => f.provinces[q]!.isLand));
+    const open = sea.filter((p) => !p.neighbors.some((q) => f.provinces[q]!.isLand));
+    expect(coast.length).toBeGreaterThan(0);
+    expect(open.length).toBeGreaterThan(0);
+    expect(mean(coast)).toBeLessThanOrEqual(0.6 * mean(open));
+  });
+
   it.runIf(seed === '1' && size === 'medium')('is deterministic', { timeout: 30000 }, () => {
     const rng = createRng(seed);
     const again = computeProvinces(rng.fork('provinces'), f.height, f.biomes, f.riverMask, W, H, f.defs);
     expect(Buffer.from(again.provinceOf.buffer).equals(Buffer.from(f.provinceOf.buffer))).toBe(true);
     expect(again.provinces).toEqual(f.provinces);
+  });
+});
+
+/**
+ * Review Focus этапа 1: 20 сидов, включая пустой и "Бета-7" (почти вся вода / почти вся суша).
+ * Размер small, чтобы прогон оставался быстрым: переменный радиус моря зависит от расстояния до
+ * суши в клетках, и на small крошечные моря встречаются чаще.
+ */
+describe('sea provinces over 20 seeds (small)', () => {
+  const SEEDS = [...Array.from({ length: 17 }, (_, i) => String(i + 1)), '', 'Бета-7', 'worldbox'];
+  it.each(SEEDS)('seed %j: every sea gets a province, ids < 65535', { timeout: 60000 }, (seed) => {
+    const f = build(seed, {}, 'small');
+    const lake = findLakes(f.height, W, H);
+    let seaCells = 0;
+    for (let i = 0; i < W * H; i++) if (!f.land[i] && !lake[i]) seaCells++;
+    const sea = f.provinces.filter((p) => p.water === 'sea').length;
+    if (seaCells > 0) expect(sea).toBeGreaterThan(0);
+    expect(f.provinces.length).toBeLessThan(65535);
+    f.provinces.forEach((p, i) => expect(p.id).toBe(i));
+    for (let i = 0; i < W * H; i++) {
+      if (!f.land[i] && !lake[i] && f.provinces[f.provinceOf[i]!]!.water !== 'sea') throw new Error(`sea cell ${i}`);
+    }
   });
 });
