@@ -8,6 +8,8 @@ export interface Hotkey {
   /** Ключ перевода: что делает клавиша (список в панели F3). */
   nameKey: RuKey;
   action: () => void;
+  /** Срабатывает и при фокусе в поле ввода (F-клавиши: в поле они ничего не печатают). */
+  allowInInput?: boolean;
 }
 
 /** То, на что вешается обработчик (window; в тестах — подделка). */
@@ -25,7 +27,7 @@ export interface HotkeyActions {
 /** Все клавиши приложения. Новая клавиша — новая запись здесь (и перевод nameKey в ru.ts). */
 export function appHotkeys(a: HotkeyActions): Hotkey[] {
   return [
-    { id: 'debug', code: 'F3', nameKey: 'key.debug', action: a.toggleDebug },
+    { id: 'debug', code: 'F3', nameKey: 'key.debug', action: a.toggleDebug, allowInInput: true },
     { id: 'mapMode', code: 'KeyM', nameKey: 'key.mapMode', action: a.nextMapMode },
   ];
 }
@@ -43,7 +45,7 @@ function isEditable(target: unknown): boolean {
 }
 
 /**
- * Вешает один обработчик keydown на target (по умолчанию окно). Нажатия в полях ввода и
+ * Вешает один обработчик keydown на target (по умолчанию окно). Нажатия в полях ввода (кроме клавиш с allowInInput) и
  * сочетания с Ctrl/Alt/Meta пропускаются (они остаются браузеру). У своей клавиши отменяется
  * действие браузера (F3 — поиск по странице), автоповтор при удержании действие не вызывает.
  * Возвращает отписку.
@@ -55,9 +57,10 @@ export function registerHotkeys(list: readonly Hotkey[], target: KeyTarget = win
     byCode.set(h.code, h);
   }
   const onKey = (e: KeyboardEvent): void => {
-    if (e.ctrlKey || e.altKey || e.metaKey || isEditable(e.target)) return;
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
     const h = byCode.get(e.code);
     if (!h) return;
+    if (isEditable(e.target) && !h.allowInInput) return;
     e.preventDefault();
     if (!e.repeat) h.action();
   };

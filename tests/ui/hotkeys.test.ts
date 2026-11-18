@@ -92,6 +92,18 @@ describe('горячие клавиши', () => {
     expect(calls.mapMode).toBe(1);
   });
 
+  it('F3 работает в поле ввода и отменяет поиск браузера, буквенные клавиши — нет', () => {
+    const { list, calls } = counter();
+    const target = fakeTarget();
+    registerHotkeys(list, target);
+    const f3 = target.press({ code: 'F3', target: { tagName: 'INPUT' } });
+    expect(calls.debug).toBe(1);
+    expect(f3.defaultPrevented).toBe(true);
+    const m = target.press({ code: 'KeyM', target: { tagName: 'INPUT' } });
+    expect(calls.mapMode).toBe(0);
+    expect(m.defaultPrevented).toBe(false);
+  });
+
   it('сочетания с Ctrl/Alt/Meta и автоповтор не вызывают действие', () => {
     const { list, calls } = counter();
     const target = fakeTarget();
