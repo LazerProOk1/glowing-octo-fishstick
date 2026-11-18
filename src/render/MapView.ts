@@ -92,6 +92,7 @@ export class MapView {
         uBiomeColor: this.blank,
         uProvince: this.blank,
         uBorder: this.blank,
+        uCoastSd: this.blank,
         uPalette: this.blank,
         uAtlas: this.atlas,
         uProvData: this.blank,
@@ -158,6 +159,7 @@ export class MapView {
     res.uBiomeColor = next.biomeColor;
     res.uProvince = next.province;
     res.uBorder = next.border;
+    res.uCoastSd = next.coastSd;
     res.uPalette = next.palette;
     const resized = world.w !== this.map.w || world.h !== this.map.h;
     this.map = { w: world.w, h: world.h };

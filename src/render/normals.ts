@@ -10,7 +10,10 @@
 import { blur } from '../sim/geom/blur';
 
 export const NORMAL_SIGMA = 1.25;
-/** Light blur for the coastline: rounds the cell-scale zigzag of a near-binary shore. */
+/**
+ * Light blur of the height for the water depth tint near the coast. The coastline itself comes
+ * from the province cells (coastSignedDistance in bakeWorld.ts), not from this field.
+ */
 export const COAST_SIGMA = 0.7;
 
 /**

@@ -2,8 +2,7 @@
 // не блокировался на несколько секунд. Текстуры рельефа запекает вложенный воркер
 // параллельно рекам и провинциям; без вложенных воркеров они пекутся здесь же, после генерации.
 import type { BiomeDef } from '../content/biomes/types';
-import { bakeTextures } from '../render/bake';
-import { bakeSurface, bakeTransferables, type SurfaceBake, type WorldBake } from '../render/bakeWorld';
+import { bakeProvinces, bakeSurface, bakeTransferables, type SurfaceBake, type WorldBake } from '../render/bakeWorld';
 import { generateWorld } from '../sim/world/generateWorld';
 import type { World } from '../sim/world/types';
 import {
@@ -170,9 +169,9 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     const job: SurfaceJob | null = parallel;
     job?.startTimeout();
     enter('bake');
-    // Текстуры провинций зависят от всей генерации — их печём здесь, пока вложенный воркер
-    // доделывает рельеф; потом ждём его результата.
-    const own = bakeTextures(world);
+    // Текстуры провинций и берега зависят от всей генерации — их печём здесь, пока вложенный
+    // воркер доделывает рельеф; потом ждём его результата.
+    const own = bakeProvinces(world);
     const pending: Promise<SurfaceResult> | null = job ? job.result : null;
     let surface: SurfaceResult;
     try {

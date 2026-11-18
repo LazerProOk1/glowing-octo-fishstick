@@ -2,8 +2,9 @@
 // чтобы главный поток только загружал готовые массивы на GPU.
 import type { BiomeDef } from '../content/biomes/types';
 import { SEA_LEVEL } from '../content/terrainLevels';
-import type { World } from '../sim/world/types';
-import { bakeTextures } from './bake';
+import type { Province, World } from '../sim/world/types';
+import { borderDistance } from '../sim/geom/edt';
+import { bakeTextures, type BakedTextures } from './bake';
 import { bakeBiomeColors } from './biomeColors';
 import { toHalf, toHalfArray } from './halfFloat';
 import { blur } from '../sim/geom/blur';
@@ -19,10 +20,42 @@ export interface SurfaceBake {
 }
 
 /** Готовые пиксели текстур мира (раскладка каналов — см. WorldTextures в textures.ts). */
-export interface WorldBake extends SurfaceBake {
-  provinceRG: Uint8Array;
-  terrain: Uint8Array;
-  border: Uint8Array;
+export interface WorldBake extends SurfaceBake, ProvinceBake {}
+
+/** Текстуры, которые зависят от провинций (печём после всей генерации). */
+export interface ProvinceBake extends BakedTextures {
+  /** R16F: знаковое расстояние до берега в клетках (+ суша, − вода), см. coastSignedDistance. */
+  coastSd: Uint16Array;
+}
+
+/**
+ * Знаковое расстояние (в клетках) от центра клетки до границы «суша/вода» по клеткам провинций:
+ * больше 0 на суше, меньше 0 на воде. Береговая линия в шейдере — его нулевая линия, поэтому
+ * берег совпадает с клеточной границей сухопутных провинций (подсветка и заливка без лесенки).
+ */
+export function coastSignedDistance(
+  provinces: readonly Pick<Province, 'isLand'>[],
+  provinceOf: Uint16Array,
+  w: number,
+  h: number,
+): Float32Array {
+  const landOf = new Uint8Array(provinces.length);
+  provinces.forEach((p, id) => (landOf[id] = p.isLand ? 1 : 0));
+  const n = w * h;
+  const mask = new Uint16Array(n);
+  for (let i = 0; i < n; i++) mask[i] = landOf[provinceOf[i] as number] as number;
+  const d = borderDistance(mask, w, h);
+  for (let i = 0; i < n; i++) if (mask[i] === 0) d[i] = -(d[i] as number);
+  return d;
+}
+
+/** Текстуры провинций и берега. */
+export function bakeProvinces(world: World): ProvinceBake {
+  const { w, h } = world;
+  return {
+    ...bakeTextures(world),
+    coastSd: toHalfArray(coastSignedDistance(world.provinces, world.provinceOf, w, h)),
+  };
 }
 
 /** RGBA16F сразу в половинной точности, без промежуточного float32-массива на 8 млн значений. */
@@ -59,11 +92,8 @@ export function bakeSurface(
 
 export function bakeWorld(world: World, surface?: SurfaceBake): WorldBake {
   const { w, h } = world;
-  const baked = bakeTextures(world);
   return {
-    provinceRG: baked.provinceRG,
-    terrain: baked.terrain,
-    border: baked.border,
+    ...bakeProvinces(world),
     ...(surface ?? bakeSurface(world.height, world.biome, world.biomes, w, h)),
   };
 }
