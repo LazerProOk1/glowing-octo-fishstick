@@ -20,6 +20,10 @@ export default tseslint.config(
           patterns: [
             { group: ['pixi.js', 'pixi.js/*'], message: 'sim не должен зависеть от pixi.js' },
             { group: ['**/render', '**/render/**', '**/ui', '**/ui/**'], message: 'sim не должен импортировать render/ui' },
+            {
+              group: ['**/worker', '**/worker/**', '**/i18n', '**/i18n/**', '**/main', '**/main.ts'],
+              message: 'sim не должен импортировать worker, i18n и main',
+            },
           ],
         },
       ],
@@ -35,6 +39,10 @@ export default tseslint.config(
         { name: 'document', message: 'DOM в sim запрещён.' },
         { name: 'window', message: 'DOM в sim запрещён.' },
         { name: 'localStorage', message: 'DOM в sim запрещён.' },
+        { name: 'crypto', message: 'Источник случайности в sim запрещён: используйте детерминированный ГСЧ.' },
+        { name: 'self', message: 'Контекст воркера в sim запрещён.' },
+        { name: 'setTimeout', message: 'Таймеры в sim запрещены.' },
+        { name: 'fetch', message: 'Сеть в sim запрещена.' },
       ],
     },
   },
