@@ -39,10 +39,11 @@ function dt1d(
 
 /**
  * Distance (in cell units) from each cell center to the nearest border point.
- * Border points lie midway between 4-adjacent cells of different provinces.
+ * Border points lie midway between 4-adjacent cells with different values in `cells`
+ * (province ids, a land mask, any labelling). Without any border every cell gets w + h.
  * Computed as an exact EDT on a 2x grid (cell centers at even coordinates).
  */
-export function borderDistance(provinceOf: Uint16Array, w: number, h: number): Float32Array {
+export function borderDistance(cells: Uint16Array, w: number, h: number): Float32Array {
   const gw = 2 * w;
   // Column pass. The input is binary (0 on border points, INF elsewhere), so the 1D transform
   // along a column is just the squared distance to the nearest zero in that column: two linear
@@ -58,14 +59,14 @@ export function borderDistance(provinceOf: Uint16Array, w: number, h: number): F
     const gy = 2 * y;
     const o = y * gw;
     for (let x = 0; x < w; x++) {
-      const p = provinceOf[row + x] as number;
-      if (x + 1 < w && p !== provinceOf[row + x + 1]) last[2 * x + 1] = gy;
+      const p = cells[row + x] as number;
+      if (x + 1 < w && p !== cells[row + x + 1]) last[2 * x + 1] = gy;
     }
     for (let gx = 0; gx < gw; gx++) g[o + gx] = gy - (last[gx] as number);
     if (y + 1 < h) {
       const below = row + w;
       for (let x = 0; x < w; x++) {
-        if (provinceOf[row + x] !== provinceOf[below + x]) last[2 * x] = gy + 1;
+        if (cells[row + x] !== cells[below + x]) last[2 * x] = gy + 1;
       }
     }
   }
@@ -77,11 +78,11 @@ export function borderDistance(provinceOf: Uint16Array, w: number, h: number): F
     if (y + 1 < h) {
       const below = row + w;
       for (let x = 0; x < w; x++) {
-        if (provinceOf[row + x] !== provinceOf[below + x]) last[2 * x] = gy + 1;
+        if (cells[row + x] !== cells[below + x]) last[2 * x] = gy + 1;
       }
     }
     for (let x = 0; x + 1 < w; x++) {
-      if (provinceOf[row + x] !== provinceOf[row + x + 1]) last[2 * x + 1] = gy;
+      if (cells[row + x] !== cells[row + x + 1]) last[2 * x + 1] = gy;
     }
     for (let gx = 0; gx < gw; gx++) {
       const up = g[o + gx] as number;

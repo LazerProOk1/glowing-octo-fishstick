@@ -1,16 +1,6 @@
 import { MAX_BIOMES } from '../../content/biomes/types';
-import {
-  KIND_CORRIDOR as KIND_CORRIDOR_,
-  KIND_LAND as KIND_LAND_,
-  KIND_WATER as KIND_WATER_,
-  labelByKey,
-} from './provinceSeeds';
-
-// Imported constants copied to module locals: in hot loops, live import bindings can be slow
-// (e.g. under Vite/Vitest module transforms).
-const KIND_CORRIDOR = KIND_CORRIDOR_;
-const KIND_LAND = KIND_LAND_;
-const KIND_WATER = KIND_WATER_;
+import { labelByKey } from '../geom/label';
+import { KIND_CORRIDOR, KIND_LAND, KIND_WATER } from './provinceSeeds';
 
 /**
  * Post-passes over a province ownership grid. `owner` is -1 on corridor cells (major rivers) until

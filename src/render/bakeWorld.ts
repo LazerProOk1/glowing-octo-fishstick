@@ -6,7 +6,8 @@ import type { World } from '../sim/world/types';
 import { bakeTextures } from './bake';
 import { bakeBiomeColors } from './biomeColors';
 import { toHalf, toHalfArray } from './halfFloat';
-import { COAST_SIGMA, bakeGradient, blur, coastNearness } from './normals';
+import { blur } from '../sim/geom/blur';
+import { COAST_SIGMA, bakeGradient, coastNearness } from './normals';
 
 /** Текстуры, которые зависят только от высоты и биомов (готовы сразу после этапа берегов). */
 export interface SurfaceBake {

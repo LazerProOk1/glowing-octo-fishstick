@@ -1,16 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DETAIL_SLOT_NAMES, type BiomeDef, type PackManifest } from '../../src/content/biomes/types';
 import { BASE_PACK } from '../../src/content/packs/base/manifest';
-import { hsl, isFallback, resolveBiomes } from '../../src/content/registry';
+import { hsl, saturation } from '../../src/content/color';
+import { isFallback, resolveBiomes } from '../../src/content/registry';
 import { translate } from '../../src/i18n/ru';
-
-/** Насыщенность HSL цвета sRGB 0..255. */
-function saturation([r, g, b]: readonly [number, number, number]): number {
-  const max = Math.max(r, g, b) / 255;
-  const min = Math.min(r, g, b) / 255;
-  const l = (max + min) / 2;
-  return max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
-}
 
 /** Старый порядок кодов (до задачи 12): обычный мир обязан его сохранить. */
 const OLD_ORDER = [
@@ -42,7 +35,7 @@ describe('реестр биомов базового пака', () => {
     for (const b of all) {
       expect(b.color, b.id).toHaveLength(3);
       for (const v of b.color) expect(Number.isInteger(v) && v >= 0 && v <= 255, b.id).toBe(true);
-      expect(saturation(b.color), b.id).toBeLessThanOrEqual(0.45);
+      expect(saturation(...b.color), b.id).toBeLessThanOrEqual(0.45);
       expect(hsl(b.color).l, b.id).toBeGreaterThanOrEqual(0.2);
       expect(hsl(b.color).l, b.id).toBeLessThanOrEqual(0.9);
     }

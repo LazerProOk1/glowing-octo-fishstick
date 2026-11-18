@@ -1,10 +1,6 @@
-import { BIOME_SLOTS as BIOME_SLOTS_, MergeGraph, mergeSmallOn } from './provinceCleanup';
-
-// Imported constants copied to module locals (cheap access in hot loops under module transforms).
-const BIOME_SLOTS = BIOME_SLOTS_;
+import { BIOME_SLOTS, MergeGraph, mergeSmallOn } from './provinceCleanup';
 
 /** Terrain-purity passes over a province ownership grid (see provinces.ts). */
-
 
 export interface MergeOptions {
   minLand: number;

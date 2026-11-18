@@ -1,6 +1,6 @@
 import type { BiomeDef } from '../../content/biomes/types';
 import { hasTag } from '../../content/registry';
-import { labelComponents } from './provinceSeeds';
+import { labelComponents } from '../geom/label';
 import { SEA_LEVEL } from '../../content/terrainLevels';
 
 /** Land components (4-connected) smaller than this sink into shallow water. */
@@ -30,10 +30,15 @@ export function normalizeShoreline(
   const outH = new Float32Array(height);
   const outB = new Uint8Array(biomes);
   const isLand = (i: number): boolean => outH[i]! > SEA_LEVEL;
+  const landMask = (): Uint8Array => {
+    const m = new Uint8Array(n);
+    for (let i = 0; i < n; i++) m[i] = isLand(i) ? 1 : 0;
+    return m;
+  };
 
   // 1. Tiny islands -> shallow water.
   {
-    const { comp, sizes } = labelComponents(n, w, h, (a, b) => isLand(a) === isLand(b));
+    const { comp, sizes } = labelComponents(landMask(), w, h);
     for (let i = 0; i < n; i++) {
       if (isLand(i) && sizes[comp[i]!]! < MIN_ISLAND_CELLS) {
         outH[i] = SEA_LEVEL - SHORE_DELTA;
@@ -43,7 +48,7 @@ export function normalizeShoreline(
   }
 
   // 2. Small enclosed lakes -> land (labelled after step 1, so sunk islands join their water body).
-  const { comp, sizes } = labelComponents(n, w, h, (a, b) => isLand(a) === isLand(b));
+  const { comp, sizes } = labelComponents(landMask(), w, h);
   const touchesBorder = new Uint8Array(sizes.length);
   for (let x = 0; x < w; x++) {
     touchesBorder[comp[x]!] = 1;

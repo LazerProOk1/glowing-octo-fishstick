@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BASE_PACK } from '../../src/content/packs/base/manifest';
+import { hsl } from '../../src/content/color';
 import { MAP_COLORS, type RGB } from '../../src/render/palette';
-
-function hsl([r, g, b]: RGB): { s: number; l: number } {
-  const max = Math.max(r, g, b) / 255;
-  const min = Math.min(r, g, b) / 255;
-  const l = (max + min) / 2;
-  const s = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
-  return { s, l };
-}
 
 const all: Array<[string, RGB]> = [
   ...BASE_PACK.biomes.map((b): [string, RGB] => [b.id, b.color]),

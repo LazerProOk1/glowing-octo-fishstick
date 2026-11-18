@@ -1,5 +1,5 @@
 import type { BiomeDef } from '../content/biomes/types';
-import { blurInterleaved, gaussianKernel } from './normals';
+import { blurInterleaved } from '../sim/geom/blur';
 import { MAP_COLORS, type RGB } from './palette';
 
 /**
@@ -98,43 +98,33 @@ export function bakeBiomeColorsRect(
   sigma = BIOME_SIGMA,
 ): void {
   if (rect.w <= 0 || rect.h <= 0) return;
-  const k = gaussianKernel(sigma);
-  const r = (k.length - 1) / 2;
+  // Окно = прямоугольник ± радиус ядра, обрезанное краями карты. Клетки прямоугольника в окне
+  // берут все отводы ядра без обрезки, кроме тех сторон, где окно упирается в край карты, а там
+  // обрезка окна и карты совпадает: blurInterleaved по окну даёт для них ровно то же, что по карте.
+  const r = biomeBlurRadius(sigma);
+  const x0 = Math.max(0, rect.x - r);
+  const x1 = Math.min(w - 1, rect.x + rect.w - 1 + r);
+  const y0 = Math.max(0, rect.y - r);
+  const y1 = Math.min(h - 1, rect.y + rect.h - 1 + r);
+  const ww = x1 - x0 + 1;
+  const wh = y1 - y0 + 1;
   const lut = colorLut(defs);
-  const clampX = (x: number): number => (x < 0 ? 0 : x >= w ? w - 1 : x);
-  const clampY = (y: number): number => (y < 0 ? 0 : y >= h ? h - 1 : y);
-  // Горизонтальный проход для строк [y0, y1] (прямоугольник ± радиус, по карте) и столбцов прямоугольника.
-  const y0 = clampY(rect.y - r);
-  const y1 = clampY(rect.y + rect.h - 1 + r);
-  const rw = rect.w;
-  const tmp = new Float32Array((y1 - y0 + 1) * rw * 4);
+  const rgbc = new Float32Array(ww * wh * 4);
   for (let y = y0; y <= y1; y++) {
-    const row = y * w;
-    for (let dx = 0; dx < rw; dx++) {
-      const x = rect.x + dx;
-      const t = ((y - y0) * rw + dx) * 4;
-      for (let ch = 0; ch < 4; ch++) {
-        let s = 0;
-        for (let i = -r; i <= r; i++) {
-          const o = (biome[row + clampX(x + i)] as number) * 4;
-          // Вода в исходном поле — нули во всех каналах.
-          const v = lut[o + 3] === 0 ? 0 : (lut[o + ch] as number);
-          s += (k[i + r] as number) * v;
-        }
-        tmp[t + ch] = s;
-      }
+    for (let x = x0; x <= x1; x++) {
+      const o = (biome[y * w + x] as number) * 4;
+      if (lut[o + 3] === 0) continue;
+      const t = ((y - y0) * ww + (x - x0)) * 4;
+      rgbc[t] = lut[o] as number;
+      rgbc[t + 1] = lut[o + 1] as number;
+      rgbc[t + 2] = lut[o + 2] as number;
+      rgbc[t + 3] = 1;
     }
   }
-  const acc = new Float64Array(rw * 4);
-  const px = new Float32Array(rw * 4);
+  const blurred = blurInterleaved(rgbc, ww, wh, 4, sigma);
   for (let y = rect.y; y < rect.y + rect.h; y++) {
-    acc.fill(0);
-    for (let i = -r; i <= r; i++) {
-      const src = (clampY(y + i) - y0) * rw * 4;
-      const ki = k[i + r] as number;
-      for (let j = 0; j < rw * 4; j++) acc[j] = (acc[j] as number) + ki * (tmp[src + j] as number);
+    for (let x = rect.x; x < rect.x + rect.w; x++) {
+      writeColor(out, (y * w + x) * 4, blurred, ((y - y0) * ww + (x - x0)) * 4);
     }
-    px.set(acc);
-    for (let dx = 0; dx < rw; dx++) writeColor(out, (y * w + rect.x + dx) * 4, px, dx * 4);
   }
 }

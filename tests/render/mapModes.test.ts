@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { translate } from '../../src/i18n/ru';
-import { MAP_MODES, mapModeById, nextMapMode, saturation } from '../../src/render/mapModes';
+import { saturation } from '../../src/content/color';
+import { MAP_MODES, mapModeById, nextMapMode } from '../../src/render/mapModes';
 import { generateWorld } from '../../src/sim/world/generateWorld';
 import { defaultParams } from '../../src/sim/world/params';
 import type { World } from '../../src/sim/world/types';

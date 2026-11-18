@@ -2,6 +2,7 @@ import { createRng, type Rng } from '../rng';
 import { createNoise2D, fbm } from '../noise';
 import { MEDIUM_H } from './params';
 import { HILL_LEVEL, SEA_LEVEL } from '../../content/terrainLevels';
+import { boxBlurRows } from '../geom/blur';
 
 const EQUATOR_TEMP = 28;
 const POLE_TEMP = -25;
@@ -64,27 +65,6 @@ function sampleCoarse(fn: (u: number, v: number) => number, w: number, h: number
 
 /** Rows a rain-shadow streak is blurred over on a medium map (box radius, applied twice). */
 const SHADOW_BLUR = 4;
-
-/** In-place vertical box blur with radius r (clamped at the map edges), row-major running sums. */
-function blurRows(a: Float32Array, w: number, h: number, r: number): void {
-  const src = a.slice();
-  const sum = new Float32Array(w);
-  const row = (y: number): number => Math.min(h - 1, Math.max(0, y)) * w;
-  for (let y = -r; y <= r; y++) {
-    const o = row(y);
-    for (let x = 0; x < w; x++) sum[x] = (sum[x] ?? 0) + (src[o + x] ?? 0);
-  }
-  const k = 1 / (2 * r + 1);
-  for (let y = 0; y < h; y++) {
-    const o = y * w;
-    const add = row(y + r + 1);
-    const sub = row(y - r);
-    for (let x = 0; x < w; x++) {
-      a[o + x] = (sum[x] ?? 0) * k;
-      sum[x] = (sum[x] ?? 0) + (src[add + x] ?? 0) - (src[sub + x] ?? 0);
-    }
-  }
-}
 
 /** Distance (4-connected steps) from each cell to the nearest water cell; 0 on water. */
 function distanceToSea(height: Float32Array, w: number, h: number): Uint16Array {
@@ -236,8 +216,8 @@ export function computeClimate(
     shadow[i] = (shadowE[i] ?? 0) * (1 - westerly) + (shadowW[i] ?? 0) * westerly;
   }
   // Per-row sweeps leave shadow streaks with hard row edges; blur across rows so they fade out.
-  blurRows(shadow, w, h, shadowBlur);
-  blurRows(shadow, w, h, shadowBlur);
+  boxBlurRows(shadow, w, h, shadowBlur);
+  boxBlurRows(shadow, w, h, shadowBlur);
 
   const dist = distanceToSea(height, w, h);
   const moisture = new Float32Array(n);

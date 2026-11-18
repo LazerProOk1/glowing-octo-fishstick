@@ -2,7 +2,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { computeAdjacency, STRAIT_MAX_WATER } from '../../../src/sim/world/adjacency';
 import { generateWorld } from '../../../src/sim/world/generateWorld';
 import { defaultParams } from '../../../src/sim/world/params';
-import { SEA_LEVEL, type World } from '../../../src/sim/world/types';
+import type { World } from '../../../src/sim/world/types';
+import { SEA_LEVEL } from '../../../src/content/terrainLevels';
 import { MAJOR_RIVER } from './provinceMetrics';
 
 const key = (a: number, b: number): string => `${Math.min(a, b)}:${Math.max(a, b)}`;

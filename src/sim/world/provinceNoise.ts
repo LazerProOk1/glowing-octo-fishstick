@@ -2,9 +2,7 @@ import type { Rng } from '../rng';
 import { createNoise2D, fbm } from '../noise';
 import type { BiomeDef } from '../../content/biomes/types';
 import { hasTag } from '../../content/registry';
-import { KIND_LAND as KIND_LAND_ } from './provinceSeeds';
-
-const KIND_LAND = KIND_LAND_;
+import { KIND_LAND } from './provinceSeeds';
 
 /** Noise fields and the biome-edge jitter used by the province partition. */
 

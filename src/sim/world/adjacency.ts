@@ -1,11 +1,7 @@
 // Граф соседства провинций: рёбра с длиной общей границы и типом (река, пролив). Спец §7.3.
-import { MAJOR_RIVER as MAJOR_RIVER_ } from './provinces';
-import { SEA_LEVEL as SEA_LEVEL_ } from '../../content/terrainLevels';
+import { MAJOR_RIVER } from './provinces';
+import { SEA_LEVEL } from '../../content/terrainLevels';
 import type { ProvinceEdge } from './types';
-
-// Локальные копии импортов: в горячих циклах живые привязки модулей медленнее.
-const MAJOR_RIVER = MAJOR_RIVER_;
-const SEA_LEVEL = SEA_LEVEL_;
 
 /** Пролив: не больше стольких клеток воды по прямой между берегами (по диагонали — до 3/√2, т.е. 2). */
 export const STRAIT_MAX_WATER = 3;

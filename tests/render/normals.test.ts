@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bakeGradient, blur, blurInterleaved, coastNearness } from '../../src/render/normals';
+import { blur, blurInterleaved } from '../../src/sim/geom/blur';
+import { bakeGradient, coastNearness } from '../../src/render/normals';
 
 const W = 32;
 const H = 16;

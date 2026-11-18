@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { borderDistance } from '../../src/render/distanceField';
+import { borderDistance } from '../../../src/sim/geom/edt';
 
 describe('borderDistance', () => {
   it('8x8 из двух половин: столбцы 3 и 4 дают 0.5, столбец 0 дает 3.5', () => {

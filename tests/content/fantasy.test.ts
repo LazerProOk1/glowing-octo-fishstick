@@ -8,7 +8,8 @@ import { generateWorld } from '../../src/sim/world/generateWorld';
 import { generateHeight } from '../../src/sim/world/heightmap';
 import { normalizeShoreline } from '../../src/sim/world/shoreline';
 import { defaultParams, SIZE_PRESETS } from '../../src/sim/world/params';
-import { SEA_LEVEL, type World } from '../../src/sim/world/types';
+import type { World } from '../../src/sim/world/types';
+import { SEA_LEVEL } from '../../src/content/terrainLevels';
 import { purity } from '../sim/world/provinceMetrics';
 
 const { w: W, h: H } = SIZE_PRESETS.medium;

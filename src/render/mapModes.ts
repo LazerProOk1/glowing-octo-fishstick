@@ -20,16 +20,6 @@ export interface MapMode {
 /** Сила заливки по умолчанию: цвет режима заметен, а отмывка рельефа и детали остаются видны. */
 export const DEFAULT_FILL = 0.55;
 
-/** Насыщенность HSL цвета 0..255 (0 — серый, 1 — чистый тон). */
-export function saturation(r: number, g: number, b: number): number {
-  const max = Math.max(r, g, b) / 255;
-  const min = Math.min(r, g, b) / 255;
-  const d = max - min;
-  if (d === 0) return 0;
-  const l = (max + min) / 2;
-  return d / (1 - Math.abs(2 * l - 1));
-}
-
 function hslToRgb(h: number, s: number, l: number): ProvinceRGBA {
   const a = s * Math.min(l, 1 - l);
   const ch = (n: number): number => {

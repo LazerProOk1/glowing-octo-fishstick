@@ -1,9 +1,6 @@
 import type { BiomeDef } from '../../content/biomes/types';
 import type { WorldParams } from './params';
 
-// Уровни рельефа живут в content (условия биомов в паках задаются через них); здесь — для sim и render.
-export { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../../content/terrainLevels';
-
 export interface RiverPath {
   points: Array<{ x: number; y: number }>;
   /** Width per point, 1..4. */

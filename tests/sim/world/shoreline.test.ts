@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolveBiomes } from '../../../src/content/registry';
 import { normalizeShoreline as normalize } from '../../../src/sim/world/shoreline';
-import { SEA_LEVEL } from '../../../src/sim/world/types';
+import { SEA_LEVEL } from '../../../src/content/terrainLevels';
 
 const W = 40;
 const H = 20;

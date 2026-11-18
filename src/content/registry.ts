@@ -8,6 +8,7 @@ import {
   type GenOptions,
   type PackManifest,
 } from './biomes/types';
+import { hsl } from './color';
 import { BASE_PACK } from './packs/base/manifest';
 
 /** Все известные паки. Новый пак: src/content/packs/<id>/manifest.ts и строка здесь. */
@@ -28,14 +29,6 @@ export function isFallback(def: BiomeDef): boolean {
 /** Без этих биомов мир не собрать: запасной биом суши, глубокая и мелкая вода. */
 export function isRequired(def: BiomeDef): boolean {
   return (def.kind === 'land' && isFallback(def)) || hasTag(def, 'deepWater') || hasTag(def, 'shallowWater');
-}
-
-/** Насыщенность и светлота HSL цвета sRGB 0..255. */
-export function hsl([r, g, b]: readonly [number, number, number]): { s: number; l: number } {
-  const max = Math.max(r, g, b) / 255;
-  const min = Math.min(r, g, b) / 255;
-  const l = (max + min) / 2;
-  return { s: max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1)), l };
 }
 
 /** Проверка одного биома; бросает ошибку с id биома. */

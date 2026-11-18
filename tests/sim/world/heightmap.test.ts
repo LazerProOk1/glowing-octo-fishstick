@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRng } from '../../../src/sim/rng';
 import { generateHeight, countLandmasses } from '../../../src/sim/world/heightmap';
 import { SIZE_PRESETS } from '../../../src/sim/world/params';
-import { SEA_LEVEL, MOUNTAIN_LEVEL, HILL_LEVEL } from '../../../src/sim/world/types';
+import { SEA_LEVEL, MOUNTAIN_LEVEL, HILL_LEVEL } from '../../../src/content/terrainLevels';
 
 const { w: WORLD_W, h: WORLD_H } = SIZE_PRESETS.medium;
 

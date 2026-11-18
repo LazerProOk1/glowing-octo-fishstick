@@ -4,16 +4,10 @@ import { BucketQueue } from './bucketQueue';
 import { assignCorridor, fixFragments, pruneTendrils, smoothOwners } from './provinceCleanup';
 import { mergeProvinces, splitImpure } from './provinceTerrain';
 import { jitterBiomes, noiseField } from './provinceNoise';
-import { KIND_CORRIDOR as KIND_CORRIDOR_, KIND_LAND as KIND_LAND_, KIND_WATER as KIND_WATER_, labelByKey, poissonSeeds } from './provinceSeeds';
-import { SEA_LEVEL as SEA_LEVEL_ } from '../../content/terrainLevels';
+import { KIND_CORRIDOR, KIND_LAND, KIND_WATER, poissonSeeds } from './provinceSeeds';
+import { labelByKey } from '../geom/label';
+import { SEA_LEVEL } from '../../content/terrainLevels';
 import type { Province } from './types';
-
-// Imported constants copied to module locals: in hot loops, live import bindings can be slow
-// (e.g. under Vite/Vitest module transforms).
-const KIND_CORRIDOR = KIND_CORRIDOR_;
-const KIND_LAND = KIND_LAND_;
-const KIND_WATER = KIND_WATER_;
-const SEA_LEVEL = SEA_LEVEL_;
 
 /** Poisson-disk radius on land, tuned for ~3100-3200 land provinces (mean ~250 cells). */
 const LAND_RADIUS = 15.8;

@@ -18,7 +18,8 @@ import {
   strayMountainCells,
 } from './provinceMetrics';
 import { SIZE_PRESETS, type WorldSize } from '../../../src/sim/world/params';
-import { SEA_LEVEL, type Province } from '../../../src/sim/world/types';
+import type { Province } from '../../../src/sim/world/types';
+import { SEA_LEVEL } from '../../../src/content/terrainLevels';
 
 /**
  * Пороги качества провинций по размеру мира. Спец и настройка генератора — для medium. Материки и

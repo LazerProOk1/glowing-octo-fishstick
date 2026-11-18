@@ -5,7 +5,7 @@ import { generateHeight } from '../../../src/sim/world/heightmap';
 import { computeArcana, computeClimate } from '../../../src/sim/world/climate';
 import { classifyBiome, compileBiomes, computeBiomes } from '../../../src/sim/world/biomes';
 import { SIZE_PRESETS } from '../../../src/sim/world/params';
-import { SEA_LEVEL } from '../../../src/sim/world/types';
+import { SEA_LEVEL } from '../../../src/content/terrainLevels';
 
 const { w: WORLD_W, h: WORLD_H } = SIZE_PRESETS.medium;
 

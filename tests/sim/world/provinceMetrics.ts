@@ -1,7 +1,8 @@
 import type { BiomeDef } from '../../../src/content/biomes/types';
 import { hasTag } from '../../../src/content/registry';
 import { SIZE_PRESETS } from '../../../src/sim/world/params';
-import { SEA_LEVEL, type Province } from '../../../src/sim/world/types';
+import type { Province } from '../../../src/sim/world/types';
+import { SEA_LEVEL } from '../../../src/content/terrainLevels';
 
 /** Доля суши, к которой приводит генератор рельефа (TARGET_LAND в heightmap.ts). */
 const LAND_SHARE = 0.38;

@@ -1,5 +1,5 @@
 import type { World } from '../sim/world/types';
-import { borderDistance } from './distanceField';
+import { borderDistance } from '../sim/geom/edt';
 
 export function encodeProvinceId(id: number): [r: number, g: number] {
   return [id & 255, id >> 8];
