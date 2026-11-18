@@ -1,5 +1,6 @@
 import { BufferImageSource, ImageSource, type TextureSource } from 'pixi.js';
 import { MAX_BIOMES, type BiomeDef } from '../content/biomes/types';
+import { hasTag } from '../content/registry';
 import type { World } from '../sim/world/types';
 import { ATLAS_URL, DETAIL_SLOT_OF } from './assets';
 import { bakeWorld, type WorldBake } from './bakeWorld';
@@ -26,8 +27,13 @@ export interface WorldTextures {
   palette: TextureSource;
 }
 
-/** Альфа палитры: слот детали, а у водных биомов — этот маркер. */
+/** Альфа палитры: слот детали, а у водных биомов — этот маркер (море). */
 export const WATER_SLOT = 255;
+/**
+ * Маркер озёрной воды (биом с тегом lake). Всё, что ≥ LAKE_SLOT, — вода без детали; по нему шейдер
+ * отличает озеро от моря.
+ */
+export const LAKE_SLOT = 254;
 export const PALETTE_SIZE = MAX_BIOMES;
 
 /** RGBA8-источник из массива пикселей (альфа — данные, без премультипликации, без мипмапов). */
@@ -87,7 +93,7 @@ export function destroyWorldTextures(t: WorldTextures): void {
   t.palette.destroy();
 }
 
-/** Пиксели палитры: по коду биома RGB — цвет, A — слот детали атласа (у воды WATER_SLOT). */
+/** Пиксели палитры: по коду биома RGB — цвет, A — слот детали атласа (у моря WATER_SLOT, у озёр LAKE_SLOT). */
 export function paletteData(biomes: readonly BiomeDef[]): Uint8Array {
   const data = new Uint8Array(PALETTE_SIZE * 4);
   biomes.forEach((def, code) => {
@@ -95,7 +101,7 @@ export function paletteData(biomes: readonly BiomeDef[]): Uint8Array {
     data[o] = def.color[0];
     data[o + 1] = def.color[1];
     data[o + 2] = def.color[2];
-    data[o + 3] = def.kind === 'water' ? WATER_SLOT : DETAIL_SLOT_OF[def.detail];
+    data[o + 3] = hasTag(def, 'lake') ? LAKE_SLOT : def.kind === 'water' ? WATER_SLOT : DETAIL_SLOT_OF[def.detail];
   });
   return data;
 }

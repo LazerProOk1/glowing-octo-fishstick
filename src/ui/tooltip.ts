@@ -1,8 +1,19 @@
 import { t, translate } from '../i18n/ru';
-import type { World } from '../sim/world/types';
+import type { BiomeDef } from '../content/biomes/types';
+import type { Province, World } from '../sim/world/types';
 import { el } from './dom';
 
 const OFFSET = 14;
+
+/** Строка подсказки: биом, суша / море / вода (озеро), прибрежная; с заглавной буквы. */
+export function provinceInfo(p: Province, biomes: readonly BiomeDef[]): string {
+  const def = biomes.find((b) => b.id === p.biome);
+  const medium = p.water === 'lake' ? t('tip.water') : p.isLand ? t('tip.land') : t('tip.sea');
+  const parts = [def ? translate(def.nameKey) : p.biome, medium];
+  if (p.coastal) parts.push(t('tip.coastal'));
+  const s = parts.join(' · ');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 /** Небольшая подсказка у курсора: номер провинции; биом, суша/море, прибрежная. */
 export class ProvinceTooltip {
@@ -39,10 +50,7 @@ export class ProvinceTooltip {
       return;
     }
     this.titleEl.textContent = `${t('tip.province')} ${p.id}`;
-    const def = this.world?.biomes.find((b) => b.id === p.biome);
-    const parts = [def ? translate(def.nameKey) : p.biome, p.isLand ? t('tip.land') : t('tip.sea')];
-    if (p.coastal) parts.push(t('tip.coastal'));
-    this.infoEl.textContent = parts.join(' · ');
+    this.infoEl.textContent = provinceInfo(p, this.world?.biomes ?? []);
     this.update();
   }
 

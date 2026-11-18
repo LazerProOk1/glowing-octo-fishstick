@@ -6,6 +6,7 @@ import { mergeProvinces, splitImpure } from './provinceTerrain';
 import { jitterBiomes, noiseField } from './provinceNoise';
 import { KIND_CORRIDOR, KIND_LAND, KIND_WATER, poissonSeeds } from './provinceSeeds';
 import { labelByKey } from '../geom/label';
+import { findLakes } from './lakes';
 import { SEA_LEVEL } from '../../content/terrainLevels';
 import type { Province } from './types';
 
@@ -15,8 +16,11 @@ const LAND_RADIUS = 15.8;
 const SEA_RADIUS = LAND_RADIUS * 3;
 /** Land pieces smaller than this merge into a land neighbour (lone islands are exempt). */
 const MIN_LAND_CELLS = 40;
-/** Sea slivers smaller than this merge into a sea neighbour. */
-const MIN_SEA_CELLS = 800;
+/**
+ * Sea slivers smaller than this merge into a sea neighbour. Lakes are separate water bodies, so a
+ * lake smaller than this ends as a single province.
+ */
+export const MIN_SEA_CELLS = 800;
 /**
  * Target share of a land province's majority biome (spec: at least 80%; the margin absorbs the
  * later border smoothing and river cells).
@@ -79,6 +83,7 @@ const DY = [0, 1, 0, -1];
  * - Growth orders cells by the Euclidean distance to the seed measured in a smoothly domain-warped
  *   space plus the terrain penalty along the growth path (ascent, streams), so borders are smooth
  *   curves at any angle that follow ridges.
+ * - Lakes (`lake`, see findLakes) are water bodies of their own: no province mixes lake and sea cells.
  */
 export function computeProvinces(
   rng: Rng,
@@ -88,6 +93,7 @@ export function computeProvinces(
   w: number,
   h: number,
   defs: readonly BiomeDef[],
+  lake: Uint8Array = findLakes(height, w, h),
 ): { provinceOf: Uint16Array; provinces: Province[] } {
   const trueBiomes = biomes;
   const n = w * h;
@@ -130,8 +136,13 @@ export function computeProvinces(
   const owner = grow(seeds, wx, wy, height, biomes, riverMask, kind, w, h);
   const isLand: number[] = seeds.map((s) => (kind[s] === KIND_LAND ? 1 : 0));
   seedUnreached(owner, kind, biomes, isLand, w, h);
+  // Class for the 3x3 smoothing (8-neighbourhood): lake and sea water differ, so a lake cell touching
+  // the sea diagonally never changes hands. Other passes step only between 4-neighbours, and a lake
+  // is a whole 4-connected water body, so they never cross the lake shore.
   const cls = new Uint8Array(n);
-  for (let i = 0; i < n; i++) cls[i] = (kind[i]! << KIND_SHIFT) | (kind[i] === KIND_LAND ? biomes[i]! : 0);
+  for (let i = 0; i < n; i++) {
+    cls[i] = (kind[i]! << KIND_SHIFT) | (kind[i] === KIND_LAND ? biomes[i]! : lake[i]!);
+  }
   // Smooth borders at the cell scale (3x3 mode), then drop remaining 1-cell bumps and tendril tips.
   smoothOwners(owner, cls, w, h);
   pruneTendrils(owner, kind, w, h);
@@ -157,7 +168,7 @@ export function computeProvinces(
   merge(SPEC_PURITY, true, -1);
   splitImpure(owner, kind, trueBiomes, isLand, SPEC_PURITY, MIN_LAND_CELLS, w, h);
   fixFragments(owner, kind, isLand, w, h);
-  return finalize(owner, kind, trueBiomes, defs, isLand.length, w, h);
+  return finalize(owner, kind, lake, trueBiomes, defs, isLand.length, w, h);
 }
 
 /**
@@ -331,6 +342,7 @@ function seedUnreached(
 function finalize(
   owner: Int32Array,
   kind: Uint8Array,
+  lake: Uint8Array,
   biomes: Uint8Array,
   defs: readonly BiomeDef[],
   count: number,
@@ -351,6 +363,7 @@ function finalize(
   const sy = new Float64Array(m);
   const cells = new Int32Array(m);
   const isLand = new Uint8Array(m);
+  const isLake = new Uint8Array(m);
   const nbs: Array<Set<number>> = [];
   for (let p = 0; p < m; p++) nbs.push(new Set());
   for (let i = 0; i < n; i++) {
@@ -361,6 +374,7 @@ function finalize(
     sy[p] = sy[p]! + (i - x) / w;
     cells[p]!++;
     isLand[p] = kind[i] === KIND_WATER ? 0 : 1;
+    isLake[p] = lake[i]!;
     biomeCounts[p * k + biomes[i]!]!++;
   }
   const best = new Float64Array(m).fill(Infinity);
@@ -395,6 +409,7 @@ function finalize(
     provinces.push({
       id: p,
       isLand: isLand[p] === 1,
+      water: isLand[p] === 1 ? null : isLake[p] === 1 ? 'lake' : 'sea',
       cellCount: cells[p]!,
       center: { x: cx, y: (c - cx) / w },
       biome: defs[bi]!.id,

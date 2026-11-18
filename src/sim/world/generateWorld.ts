@@ -5,6 +5,7 @@ import { computeAdjacency } from './adjacency';
 import { computeBiomes } from './biomes';
 import { computeArcana, computeClimate } from './climate';
 import { generateHeight } from './heightmap';
+import { applyLakeBiome, findLakes } from './lakes';
 import { GEN_VERSION, genOptionsOf, SIZE_PRESETS, type WorldParams, type WorldSize } from './params';
 import { computeProvinces } from './provinces';
 import { computeRivers } from './rivers';
@@ -56,7 +57,11 @@ export function generateWorld(
   onStage?.('biomes');
   const rawBiomes = computeBiomes(defs, rawHeight, temperature, moisture, arcana);
   onStage?.('shoreline');
-  const { height, biomes } = normalizeShoreline(rawHeight, rawBiomes, w, h, defs);
+  const shore = normalizeShoreline(rawHeight, rawBiomes, w, h, defs);
+  const { height } = shore;
+  // Озёра — часть этапа берегов: биом озёр должен попасть в запекание поверхности.
+  const lake = findLakes(height, w, h);
+  const biomes = applyLakeBiome(shore.biomes, lake, defs);
   onSurface?.(height, biomes, defs, w, h);
   onStage?.('rivers');
   const { rivers, riverMask } = computeRivers(height, moisture, w, h);
@@ -69,6 +74,7 @@ export function generateWorld(
     w,
     h,
     defs,
+    lake,
   );
   assertProvinceCount(provinces.length);
   // Соседство — часть этапа провинций (десятки мс).

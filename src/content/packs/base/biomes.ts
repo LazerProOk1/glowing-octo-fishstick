@@ -143,3 +143,20 @@ export const BASE_BIOMES: BiomeDef[] = [
     when: { temperature: [above(24), Infinity], moisture: [above(0.7), Infinity] },
   },
 ];
+
+/**
+ * Озёра: вода замкнутых внутренних водоёмов (src/sim/world/lakes.ts). По условиям не выбирается
+ * (тег lake), поэтому `when` пуст. В паке идёт последним, после фэнтези: коды остальных биомов
+ * не сдвигаются.
+ */
+export const LAKE_BIOME: BiomeDef = {
+  id: 'lake',
+  nameKey: 'biome.lake',
+  kind: 'water',
+  fantasy: false,
+  color: [96, 124, 118],
+  detail: 'paper',
+  priority: 0,
+  when: {},
+  tags: ['lake'],
+};

@@ -2,7 +2,7 @@ import { ATLAS_GRID, DetailSlot } from './assets';
 import { MAP_COLORS, glslVec3 } from './palette';
 import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../content/terrainLevels';
 import { PROVINCE_FLAGS } from './provinceData';
-import { PALETTE_SIZE, WATER_SLOT } from './textures';
+import { LAKE_SLOT, PALETTE_SIZE, WATER_SLOT } from './textures';
 
 /** Число как литерал GLSL float. */
 const f = (n: number): string => n.toFixed(4);
@@ -62,7 +62,7 @@ uniform sampler2D uSurface;   // RGBA16F linear: RG blurred Sobel gradient per c
 uniform sampler2D uBiomeColor; // RGBA8 linear: blurred land palette colour, A land coverage
 uniform sampler2D uProvince;  // RGBA8: R,G id, B land
 uniform sampler2D uBorder;    // RGBA8: R distance * 32
-uniform sampler2D uPalette;   // ${PALETTE_SIZE}x1: rgb biome colour, a detail slot (255 = water)
+uniform sampler2D uPalette;   // ${PALETTE_SIZE}x1: rgb biome colour, a detail slot (255 = sea, 254 = lake)
 uniform sampler2D uAtlas;     // 4x4 grayscale detail tiles, mipmapped
 uniform sampler2D uProvData;  // RGBA8 per province id (row by row, uProvDataW wide): rgb fill, a flags
 
@@ -81,12 +81,15 @@ const float DETAIL_SPAN = ${f(DETAIL_SPAN_CELLS)};
 const float PAPER_SPAN = ${f(PAPER_SPAN_CELLS)};
 const float PAPER_SLOT = ${f(DetailSlot.PAPER)};
 const float WATER_SLOT = ${f(WATER_SLOT)};
+const float LAKE_SLOT = ${f(LAKE_SLOT)};
 const float MAX_LOD = 5.0;
 const float SLOT_GAIN[7] = float[7](${gains});
 const int FLAG_FILL = ${PROVINCE_FLAGS.FILL};
 
 const vec3 DEEP = ${glslVec3(MAP_COLORS.waterDeep)};
 const vec3 SHALLOW = ${glslVec3(MAP_COLORS.waterShallow)};
+const vec3 LAKE_DEEP = ${glslVec3(MAP_COLORS.lakeDeep)};
+const vec3 LAKE_SHALLOW = ${glslVec3(MAP_COLORS.lakeShallow)};
 const vec3 COAST_LINE = ${glslVec3(MAP_COLORS.coastLine)};
 const vec3 BORDER = ${glslVec3(MAP_COLORS.border)};
 const vec3 VOID_COLOR = ${glslVec3(MAP_COLORS.void)};
@@ -144,6 +147,42 @@ vec4 provFill(float id) {
   vec4 d = texelFetch(uProvData, ivec2(i % w, i / w), 0);
   float on = (int(round(d.a * 255.0)) & FLAG_FILL) != 0 ? 1.0 : 0.0;
   return vec4(d.rgb * on, on);
+}
+
+// Palette slot of a cell (detail slot, WATER_SLOT for sea, LAKE_SLOT for lake water).
+float slotAt(ivec2 c) {
+  int code = int(round(texelFetch(uTerrain, c, 0).g * 255.0));
+  return round(texelFetch(uPalette, ivec2(code, 0), 0).a * 255.0);
+}
+
+// Share of lake among the water cells around p (0 = sea, 1 = lake), from the biome codes: bilinear
+// over the 4 nearest cells; where those are all land (the smooth coastline can still show water
+// there), over the 3x3 cells around p. Lakes and the sea never touch along a cell edge.
+float lakeShare(vec2 pc, vec2 pw, vec2 p) {
+  float lakeW = 0.0;
+  float waterW = 0.0;
+  for (int i = 0; i < 4; i++) {
+    vec2 o = vec2(float(i & 1), float(i >> 1));
+    vec2 ow = mix(1.0 - pw, pw, o);
+    float wgt = ow.x * ow.y + 1e-4;
+    float slot = slotAt(cellAt(pc + o));
+    if (slot > LAKE_SLOT - 0.5) {
+      waterW += wgt;
+      if (slot < WATER_SLOT - 0.5) lakeW += wgt;
+    }
+  }
+  if (waterW == 0.0) {
+    for (int dy = -1; dy <= 1; dy++) {
+      for (int dx = -1; dx <= 1; dx++) {
+        float slot = slotAt(cellAt(p + vec2(float(dx), float(dy))));
+        if (slot > LAKE_SLOT - 0.5) {
+          waterW += 1.0;
+          if (slot < WATER_SLOT - 0.5) lakeW += 1.0;
+        }
+      }
+    }
+  }
+  return waterW > 0.0 ? lakeW / waterW : 0.0;
 }
 
 float bilin(vec4 v, vec2 w) {
@@ -255,9 +294,8 @@ void main() {
     vec2 o = vec2(float(i & 1), float(i >> 1));
     vec2 ow = mix(1.0 - bw, bw, o);
     float wgt = ow.x * ow.y;
-    int code = int(round(texelFetch(uTerrain, cellAt(bc + o), 0).g * 255.0));
-    float slot = round(texelFetch(uPalette, ivec2(code, 0), 0).a * 255.0);
-    if (slot < WATER_SLOT - 0.5) {
+    float slot = slotAt(cellAt(bc + o));
+    if (slot < LAKE_SLOT - 0.5) {
       wSum += wgt;
       detail += wgt * (atlasSample(slot, p, DETAIL_SPAN, lod) - 0.5) * SLOT_GAIN[int(slot)];
     }
@@ -280,10 +318,14 @@ void main() {
 
   // ---- water: calm. Deep slate, a lighter teal-grey band hugging the coast that fades within
   // ~3-6 cells (blurred land mask, sigma 3.5), a very gentle darkening over the open ocean.
+  // Lakes: lighter and greener, no open-water darkening, the shore band within ~2 cells
+  // (near is ~0.5 on the coastline and ~0.28 two cells out on a straight shore).
   float near = surf.a;
   vec3 water = mix(DEEP, SHALLOW, smoothstep(0.004, 0.45, near));
   float depth = max(-hc, 0.0);
   water *= 1.0 - 0.05 * smoothstep(0.1, 0.4, depth) * (1.0 - smoothstep(0.0, 0.1, near));
+  float lake = lakeShare(pc, pw, p);
+  if (lake > 0.0) water = mix(water, mix(LAKE_DEEP, LAKE_SHALLOW, smoothstep(0.28, 0.5, near)), lake);
   water = water * (1.0 - uFill * seaFill.a) + uFill * seaFill.rgb;
 
   vec3 col = mix(water, land, landMask);

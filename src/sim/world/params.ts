@@ -7,9 +7,10 @@ import { DEFAULT_PACKS } from '../../content/registry';
  * результат для тех же WorldParams (массивы мира, провинции, рёбра соседства, состав World) —
  * в том же коммите, вместе с обновлением отпечатка в tests/sim/world/fingerprint.test.ts.
  * Чистые оптимизации с побитно тем же результатом версию не меняют.
- * История: 1 — этапы 1–12; 2 — WorldParams, размер мира, граф соседства провинций.
+ * История: 1 — этапы 1–12; 2 — WorldParams, размер мира, граф соседства провинций;
+ * 3 — озёра, плотность морских провинций, граница джунглей (этап 1.5).
  */
-export const GEN_VERSION = 2;
+export const GEN_VERSION = 3;
 
 export type WorldSize = 'small' | 'medium' | 'large';
 

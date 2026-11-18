@@ -1,5 +1,5 @@
 import type { BiomeDef, Range } from '../../content/biomes/types';
-import { isFallback } from '../../content/registry';
+import { hasTag, isFallback } from '../../content/registry';
 import { SEA_LEVEL } from '../../content/terrainLevels';
 
 /** Измерения условий в порядке хранения: высота, температура, влажность, магичность. */
@@ -8,7 +8,8 @@ const DIMS = 4;
 /**
  * Список биомов, скомпилированный для классификации 2 млн клеток: плоские границы диапазонов
  * в порядке проверки. Сначала водные биомы, потом сухопутные; внутри — по убыванию приоритета
- * (при равенстве — по коду); запасной биом каждого вида — последним.
+ * (при равенстве — по коду); запасной биом каждого вида — последним. Озёрный биом (тег lake)
+ * в перебор не входит: его ставит findLakes/applyLakeBiome по форме водоёма.
  */
 export interface CompiledBiomes {
   /** Код биома (индекс в списке мира) по позиции проверки. */
@@ -23,6 +24,7 @@ export interface CompiledBiomes {
 export function compileBiomes(biomes: readonly BiomeDef[]): CompiledBiomes {
   const order = biomes
     .map((def, code) => ({ def, code }))
+    .filter(({ def }) => !hasTag(def, 'lake'))
     .sort((a, b) => {
       if (a.def.kind !== b.def.kind) return a.def.kind === 'water' ? -1 : 1;
       const fa = isFallback(a.def) ? 1 : 0;

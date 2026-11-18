@@ -38,17 +38,19 @@ const FINGERPRINT = {
     moisture: 'df0babb0',
     arcana: 'eaaa4394',
   },
-  genVersion: 2,
+  // v3 (озёра): биом lake на клетках замкнутых водоёмов — меняются biome и terrain (канал G);
+  // разбиение на провинции, высота, реки и рёбра те же.
+  genVersion: 3,
   world: {
     height: '9f842423',
-    biome: 'f90fce94',
+    biome: '789cae80',
     provinceOf: '73a46d57',
     riverMask: '61e3f25d',
     edges: '6230d3d0',
   },
   bake: {
     provinceRG: 'b9161d70',
-    terrain: '698d898a',
+    terrain: '6f9576fe',
     border: 'e29aa78f',
     bakeHeight: '8c184fb8',
     surface: 'a378f8da',
@@ -58,7 +60,7 @@ const FINGERPRINT = {
 
 /** Фэнтези включено (fantasy=1), размер small: ловит дрейф арканы и фэнтези-биомов. */
 const FANTASY_SMALL = {
-  world: { height: 'a62966d8', biome: '36782ea2', provinceOf: '73f1afc1', riverMask: '285b5862', edges: '7f60b8a5' },
+  world: { height: 'a62966d8', biome: '77a30566', provinceOf: '73f1afc1', riverMask: '285b5862', edges: '7f60b8a5' },
   climate: { temperature: '7911d17e', moisture: 'c26fbf9e', arcana: 'a5ff6b92' },
 };
 

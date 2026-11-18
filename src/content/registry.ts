@@ -20,15 +20,20 @@ export function hasTag(def: BiomeDef, tag: BiomeTag): boolean {
   return def.tags?.includes(tag) ?? false;
 }
 
-/** Запасной биом своего вида: без условий, подходит любой клетке. */
+/** Запасной биом своего вида: без условий, подходит любой клетке (озёрный биом — не запасной). */
 export function isFallback(def: BiomeDef): boolean {
   const w: BiomeConditions = def.when;
-  return w.height === undefined && w.temperature === undefined && w.moisture === undefined && w.arcana === undefined;
+  return !hasTag(def, 'lake') && w.height === undefined && w.temperature === undefined && w.moisture === undefined && w.arcana === undefined;
 }
 
-/** Без этих биомов мир не собрать: запасной биом суши, глубокая и мелкая вода. */
+/** Без этих биомов мир не собрать: запасной биом суши, глубокая и мелкая вода, озёра. */
 export function isRequired(def: BiomeDef): boolean {
-  return (def.kind === 'land' && isFallback(def)) || hasTag(def, 'deepWater') || hasTag(def, 'shallowWater');
+  return (
+    (def.kind === 'land' && isFallback(def)) ||
+    hasTag(def, 'deepWater') ||
+    hasTag(def, 'shallowWater') ||
+    hasTag(def, 'lake')
+  );
 }
 
 /** Проверка одного биома; бросает ошибку с id биома. */
@@ -48,6 +53,7 @@ export function validateBiome(def: BiomeDef): void {
   if (l < 0.2 || l > 0.9) fail('цвет слишком тёмный или светлый (светлота HSL вне 0.2..0.9)');
   if (!(DETAIL_SLOT_NAMES as readonly string[]).includes(def.detail)) fail(`нет слота атласа «${def.detail}»`);
   if (!Number.isFinite(def.priority)) fail('приоритет — конечное число');
+  if (hasTag(def, 'lake') && def.kind !== 'water') fail('биом с тегом lake должен быть водным');
   for (const [k, r] of Object.entries(def.when) as Array<[string, readonly [number, number] | undefined]>) {
     if (r === undefined) continue;
     if (!(r[0] < r[1])) fail(`условие ${k}: нужно min < max`);
@@ -91,7 +97,7 @@ export function resolveBiomes(options: GenOptions = {}, available: readonly Pack
       throw new Error(`нужен ровно один запасной биом вида ${kind} без условий, а их ${fallbacks.length}`);
     }
   }
-  for (const tag of ['deepWater', 'shallowWater'] as const) {
+  for (const tag of ['deepWater', 'shallowWater', 'lake'] as const) {
     if (!list.some((b) => b.kind === 'water' && hasTag(b, tag))) throw new Error(`нет водного биома с тегом ${tag}`);
   }
   return list;

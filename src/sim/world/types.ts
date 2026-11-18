@@ -11,6 +11,8 @@ export interface Province {
   /** Equals the index in the provinces array and the value in `provinceOf`. */
   id: number;
   isLand: boolean;
+  /** Вода провинции: 'sea' — море, 'lake' — озеро (замкнутый внутренний водоём), null — суша. */
+  water: 'sea' | 'lake' | null;
   cellCount: number;
   /** A cell of the province near its centroid (integer cell coordinates). */
   center: { x: number; y: number };
@@ -18,7 +20,7 @@ export interface Province {
   biome: string;
   /** Ids of 4-adjacent provinces (land and sea), ascending. */
   neighbors: number[];
-  /** Land province bordering a sea province. */
+  /** Land province bordering a water province (sea or lake). */
   coastal: boolean;
 }
 

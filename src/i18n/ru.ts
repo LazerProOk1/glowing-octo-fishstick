@@ -24,6 +24,7 @@ export const ru = {
   'tip.province': 'Провинция',
   'tip.land': 'суша',
   'tip.sea': 'море',
+  'tip.water': 'вода',
   'tip.coastal': 'прибрежная',
 
   'debug.title': 'Отладка',
@@ -63,6 +64,7 @@ export const ru = {
 
   'biome.ocean': 'океан',
   'biome.coast': 'побережье',
+  'biome.lake': 'озеро',
   'biome.plains': 'равнины',
   'biome.forest': 'лес',
   'biome.taiga': 'тайга',

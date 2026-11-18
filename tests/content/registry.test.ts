@@ -10,6 +10,8 @@ const OLD_ORDER = [
   'ocean', 'coast', 'plains', 'forest', 'taiga', 'tundra', 'glacier',
   'desert', 'steppe', 'swamp', 'hills', 'mountains', 'jungle',
 ];
+/** Озеро (GEN_VERSION 3) дописано в конец пака: старые коды не сдвигаются. */
+const DEFAULT_ORDER = [...OLD_ORDER, 'lake'];
 
 const all = BASE_PACK.biomes;
 const tagged = (tag: string): BiomeDef[] => all.filter((b) => (b.tags as readonly string[] | undefined)?.includes(tag));
@@ -86,14 +88,15 @@ describe('реестр биомов базового пака', () => {
 
 describe('resolveBiomes', () => {
   it('по умолчанию: базовые биомы в старом порядке кодов, без фэнтези', () => {
-    expect(resolveBiomes({}).map((b) => b.id)).toEqual(OLD_ORDER);
-    expect(resolveBiomes({ packs: ['base'], fantasy: false }).map((b) => b.id)).toEqual(OLD_ORDER);
+    expect(resolveBiomes({}).map((b) => b.id)).toEqual(DEFAULT_ORDER);
+    expect(resolveBiomes({ packs: ['base'], fantasy: false }).map((b) => b.id)).toEqual(DEFAULT_ORDER);
   });
 
   it('с фэнтези: фэнтези-биомы дописаны после базовых', () => {
     const ids = resolveBiomes({ fantasy: true }).map((b) => b.id);
     expect(ids.slice(0, OLD_ORDER.length)).toEqual(OLD_ORDER);
-    expect(ids.slice(OLD_ORDER.length).sort()).toEqual(['ash_wastes', 'crystal_mountains', 'magic_forest', 'mushroom_forest']);
+    expect(ids.slice(OLD_ORDER.length, -1).sort()).toEqual(['ash_wastes', 'crystal_mountains', 'magic_forest', 'mushroom_forest']);
+    expect(ids.at(-1)).toBe('lake');
   });
 
   it('выключенный биом убирается из списка', () => {
@@ -108,6 +111,16 @@ describe('resolveBiomes', () => {
     expect(() => resolveBiomes({ disabledBiomes: ['plains'] })).toThrow(/plains/);
     expect(() => resolveBiomes({ disabledBiomes: ['ocean'] })).toThrow(/ocean/);
     expect(() => resolveBiomes({ disabledBiomes: ['coast'] })).toThrow(/coast/);
+    expect(() => resolveBiomes({ disabledBiomes: ['lake'] })).toThrow(/lake/);
+  });
+
+  it('озеро: водный биом с тегом lake, не запасной; сушей быть не может', () => {
+    const lake = all.find((b) => b.id === 'lake')!;
+    expect(lake.kind).toBe('water');
+    expect(lake.tags).toContain('lake');
+    expect(isFallback(lake)).toBe(false);
+    const bad: PackManifest = { id: 'bad', nameKey: 'pack.x', version: '0', biomes: [], overrides: { lake: { kind: 'land' } } };
+    expect(() => resolveBiomes({ packs: ['base', 'bad'] }, [BASE_PACK, bad])).toThrow(/lake/);
   });
 
   it('неизвестный биом или пак — ошибка', () => {
@@ -135,7 +148,7 @@ describe('resolveBiomes', () => {
     };
     const list = resolveBiomes({ packs: ['base', 'test'] }, [BASE_PACK, pack]);
     expect(list.find((b) => b.id === 'forest')!.color).toEqual([100, 110, 90]);
-    expect(list.map((b) => b.id)).toEqual([...OLD_ORDER, 'heath']);
+    expect(list.map((b) => b.id)).toEqual([...DEFAULT_ORDER, 'heath']);
     // Базовый пак не изменился.
     expect(resolveBiomes({}).find((b) => b.id === 'forest')!.color).not.toEqual([100, 110, 90]);
   });

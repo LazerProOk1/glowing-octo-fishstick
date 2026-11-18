@@ -8,8 +8,11 @@ export type DetailSlotName = (typeof DETAIL_SLOT_NAMES)[number];
 /** Полуинтервал [min, max): min включительно, max не включительно; ±Infinity допустимы. */
 export type Range = readonly [min: number, max: number];
 
-/** Роли, на которые опирается генератор. */
-export type BiomeTag = 'mountain' | 'hill' | 'deepWater' | 'shallowWater';
+/**
+ * Роли, на которые опирается генератор. `lake` — вода озёр: такой биом не выбирается по условиям
+ * `when`, его получают клетки замкнутых внутренних водоёмов (src/sim/world/lakes.ts).
+ */
+export type BiomeTag = 'mountain' | 'hill' | 'deepWater' | 'shallowWater' | 'lake';
 
 /** Поля мира, по которым выбирается биом. */
 export interface BiomeConditions {
