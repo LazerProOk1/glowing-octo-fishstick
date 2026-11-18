@@ -86,6 +86,12 @@ function getSurfaceWorker(): Worker | null {
   return surfaceWorker;
 }
 
+interface SurfaceJob {
+  result: Promise<SurfaceResult>;
+  /** Запускает таймаут ожидания результата (вызывается, когда generateWorld закончил). */
+  startTimeout(): void;
+}
+
 /** Отправляет копии высоты и биомов во вложенный воркер; null — если его нет. */
 function startSurfaceBake(
   id: number,
@@ -94,7 +100,7 @@ function startSurfaceBake(
   defs: BiomeDef[],
   w: number,
   h: number,
-): Promise<SurfaceResult> | null {
+): SurfaceJob | null {
   const worker = getSurfaceWorker();
   if (!worker) return null;
   const req: SurfaceRequest = {
@@ -106,23 +112,33 @@ function startSurfaceBake(
     w,
     h,
   };
-  return new Promise<SurfaceResult>((resolve, reject) => {
-    const timer = setTimeout(
-      () => dropSurfaceWorker(worker, new Error('surface worker timed out'), true),
-      SURFACE_TIMEOUT_MS,
-    );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let settled = false;
+  const result = new Promise<SurfaceResult>((resolve, reject) => {
     surfacePending.set(id, {
       resolve: (r) => {
+        settled = true;
         clearTimeout(timer);
         resolve(r);
       },
       reject: (e) => {
+        settled = true;
         clearTimeout(timer);
         reject(e);
       },
     });
     worker.postMessage(req, [req.height.buffer, req.biome.buffer]);
   });
+  // Таймаут отсчитывается от конца generateWorld, а не от отправки запроса: вложенный воркер
+  // конкурирует с генерацией за процессор, и долгая генерация большого мира не должна его ронять.
+  const startTimeout = (): void => {
+    if (settled) return;
+    timer = setTimeout(
+      () => dropSurfaceWorker(worker, new Error('surface worker timed out'), true),
+      SURFACE_TIMEOUT_MS,
+    );
+  };
+  return { result, startTimeout };
 }
 
 scope.onmessage = (e) => {
@@ -147,15 +163,17 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     if (next) scope.postMessage({ v: PROTOCOL_VERSION, type: 'stage', id, stage: next });
   };
   try {
-    let parallel: Promise<SurfaceResult> | null = null;
+    let parallel = null as SurfaceJob | null;
     const world = generateWorld(params, enter, (height, biome, defs, w, h) => {
       parallel = startSurfaceBake(id, height, biome, defs, w, h);
     });
+    const job: SurfaceJob | null = parallel;
+    job?.startTimeout();
     enter('bake');
     // Текстуры провинций зависят от всей генерации — их печём здесь, пока вложенный воркер
     // доделывает рельеф; потом ждём его результата.
     const own = bakeTextures(world);
-    const pending: Promise<SurfaceResult> | null = parallel;
+    const pending: Promise<SurfaceResult> | null = job ? job.result : null;
     let surface: SurfaceResult;
     try {
       surface = pending ? await pending : bakeHere(world);
