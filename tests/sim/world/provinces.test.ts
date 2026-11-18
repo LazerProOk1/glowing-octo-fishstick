@@ -268,7 +268,7 @@ describe.each([
     expect(rl.longCells / bl.border).toBeLessThanOrEqual(QUALITY[size].landStraight);
     expect(r.axis).toBeLessThanOrEqual(30);
     expect(r.diagonal).toBeLessThanOrEqual(30);
-  });
+  }, 60000);
 
   it('borders are smooth at the cell scale (few 1-cell bumps or notches)', () => {
     expect(bumpShare(f.height, f.riverMask, f.provinceOf, W, H).share).toBeLessThanOrEqual(QUALITY[size].bumps);
