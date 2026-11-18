@@ -16,7 +16,7 @@ describe('encodeProvinceId', () => {
 function mkProvinces(): Province[] {
   const ps: Province[] = [];
   for (let id = 0; id <= 300; id++) {
-    ps.push({ id, isLand: id === 0, water: id === 0 ? null : 'sea', cellCount: 1, center: { x: 0, y: 0 }, biome: 'plains', neighbors: [], coastal: false });
+    ps.push({ id, isLand: id === 0, water: id === 0 ? null : 'sea', cellCount: 1, center: { x: 0, y: 0 }, biome: 'plains', neighbors: [], coastal: false, lakeside: false });
   }
   return ps;
 }

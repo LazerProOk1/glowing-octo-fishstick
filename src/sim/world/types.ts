@@ -20,8 +20,13 @@ export interface Province {
   biome: string;
   /** Ids of 4-adjacent provinces (land and sea), ascending. */
   neighbors: number[];
-  /** Land province bordering a water province (sea or lake). */
+  /**
+   * Сухопутная провинция у моря: граничит с провинцией `water === 'sea'`. Признак будущих портов
+   * и флота (флот по озёрам не ходит); берег озера сюда не входит.
+   */
   coastal: boolean;
+  /** Сухопутная провинция у озера: граничит с провинцией `water === 'lake'` (пресная вода, рыба). */
+  lakeside: boolean;
 }
 
 /** Ребро графа соседства провинций. */

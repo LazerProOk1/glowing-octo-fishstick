@@ -414,7 +414,8 @@ function finalize(
       center: { x: cx, y: (c - cx) / w },
       biome: defs[bi]!.id,
       neighbors,
-      coastal: isLand[p] === 1 && neighbors.some((q) => isLand[q] === 0),
+      coastal: isLand[p] === 1 && neighbors.some((q) => isLand[q] === 0 && isLake[q] === 0),
+      lakeside: isLand[p] === 1 && neighbors.some((q) => isLand[q] === 0 && isLake[q] === 1),
     });
   }
   return { provinceOf, provinces };

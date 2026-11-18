@@ -324,7 +324,9 @@ void main() {
   vec3 water = mix(DEEP, SHALLOW, smoothstep(0.004, 0.45, near));
   float depth = max(-hc, 0.0);
   water *= 1.0 - 0.05 * smoothstep(0.1, 0.4, depth) * (1.0 - smoothstep(0.0, 0.1, near));
-  float lake = lakeShare(pc, pw, p);
+  // Lake lookup (up to 13 texel pairs) only where water shows at all: at landMask 1 the water
+  // colour is multiplied by 0 below, so skipping it there leaves the picture identical.
+  float lake = landMask < 1.0 ? lakeShare(pc, pw, p) : 0.0;
   if (lake > 0.0) water = mix(water, mix(LAKE_DEEP, LAKE_SHALLOW, smoothstep(0.28, 0.5, near)), lake);
   water = water * (1.0 - uFill * seaFill.a) + uFill * seaFill.rgb;
 

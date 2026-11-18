@@ -191,10 +191,10 @@ describe.each([
     expect(mismatched).toBe(0);
   });
 
-  it('coastal is true exactly for land provinces bordering a sea province', () => {
+  it('coastal / lakeside: land provinces bordering a sea / a lake province', () => {
     for (const p of f.provinces) {
-      const expected = p.isLand && p.neighbors.some((q) => !f.provinces[q]!.isLand);
-      expect(p.coastal).toBe(expected);
+      expect(p.coastal).toBe(p.isLand && p.neighbors.some((q) => f.provinces[q]!.water === 'sea'));
+      expect(p.lakeside).toBe(p.isLand && p.neighbors.some((q) => f.provinces[q]!.water === 'lake'));
     }
   });
 

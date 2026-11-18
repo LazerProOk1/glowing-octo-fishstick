@@ -4,7 +4,7 @@ import type { Province } from '../../src/sim/world/types';
 import { provinceInfo } from '../../src/ui/tooltip';
 
 function province(p: Partial<Province>): Province {
-  return { id: 0, isLand: true, water: null, cellCount: 1, center: { x: 0, y: 0 }, biome: 'plains', neighbors: [], coastal: false, ...p };
+  return { id: 0, isLand: true, water: null, cellCount: 1, center: { x: 0, y: 0 }, biome: 'plains', neighbors: [], coastal: false, lakeside: false, ...p };
 }
 
 describe('provinceInfo', () => {

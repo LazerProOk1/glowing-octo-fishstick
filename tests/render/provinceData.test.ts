@@ -4,7 +4,7 @@ import { PROVINCE_FLAGS, ProvinceData, provinceDataLayout } from '../../src/rend
 import type { Province, World } from '../../src/sim/world/types';
 
 function province(id: number, isLand: boolean): Province {
-  return { id, isLand, water: isLand ? null : 'sea', cellCount: 1, center: { x: 0, y: 0 }, biome: 'plains', neighbors: [], coastal: false };
+  return { id, isLand, water: isLand ? null : 'sea', cellCount: 1, center: { x: 0, y: 0 }, biome: 'plains', neighbors: [], coastal: false, lakeside: false };
 }
 
 function fakeWorld(n: number): World {

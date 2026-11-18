@@ -116,6 +116,23 @@ describe('lake provinces (сид "1", medium)', () => {
     expect(lakes).toBeGreaterThan(0);
   });
 
+  it('coastal — только у моря, lakeside — у озера', () => {
+    const ps = world.provinces;
+    let lakeOnly = 0;
+    for (const p of ps) {
+      const sea = p.neighbors.some((q) => ps[q]!.water === 'sea');
+      const lakeNb = p.neighbors.some((q) => ps[q]!.water === 'lake');
+      expect(p.coastal, `провинция ${p.id}`).toBe(p.isLand && sea);
+      expect(p.lakeside, `провинция ${p.id}`).toBe(p.isLand && lakeNb);
+      if (p.isLand && lakeNb && !sea) {
+        lakeOnly++;
+        expect(p.coastal).toBe(false);
+        expect(p.lakeside).toBe(true);
+      }
+    }
+    expect(lakeOnly).toBeGreaterThan(0);
+  });
+
   it('озеро меньше минимальной морской провинции — одна провинция', () => {
     const { w, h } = world;
     const { comp, sizes } = labelComponents(lake, w, h);
