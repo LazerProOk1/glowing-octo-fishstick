@@ -20,7 +20,10 @@ License text: https://creativecommons.org/publicdomain/zero/1.0/
 
 ## Fonts
 
-- `fonts/EBGaramond-VariableFont_wght.ttf`, `fonts/EBGaramond-Italic-VariableFont_wght.ttf`:
-  EB Garamond, https://github.com/google/fonts/tree/main/ofl/ebgaramond
-  (SIL Open Font License 1.1, full text in `fonts/OFL.txt`). Used for map labels and UI text.
-- `fonts/OFL.txt`: license text of EB Garamond (SIL OFL 1.1).
+- `fonts/PT_Sans-Web-Regular.ttf`, `fonts/PT_Sans-Web-Bold.ttf`: PT Sans by ParaType
+  (https://www.paratype.com), from the google/fonts repository:
+  https://raw.githubusercontent.com/google/fonts/main/ofl/ptsans/PT_Sans-Web-Regular.ttf and
+  https://raw.githubusercontent.com/google/fonts/main/ofl/ptsans/PT_Sans-Web-Bold.ttf
+  (unmodified). License: SIL Open Font License 1.1, full text in `fonts/OFL.txt`. Used for UI text.
+- `fonts/OFL.txt`: license text of PT Sans (SIL OFL 1.1), from
+  https://raw.githubusercontent.com/google/fonts/main/ofl/ptsans/OFL.txt

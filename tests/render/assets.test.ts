@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
-import { ATLAS_GRID, DetailSlot, FONT_SERIF, TERRAIN_TEXTURES } from '../../src/render/assets';
+import { ATLAS_GRID, DetailSlot, FONT_UI, FONT_URLS, TERRAIN_TEXTURES } from '../../src/render/assets';
 import { BIOMES } from '../../src/sim/world/types';
 
 const ROOT = join(__dirname, '..', '..');
@@ -19,8 +19,10 @@ describe('TERRAIN_TEXTURES', () => {
       expect(slot).toBeLessThan(ATLAS_GRID * ATLAS_GRID);
     }
   });
-  it('exposes the serif font family', () => {
-    expect(FONT_SERIF).toBe('EB Garamond');
+  it('exposes the UI font family and its files', () => {
+    expect(FONT_UI).toBe('PT Sans');
+    expect(FONT_URLS.regular).toContain('PT_Sans-Web-Regular.ttf');
+    expect(FONT_URLS.bold).toContain('PT_Sans-Web-Bold.ttf');
   });
 });
 
@@ -102,6 +104,18 @@ describe('atlas tile statistics', () => {
   });
 });
 
+describe('fonts', () => {
+  it('ships PT Sans Regular and Bold as TrueType files with the OFL text', () => {
+    for (const f of ['PT_Sans-Web-Regular.ttf', 'PT_Sans-Web-Bold.ttf']) {
+      const buf = readFileSync(join(ASSETS, 'fonts', f));
+      expect(buf.readUInt32BE(0), f).toBe(0x00010000); // sfnt version 1.0 (TrueType)
+    }
+    const ofl = readFileSync(join(ASSETS, 'fonts', 'OFL.txt'), 'utf8');
+    expect(ofl).toContain('PT Sans');
+    expect(ofl).toContain('SIL Open Font License, Version 1.1');
+  });
+});
+
 describe('CREDITS.md', () => {
   it('mentions every asset file', () => {
     for (const dir of ['terrain', 'fonts']) {
@@ -111,7 +125,7 @@ describe('CREDITS.md', () => {
     }
   });
   it('mentions every source', () => {
-    for (const id of ['Grass005', 'Moss002', 'Ground054', 'Rock051', 'Snow010A', 'Ground087', 'Paper001', 'EB Garamond']) {
+    for (const id of ['Grass005', 'Moss002', 'Ground054', 'Rock051', 'Snow010A', 'Ground087', 'Paper001', 'PT Sans', 'ParaType']) {
       expect(credits, id).toContain(id);
     }
   });
