@@ -10,7 +10,7 @@ import { appHotkeys, registerHotkeys } from './ui/hotkeys';
 import { LoadingScreen } from './ui/loading';
 import { Notice } from './ui/notice';
 import { ProvinceTooltip } from './ui/tooltip';
-import type { WorldParams } from './sim/world/params';
+import { defaultParams, type WorldParams } from './sim/world/params';
 import { isSuperseded, requestWorld, type GenResult } from './worker/genClient';
 import { buildWorldUrl, parseWorldUrl } from './worldUrl';
 import './ui/styles.css';
@@ -165,7 +165,10 @@ async function start(root: HTMLElement): Promise<void> {
       if (isSuperseded(err)) return;
       console.error(err);
       loading.hide();
-      clearError = showError(root, t('error.generation'), errorDetail(err));
+      // Параметры из адреса могли быть неверными: и «Перезагрузить», и смена сида (F3) идут от
+      // мира по умолчанию для того же сида, а не от сломанных опций.
+      current = defaultParams(current.seed);
+      clearError = showError(root, t('error.generation'), errorDetail(err), requestKey(current));
     }
   };
 
@@ -191,6 +194,7 @@ async function start(root: HTMLElement): Promise<void> {
   await show(first.world);
 }
 
+document.title = t('app.title');
 const root = document.getElementById('app') ?? document.body;
 start(root).catch((err: unknown) => {
   console.error(err);
