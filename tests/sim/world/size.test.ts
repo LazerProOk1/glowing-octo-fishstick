@@ -47,10 +47,7 @@ describe('размер мира small', () => {
 // Большой мир генерируется ~10 с; запуск: WORLD_LARGE=1 npx vitest run tests/sim/world/size.test.ts
 describe.skipIf(!process.env.WORLD_LARGE)('размер мира large (дымовой тест)', () => {
   it('генерируется, провинций в пределах, id влезают в uint16', { timeout: 120000 }, () => {
-    const t = performance.now();
     const world = generateWorld(paramsOf('1', 'large'));
-    const ms = performance.now() - t;
-    console.log(`large: ${Math.round(ms)} мс, провинций ${world.provinces.length}, рёбер ${world.adjacency.length}`);
     expect([world.w, world.h]).toEqual([3072, 1536]);
     const b = provinceBounds(world.height, world.w, world.h);
     const c = counts(world);

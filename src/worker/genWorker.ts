@@ -89,6 +89,8 @@ interface SurfaceJob {
   result: Promise<SurfaceResult>;
   /** Запускает таймаут ожидания результата (вызывается, когда generateWorld закончил). */
   startTimeout(): void;
+  /** Отменяет задачу: вложенный воркер завершается (если ещё не ответил), следующий мир создаст нового. */
+  cancel(): void;
 }
 
 /** Отправляет копии высоты и биомов во вложенный воркер; null — если его нет. */
@@ -137,7 +139,15 @@ function startSurfaceBake(
       SURFACE_TIMEOUT_MS,
     );
   };
-  return { result, startTimeout };
+  const cancel = (): void => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    surfacePending.delete(id);
+    if (surfaceWorker === worker) surfaceWorker = undefined;
+    worker.terminate();
+  };
+  return { result, startTimeout, cancel };
 }
 
 scope.onmessage = (e) => {
@@ -161,8 +171,8 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     stepStart = now;
     if (next) scope.postMessage({ v: PROTOCOL_VERSION, type: 'stage', id, stage: next });
   };
+  let parallel = null as SurfaceJob | null;
   try {
-    let parallel = null as SurfaceJob | null;
     const world = generateWorld(params, enter, (height, biome, defs, w, h) => {
       parallel = startSurfaceBake(id, height, biome, defs, w, h);
     });
@@ -185,6 +195,9 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     const transfer = [...new Set([...collectTransferables(world), ...bakeTransferables(bake)])];
     scope.postMessage({ v: PROTOCOL_VERSION, type: 'done', id, world, bake, timings }, transfer);
   } catch (err) {
+    // Генерация упала, когда запекание рельефа уже шло: не оставляем вложенный воркер работать вхолостую.
+    const job: SurfaceJob | null = parallel;
+    job?.cancel();
     const message = err instanceof Error ? err.message : String(err);
     scope.postMessage({ v: PROTOCOL_VERSION, type: 'error', id, message });
   }

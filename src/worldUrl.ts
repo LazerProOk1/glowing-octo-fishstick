@@ -18,6 +18,7 @@ function normalizeOff(ids: readonly string[]): string[] {
   return [...new Set(ids)].sort();
 }
 
+/** Значения из URLSearchParams уже раскодированы (повторно не декодируем: «%41» в id остался бы «A»). Запятая разделяет id. */
 function list(raw: string | null): string[] {
   return (raw ?? '')
     .split(',')
@@ -40,8 +41,8 @@ export function parseWorldUrl(hash: string): WorldParams {
     const size = params.get('size') ?? DEFAULT_SIZE;
     out.options.size = isWorldSize(size) ? size : DEFAULT_SIZE;
     out.options.disabledBiomes = normalizeOff(list(params.get('off')));
-    const packs = list(params.get('packs'));
-    if (packs.length > 0) out.packs = packs;
+    // `packs=` с пустым списком — осознанный выбор «без паков», он переживает круг build → parse.
+    if (params.has('packs')) out.packs = list(params.get('packs'));
   }
   return out;
 }

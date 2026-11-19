@@ -16,9 +16,9 @@ describe('worldHash', () => {
     a = smallWorld('1');
   }, 60000);
 
-  // Эталон меняется вместе с отпечатком мира (правило GEN_VERSION, tests/sim/world/fingerprint.test.ts).
-  it('стабилен для сида "1", small', () => {
-    expect(worldHash(a)).toBe('1cbd4496');
+  // Эталонный хеш (литерал) лежит только в tests/sim/world/fingerprint.test.ts.
+  it('выглядит как 8 hex-символов', () => {
+    expect(worldHash(a)).toMatch(/^[0-9a-f]{8}$/);
   });
 
   it('совпадает у двух генераций с одними параметрами', () => {

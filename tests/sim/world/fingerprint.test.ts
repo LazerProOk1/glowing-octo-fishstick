@@ -3,17 +3,7 @@ import { bakeWorld, type WorldBake } from '../../../src/render/bakeWorld';
 import { generateWorld } from '../../../src/sim/world/generateWorld';
 import { defaultParams, GEN_VERSION } from '../../../src/sim/world/params';
 import type { World } from '../../../src/sim/world/types';
-
-/** FNV-1a (32 бита) по байтам массива. */
-function fnv1a(v: ArrayBufferView): string {
-  const bytes = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
-  let h = 0x811c9dc5;
-  for (let i = 0; i < bytes.length; i++) {
-    h ^= bytes[i]!;
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(16).padStart(8, '0');
-}
+import { fnv1a, worldHash } from '../../../src/sim/world/worldHash';
 
 /** Рёбра соседства одним массивом: a, b, length, riverLength, флаги (бит 0 — река, бит 1 — пролив). */
 function edgesBytes(world: World): Int32Array {
@@ -146,5 +136,16 @@ describe('отпечаток мира с фэнтези (сид "1", small, fant
     p.options.size = 'small';
     const world = generateWorld(p);
     expect({ world: worldHashes(world), climate: climateHashes(world) }, CHANGED).toEqual(FANTASY_SMALL);
+  }, 60000);
+});
+
+/** worldHash (хеш мира для сверки в онлайне) сида "1", small, без фэнтези — ещё один эталон, он же здесь. */
+const WORLD_HASH_SMALL = '1cbd4496';
+
+describe('worldHash сида "1", small', () => {
+  it('совпадает с эталоном', () => {
+    const p = defaultParams('1');
+    p.options.size = 'small';
+    expect(worldHash(generateWorld(p)), CHANGED).toBe(WORLD_HASH_SMALL);
   }, 60000);
 });

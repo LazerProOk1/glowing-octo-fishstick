@@ -52,4 +52,13 @@ describe('rng', () => {
     }
     expect([...seen].sort()).toEqual([3, 4, 5, 6]);
   });
+
+  it('int: нецелые аргументы и пустой диапазон — ошибка', () => {
+    const r = createRng('int-bad');
+    expect(() => r.int(1.5, 4)).toThrow(RangeError);
+    expect(() => r.int(1, 4.5)).toThrow(RangeError);
+    expect(() => r.int(3, 3)).toThrow(RangeError);
+    expect(() => r.int(5, 2)).toThrow(RangeError);
+    expect(() => r.int(0, Number.NaN)).toThrow(RangeError);
+  });
 });

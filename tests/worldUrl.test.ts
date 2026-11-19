@@ -51,7 +51,15 @@ describe('parseWorldUrl', () => {
   });
 
   it('лишние параметры и fantasy≠1 игнорируются', () => {
-    expect(parseWorldUrl('#abc?foo=bar&fantasy=0&off=&packs=')).toEqual(params('abc'));
+    expect(parseWorldUrl('#abc?foo=bar&fantasy=0&off=')).toEqual(params('abc'));
+  });
+
+  it('off= декодируется: закодированные id читаются так же, как обычные', () => {
+    expect(parseWorldUrl('#x?off=%D0%BB%D0%B5%D1%81,desert').options.disabledBiomes).toEqual(['desert', 'лес']);
+  });
+
+  it('packs= без значений — пустой список паков', () => {
+    expect(parseWorldUrl('#abc?packs=').packs).toEqual([]);
   });
 
   it('битая кодировка не роняет разбор', () => {
@@ -82,6 +90,13 @@ describe('buildWorldUrl', () => {
     const p = params('x', {}, ['base', 'ww2']);
     expect(buildWorldUrl(p)).toBe('#x?packs=base,ww2');
     expect(parseWorldUrl(buildWorldUrl(p))).toEqual(p);
+  });
+
+  it('пустой список паков и id биомов с «%», «+», кириллицей переживают круг', () => {
+    const p = params('x', { disabledBiomes: ['100%41', 'a+b', 'лес'].sort() }, []);
+    const url = buildWorldUrl(p);
+    expect(url).toContain('packs=');
+    expect(parseWorldUrl(url)).toEqual(p);
   });
 
   it('сид со знаком вопроса и амперсандом переживает круг', () => {

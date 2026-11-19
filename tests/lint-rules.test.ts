@@ -27,6 +27,22 @@ describe('правила ESLint для src/sim', () => {
     expect(errors.length).toBeGreaterThan(0);
   });
 
+  it('запрещает подпути pixi.js/* в src/sim', async () => {
+    for (const path of ['pixi.js/math-extras', 'pixi.js/unsafe-eval']) {
+      const errors = await lint(`import '${path}';
+`, 'src/sim/x.ts');
+      expect(errors.length, path).toBeGreaterThan(0);
+    }
+  });
+
+  it('запрещает DOM-глобалы document, window и localStorage в src/sim', async () => {
+    for (const code of ['document.title', 'window.innerWidth', 'localStorage.getItem("a")']) {
+      const errors = await lint(`export const x = () => ${code};
+`, 'src/sim/x.ts');
+      expect(errors.length, code).toBeGreaterThan(0);
+    }
+  });
+
   it('запрещает импорт из render и ui в src/sim', async () => {
     const a = await lint("import '../render/a';\n", 'src/sim/x.ts');
     const b = await lint("import '../ui/a';\n", 'src/sim/x.ts');

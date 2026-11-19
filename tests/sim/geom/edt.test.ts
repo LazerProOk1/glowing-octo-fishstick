@@ -27,6 +27,11 @@ describe('borderDistance', () => {
     expect(d[2]).toBeCloseTo(3.5, 5);
   });
 
+  it('шахматная доска 2x2: у каждой клетки граница в 0.5', () => {
+    const d = borderDistance(new Uint16Array([0, 1, 1, 0]), 2, 2);
+    for (let i = 0; i < 4; i++) expect(d[i], `клетка ${i}`).toBeCloseTo(0.5, 5);
+  });
+
   it('одна провинция: расстояние большое и конечное по размеру', () => {
     const d = borderDistance(new Uint16Array(16), 4, 4);
     expect(Number.isFinite(d[0])).toBe(true);

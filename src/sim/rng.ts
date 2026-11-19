@@ -51,6 +51,9 @@ export function createRng(seed: string): Rng {
   return {
     next,
     int(min, maxExcl) {
+      if (!Number.isInteger(min) || !Number.isInteger(maxExcl) || maxExcl <= min) {
+        throw new RangeError(`rng.int needs integers with maxExcl > min, got (${min}, ${maxExcl})`);
+      }
       return min + Math.floor(next() * (maxExcl - min));
     },
     fork(label) {

@@ -19,9 +19,9 @@ export function gaussianKernel(sigma: number): Float32Array {
 }
 
 /**
- * Separable Gaussian blur with edge clamping.
- * Interior taps run without bounds checks; the vertical pass accumulates whole rows
- * (contiguous memory) in a Float64 row buffer, so precision matches a scalar double sum.
+ * Разделимое гауссово размытие с продлением краёв (clamp).
+ * Внутри карты отсчёты считаются без проверки границ; вертикальный проход копит целые строки
+ * (память идёт подряд) в буфере Float64, поэтому точность как у скалярной суммы в double.
  */
 export function blur(src: Float32Array, w: number, h: number, sigma: number): Float32Array {
   const k = gaussianKernel(sigma);
@@ -63,9 +63,9 @@ export function blur(src: Float32Array, w: number, h: number, sigma: number): Fl
 }
 
 /**
- * The same blur for `c` interleaved channels (src.length = w·h·c) in one sweep: per channel the
- * taps and their summation order are exactly those of `blur`, so each channel matches it bit for
- * bit; the loops over the map run once instead of c times.
+ * То же размытие для `c` чередующихся каналов (длина src = w·h·c) за один проход: у каждого канала
+ * отсчёты и порядок сложения те же, что в `blur`, поэтому канал совпадает с ним бит в бит;
+ * циклы по карте идут один раз, а не c раз.
  */
 export function blurInterleaved(src: Float32Array, w: number, h: number, c: number, sigma: number): Float32Array {
   const k = gaussianKernel(sigma);
@@ -110,8 +110,8 @@ export function blurInterleaved(src: Float32Array, w: number, h: number, c: numb
 }
 
 /**
- * In-place vertical box blur with radius r (clamped at the map edges), row-major running sums
- * in float32. Не гаусс: скользящее среднее по 2r+1 строкам (климат дважды размывает им полосы
+ * Вертикальное размытие окном радиуса r на месте (края продлеваются), скользящие суммы по строкам
+ * в float32. Не гаусс: скользящее среднее по 2r+1 строкам (климат дважды размывает им полосы
  * дождевой тени).
  */
 export function boxBlurRows(a: Float32Array, w: number, h: number, r: number): void {
