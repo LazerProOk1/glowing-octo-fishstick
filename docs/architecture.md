@@ -1,124 +1,124 @@
-# Архитектура
+# Architecture
 
-Краткое описание устройства кода этапа 1 (карта мира). Подробный дизайн игры — в
-[спецификации](superpowers/specs/2026-11-16-settlement-strategy-design.md), §7.
+A short description of how the stage 1 code (world map) is laid out. The detailed game design is in the
+[spec](superpowers/specs/2026-11-16-settlement-strategy-design.md), §7.
 
-## Модули
+## Modules
 
-| Каталог | Что внутри | Может зависеть от |
+| Directory | What is inside | May depend on |
 | --- | --- | --- |
-| `src/sim` | Детерминированное ядро: ГСЧ, шум, генерация мира (`sim/world`). Тот же `WorldParams` даёт тот же мир побитно. | `content` |
-| `src/game` | Пока пусто (`README.md`). Игровая логика этапа 2: только целые числа или фиксированная точка. | `sim`, `content` |
-| `src/content` | Данные игры: биомы, паки (`content/packs`), реестр паков, уровни рельефа. Названия — ключи перевода, не текст. | — |
-| `src/render` | Всё, что рисует карту: запекание текстур, шейдер, камера, реки, режимы карты, `MapView` (PixiJS). | `sim`, `content` |
-| `src/ui` | DOM-интерфейс: экран загрузки, подсказка, панель отладки, ошибки, реестр горячих клавиш, стили. | `i18n`, `sim` (типы), `worker` (типы этапов) |
-| `src/worker` | Воркер генерации, вложенный воркер текстур рельефа, клиент и протокол сообщений. | `sim`, `content`, `render` (запекание) |
-| `src/i18n` | Строки интерфейса и переводы названий контента (`ru.ts`). | — |
+| `src/sim` | Deterministic core: RNG, noise, world generation (`sim/world`). The same `WorldParams` give the same world bit for bit. | `content` |
+| `src/game` | Empty for now (`README.md`). Stage 2 game logic: integers or fixed point only. | `sim`, `content` |
+| `src/content` | Game data: biomes, packs (`content/packs`), pack registry, terrain levels. Names are translation keys, not text. | — |
+| `src/render` | Everything that draws the map: texture baking, shader, camera, rivers, map modes, `MapView` (PixiJS). | `sim`, `content` |
+| `src/ui` | DOM interface: loading screen, tooltip, debug panel, errors, hotkey registry, styles. | `i18n`, `sim` (types), `worker` (stage types) |
+| `src/worker` | Generation worker, nested terrain-texture worker, client and message protocol. | `sim`, `content`, `render` (baking) |
+| `src/i18n` | Interface strings and translations of content names (`ru.ts`). | — |
 
-`src/main.ts` собирает всё вместе, `src/worldUrl.ts` переводит адрес страницы в `WorldParams` и обратно.
+`src/main.ts` assembles everything, `src/worldUrl.ts` converts the page address to `WorldParams` and back.
 
-Ограничения проверяются ESLint и тестами:
+The restrictions are enforced by ESLint and tests:
 
-- `src/sim/**` не импортирует `render`, `ui`, `pixi.js`, не обращается к DOM, `Math.random`, `Date`, `performance`.
-- `src/game/**` подчиняется тем же правилам, что `src/sim/**`, и вдобавок не вызывает функции `Math`,
-  которые движок считает приближённо (`Math.sin`, `Math.pow`, `Math.log` и т. п., `**` с нецелой
-  степенью). Обычная арифметика и `Math.sqrt` разрешены: они точные.
-- В `src/ui/*.ts` нет кириллицы в строковых литералах: все строки — ключи из `src/i18n/ru.ts`.
+- `src/sim/**` does not import `render`, `ui`, `pixi.js`, and does not touch the DOM, `Math.random`, `Date`, `performance`.
+- `src/game/**` obeys the same rules as `src/sim/**` and additionally does not call `Math` functions that the
+  engine treats as approximate (`Math.sin`, `Math.pow`, `Math.log` and the like, `**` with a non-integer
+  exponent). Ordinary arithmetic and `Math.sqrt` are allowed: they are exact.
+- `src/ui/*.ts` has no Cyrillic in string literals: all strings are keys from `src/i18n/ru.ts`.
 
-## Поток данных
+## Data flow
 
-1. **Параметры.** `parseWorldUrl(location.hash)` даёт `WorldParams`: версия генератора, сид, паки, опции
-   (фэнтези, выключенные биомы, размер). Без сида выбирается случайный и записывается в адрес.
-2. **Запрос.** `requestWorld(params)` (`worker/genClient.ts`) отправляет запрос воркеру. Новый запрос
-   останавливает воркер со старым, обещание старого отклоняется `SupersededError`.
-3. **Генерация.** `genWorker.ts` вызывает `generateWorld`: рельеф, климат, биомы, береговая линия, реки,
-   провинции и граф соседства. После береговой линии высота и биомы уходят во вложенный воркер
-   (`surfaceWorker.ts`), который печёт текстуры рельефа параллельно рекам и провинциям.
-4. **Запекание.** Воркер генерации печёт карты владельцев провинций для суши и для воды
-   (`render/bake.ts`, `render/bakeWorld.ts`; границы шейдер строит по ним сам), дожидается
-   текстур рельефа и отправляет мир и все массивы текстур в главный поток передачей, без копирования.
-   Этапы по ходу работы приходят клиенту и показываются на экране загрузки.
-5. **Показ.** `MapView.setWorld(world, bake)` создаёт GPU-текстуры (`render/textures.ts`) и текстуру
-   данных провинций (`render/provinceData.ts`) с цветами текущего режима карты.
-6. **Кадр.** Один полноэкранный quad с шейдером `render/mapShader.ts`: биомы, детали из атласа, отмывка
-   рельефа, вода, береговая линия, заливка режима карты, границы провинций, подсветка под курсором.
-   Реки — отдельный слой поверх (`render/riverLayer.ts`). Камера меняет только uniform-ы; на
-   кадре загружаются только изменённые тексели данных провинций. Исключение — слой рек:
-   `RiverLayer.update` перестраивает `Graphics` рек, когда зум переходит границу ступени ширины,
-   то есть при таком переходе выделения происходят.
+1. **Params.** `parseWorldUrl(location.hash)` yields `WorldParams`: generator version, seed, packs, options
+   (fantasy, disabled biomes, size). Without a seed a random one is picked and written to the address.
+2. **Request.** `requestWorld(params)` (`worker/genClient.ts`) sends a request to the worker. A new request
+   stops the worker busy with the old one, and the old promise rejects with `SupersededError`.
+3. **Generation.** `genWorker.ts` calls `generateWorld`: terrain, climate, biomes, shoreline, rivers,
+   provinces and the adjacency graph. After the shoreline, height and biomes go to the nested worker
+   (`surfaceWorker.ts`), which bakes the terrain textures in parallel with rivers and provinces.
+4. **Baking.** The generation worker bakes the province owner maps for land and for water
+   (`render/bake.ts`, `render/bakeWorld.ts`; the shader builds the borders from them itself), waits for the
+   terrain textures and sends the world and all texture arrays to the main thread by transfer, without
+   copying. Stages arrive at the client as the work goes on and are shown on the loading screen.
+5. **Display.** `MapView.setWorld(world, bake)` creates the GPU textures (`render/textures.ts`) and the
+   province data texture (`render/provinceData.ts`) with the colours of the current map mode.
+6. **Frame.** One full-screen quad with the `render/mapShader.ts` shader: biomes, details from the atlas,
+   terrain shading, water, shoreline, map mode fill, province borders, highlight under the cursor.
+   Rivers are a separate layer on top (`render/riverLayer.ts`). The camera only changes uniforms; per
+   frame only the changed texels of the province data are uploaded. The exception is the river layer:
+   `RiverLayer.update` rebuilds the river `Graphics` when the zoom crosses a width-step boundary,
+   so allocations happen on such a crossing.
 
-Производные данные (всё, что строится из мира только для отрисовки) собраны в `render/derived.ts`:
-`buildDerived` строит их целиком, `updateDerivedRect` пересчитывает прямоугольник после правки клеток
-и возвращает записанную область; `MapView.updateRegion(rect)` загружает на GPU строки, которые она задевает.
+Derived data (everything built from the world for drawing only) is collected in `render/derived.ts`:
+`buildDerived` builds it whole, `updateDerivedRect` recomputes a rectangle after cell edits and returns the
+written area; `MapView.updateRegion(rect)` uploads to the GPU the rows that it touches.
 
-### Протокол воркеров
+### Worker protocol
 
-Все сообщения в обе стороны, включая вложенный воркер, несут поле `v: PROTOCOL_VERSION`
-(`worker/protocol.ts`). Сообщение другой версии не разбирается: клиент отклоняет запрос с ошибкой и
-останавливает воркер, воркер отвечает сообщением об ошибке. При изменении формы сообщений
-`PROTOCOL_VERSION` поднимается на 1.
+All messages in both directions, including the nested worker, carry `v: PROTOCOL_VERSION`
+(`worker/protocol.ts`). A message of another version is not parsed: the client rejects the request with an
+error and stops the worker, the worker replies with an error message. When the message shape changes,
+`PROTOCOL_VERSION` is bumped by 1.
 
-## Правило GEN_VERSION
+## GEN_VERSION rule
 
-`GEN_VERSION` (`sim/world/params.ts`) поднимается на 1 при любом изменении генерации, которое меняет
-результат для тех же `WorldParams`: массивы мира, провинции, рёбра соседства, состав `World`.
-В том же коммите обновляется отпечаток в `tests/sim/world/fingerprint.test.ts` — это единственное место
-с ожидаемыми хешами. Оптимизации с побитно тем же результатом версию не меняют. Изменения отрисовки
-(шейдер, палитра, запекание) версию тоже не меняют: они не трогают сам мир.
+`GEN_VERSION` (`sim/world/params.ts`) is bumped by 1 on any generation change that alters the result for the
+same `WorldParams`: world arrays, provinces, adjacency edges, the contents of `World`.
+In the same commit the fingerprint in `tests/sim/world/fingerprint.test.ts` is updated — that is the only
+place with expected hashes. Optimisations with a bit-identical result do not change the version. Render
+changes (shader, palette, baking) do not change the version either: they do not touch the world itself.
 
-История версий:
+Version history:
 
-- v1: этапы 1–12.
-- v2: `WorldParams`, размер мира, граф соседства провинций.
-- v3: озёра, плотность морских провинций, граница джунглей.
+- v1: stages 1–12.
+- v2: `WorldParams`, world size, province adjacency graph.
+- v3: lakes, sea-province density, jungle edge.
 
-Детерминизм побитовый в пределах одного движка JS (одного браузера и версии). `Math.pow`, `Math.exp`,
-`Math.sin` и подобные не обязаны давать побитово одинаковый результат в разных движках, поэтому
-хэши отпечатка проверены только на движке тестов. Генерацию мира на целые числа не переводим: вместо
-этого игроки онлайн-партии сверяют `worldHash` (см. «Готовность к этапу 2»). Достаточно разницы в
-последнем бите высоты одной клетки, чтобы хеш не совпал и мир пришлось целиком прислать от хоста.
+Determinism is bit-exact within one JS engine (one browser and version). `Math.pow`, `Math.exp`,
+`Math.sin` and the like are not required to give a bit-identical result in different engines, so the
+fingerprint hashes are verified only on the test engine. We do not move world generation to integers;
+instead, players in an online game compare `worldHash` (see "Readiness for stage 2"). A difference in the
+last bit of one cell's height is enough for the hash to differ, and then the whole world has to be sent by
+the host.
 
-## Готовность к этапу 2
+## Readiness for stage 2
 
-Игровой логики ещё нет, поэтому дешёвые правила закрепляем сейчас, пока их не надо переделывать.
-Короткие слова, которые встречаются ниже:
+There is no game logic yet, so the cheap rules are pinned down now, while they do not have to be redone.
+Short words used below:
 
-- **Тик** — один шаг игрового времени (у нас «день»). Вся игра — это последовательность тиков.
-- **Фиксированная точка** — дробные величины хранятся целыми числами в мелких единицах
-  (например, еда в сотых долях: 1,25 хранится как 125).
-- **Снимок** — копия данных на один момент (мир или состояние партии), которую можно сохранить или
-  переслать.
-- **Рассинхрон** — у игроков онлайн-партии состояние разошлось, и каждый видит свою игру.
-- **Линтер** (ESLint) — программа, которая читает код и ругается на запрещённые конструкции до запуска.
+- **Tick** — one step of game time (here a "day"). The whole game is a sequence of ticks.
+- **Fixed point** — fractional values stored as integers in small units
+  (for example, food in hundredths: 1.25 is stored as 125).
+- **Snapshot** — a copy of the data at one moment (the world or the game state) that can be saved or sent.
+- **Desync** — players in an online game have diverged, and each sees their own game.
+- **Linter** (ESLint) — a program that reads code and complains about forbidden constructs before it runs.
 
-Почему обычная арифметика безопасна. Стандарт чисел с плавающей точкой (IEEE 754) требует, чтобы
-`+ − × ÷` и `Math.sqrt` округлялись точно, поэтому любой браузер даёт одинаковые биты. Функции вроде
-`Math.sin`, `Math.pow`, `Math.log` стандарт не фиксирует: браузеры считают их приближённо и по-разному.
-Линтер в `src/game` запрещает именно такие функции (`pow`, `exp`, `expm1`, `log`, `log2`, `log10`,
+Why ordinary arithmetic is safe. The floating-point standard (IEEE 754) requires `+ − × ÷` and `Math.sqrt` to
+be rounded exactly, so any browser gives the same bits. Functions like `Math.sin`, `Math.pow`, `Math.log`
+are not pinned by the standard: browsers compute them approximately and differently. The linter in
+`src/game` forbids exactly those functions (`pow`, `exp`, `expm1`, `log`, `log2`, `log10`,
 `log1p`, `cbrt`, `hypot`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sinh`, `cosh`, `tanh`,
-`asinh`, `acosh`, `atanh`) и `**` с нецелой или переменной степенью. Считать экономику в целых числах
-или фиксированной точке — **договорённость**, линтер её не проверяет: дробное деление тоже
-детерминировано, но целые проще сохранять и сравнивать, и они не копят ошибки округления.
+`asinh`, `acosh`, `atanh`) and `**` with a non-integer or variable exponent. Computing the economy in integers
+or fixed point is an **agreement**, the linter does not check it: fractional division is deterministic too,
+but integers are simpler to save and compare, and they do not accumulate rounding errors.
 
-| Риск | Что решено | Когда делать |
+| Risk | What is decided | When to do it |
 | --- | --- | --- |
-| **Детерминизм между браузерами.** Коротко: мир, построенный в разных браузерах, может чуть различаться. Генерация считает `Math.pow`, `Math.exp`, `Math.sin`, а они дают разные последние биты на разных движках. | `worldHash(world)` (`src/sim/world/worldHash.ts`) — единственный хеш мира: параметры, список биомов, `GEN_VERSION`, размер, `height`, `temperature`, `moisture`, `arcana`, `biome`, `riverMask`, `provinceOf`. Список провинций, рёбра соседства, `water`, `coastal` и `lakeside` выводятся из этих массивов точной арифметикой, поэтому тоже покрыты. При входе в онлайн игроки сравнивают с хостом **версию сборки и контента** и `worldHash`: не совпала версия — войти нельзя, не совпал хеш — мир присылает хост (снимок medium около 4–8 МБ сжатый, large примерно в 2,25 раза больше). Игровая логика (`src/game`) не вызывает приближённых функций `Math` (линтер). | Правило линтера и `worldHash` — сейчас; сверка версий и пересылка мира — на этапе онлайна. |
-| **Рассинхрон во время партии.** Коротко: даже при одном мире игры могут разойтись из-за ошибки в коде. | Каждые N тиков симуляция считает хеш состояния партии, клиенты сравнивают его с хостом. Не совпал — партия останавливается с понятной ошибкой (позже — догоняет снимком от хоста). | Вместе с онлайном; хеш состояния удобно завести уже на этапе 2 для тестов. |
-| **Версия правил и контента.** Коротко: та же команда в другой версии игры даёт другой результат. | Сохранения и повторы хранят версию сборки и контента (паки и их версии) рядом с `GEN_VERSION`; онлайн сверяет её при входе. Повтор другой версии честно сообщает, что не может быть проигран. | Когда появятся сохранения и повторы. |
-| **Где живёт симуляция.** Коротко: сейчас мир после генерации уходит в главный поток, а для игры он нужен в воркере. Сейчас воркер генерирует мир и **отдаёт** его главному потоку передачей, сам ничего не хранит. | Воркер генерации становится воркером симуляции: хранит `World` и состояние игры, шлёт отрисовке снимки и изменения. Главный поток держит display-карты `displayProvinceOf` / `displaySeaProvinceOf` (`render/bakeWorld.ts`, на 1–2 клетках у берега отличаются от `provinceOf` симуляции) для наведения и неизменную копию `provinces` для подсказки, режимов карты и панели отладки. Позже он будет получать снимки состояния по провинциям (владелец, туман). | В начале этапа 2. |
-| **Время.** Коротко: игра идёт шагами-днями одинаковой длины на любой скорости. | Фиксированный тик «день». Скорость игры меняет число тиков в секунду, а не длину тика. Команды игрока ставятся на номер тика. | В начале этапа 2, вместе с воркером симуляции. |
-| **Сохранения.** Коротко: сохранение должно открываться, даже если генератор с тех пор изменился. | Сохранение — двоичный снимок массивов мира (`height`, `provinceOf` и т. д.) плюс JSON с состоянием партии; либо сид + `GEN_VERSION` + версия контента + список команд. Если `GEN_VERSION` не совпадает с текущей, берётся сохранённый снимок мира, а не перегенерация. | Когда появятся сохранения. |
-| **Владение провинциями.** Коротко: кому принадлежит каждая провинция. | Массивы «владелец» и «контролирует» по id провинции в состоянии игры. На экран они попадают через текстуру данных провинций (`render/provinceData.ts`), без перезапекания мира. | Этап 2. |
-| **Туман войны.** Коротко: каждый игрок видит только часть карты. | Видимость — по провинциям, отдельно для каждого игрока. В онлайне, где все клиенты считают одно и то же (lockstep), у каждого есть полное состояние, поэтому туман только визуальный: изменённый клиент может увидеть всё. Шейдеру нужен флаг видимости провинции в текстуре данных провинций. | Когда появится туман. |
-| **Армии и пути.** Коротко: армиям нужны расстояния между провинциями без приближённой математики в игровой логике. | Граф `adjacency` с `length`, `riverLength`, `river` и `strait` уже есть; у провинции есть `center`, `water` (`'sea'`, `'lake'` или нет), `coastal` (только море) и `lakeside`. Целая стоимость перехода по каждому ребру считается заранее в `src/sim` (там `Math.sqrt` для расстояния между центрами допустим: он точный), так что `src/game` ищет путь в целых числах. Флот ходит только по морю: проливы (`strait`) могут проходить и через воду озера, поэтому морской код проверяет `water === 'sea'`, а не просто «вода». Игровой код на каждом тике берёт только готовые результаты `src/sim` (например, целые стоимости рёбер) и не вызывает шум, геометрию и другие помощники генерации: они медленные и считают в дробных числах. | Стоимости рёбер — вместе с движением армий на этапе 2. |
-| **Экономика.** Коротко: ресурсы и население — часть партии, а не мира. | Данные провинции (биом, прибрежность, озеро рядом, реки на рёбрах, `cellCount`) уже есть. Ресурсы и население — новые поля состояния игры, а не `World`: мир не меняется от того, что происходит в партии. Игровая логика опирается на `biome` клетки и провинции, а не на свои пороги температуры и влажности: биом выбирается по климату, сдвинутому шумом, поэтому порог по сырому климату разошёлся бы с тем, что видно на карте. | Этап 2. |
-| **Размер и id.** Коротко: номеров провинций хватает с запасом. | id провинций меньше 65535 (`Uint16Array`). На medium около 3200 сухопутных и 300–340 морских провинций плюс несколько озёр (сид "1": 3280 / 342 / 17; "worldbox": 3180 / 308 / 5). Таблицы состояния игры лучше сразу делать массивами по id. | Этап 2. |
-| **Время генерации.** Коротко: мир должен строиться не дольше 8 с. Замер этапа 1.5 (medium): в браузере на спокойной машине 4,7–4,9 с; в node (сборка esbuild) 3,4–3,5 с против 3,1–3,5 с до этапа, то есть роста нет. Прежние 11,9 с в браузере — загруженная машина, 5,3 с в node — накладные расходы Vitest на преобразование кода. | Воркер симуляции будет владеть миром, поэтому генерация остаётся в нём и должна укладываться в 8 с; иначе начало партии и загрузка онлайн-мира станут медленнее. Замерять на спокойной машине и вне Vitest. | Следить при каждом изменении генерации. |
-| **Редактор карты и терраформинг.** Коротко: правка клеток во время игры обновляет не все текстуры. | `updateDerivedRect` и `MapView.updateRegion` пересчитывают и загружают по прямоугольнику только terrain, высоту, цвета биомов и вид воды (канал A `provinceSeaRG`). Поверхность (градиент, береговая линия, близость берега), карты владельцев для показа (`displayProvinceOf` / `displaySeaProvinceOf`) и глубина моря `seaDepth` по прямоугольнику не обновляются. Правка высоты, береговой линии или провинций требует полной пересборки `buildDerived` и `setWorld`. | Когда появятся редактор или терраформинг. |
+| **Determinism across browsers.** In short: the same world built in different browsers may differ slightly. Generation computes `Math.pow`, `Math.exp`, `Math.sin`, and they give different last bits on different engines. | `worldHash(world)` (`src/sim/world/worldHash.ts`) is the only world hash: params, biome list, `GEN_VERSION`, size, `height`, `temperature`, `moisture`, `arcana`, `biome`, `riverMask`, `provinceOf`. The province list, adjacency edges, `water`, `coastal` and `lakeside` are derived from these arrays with exact arithmetic, so they are covered too. When joining an online game, players compare the **build and content version** and `worldHash` with the host: version mismatch — cannot join, hash mismatch — the host sends the world (a medium snapshot is about 4–8 MB compressed, large is roughly 2.25 times bigger). Game logic (`src/game`) does not call approximate `Math` functions (the linter). | The linter rule and `worldHash` are done now; version comparison and world transfer — at the online stage. |
+| **Desync during a game.** In short: even with the same world, games can diverge because of a bug. | Every N ticks the simulation computes a hash of the game state, and clients compare it with the host. On mismatch the game stops with a clear error (later it catches up from a host snapshot). | Together with online play; the state hash is worth adding already at stage 2 for the tests. |
+| **Rules and content version.** In short: the same command in another game version gives another result. | Saves and replays store the build and content version (packs and their versions) next to `GEN_VERSION`; online play checks it on join. A replay of another version honestly reports that it cannot be played. | When saves and replays appear. |
+| **Where the simulation lives.** In short: today the world goes to the main thread after generation, while the game needs it in the worker. Right now the worker generates the world and **hands it** to the main thread by transfer, keeping nothing itself. | The generation worker becomes the simulation worker: it holds `World` and the game state, and sends snapshots and changes to the renderer. The main thread keeps the display maps `displayProvinceOf` / `displaySeaProvinceOf` (`render/bakeWorld.ts`, differing from the simulation `provinceOf` on 1–2 cells at the shore) for hovering and an immutable copy of `provinces` for the tooltip, map modes and the debug panel. Later it will receive state snapshots per province (owner, fog). | At the start of stage 2. |
+| **Time.** In short: the game runs in day steps of equal length at any speed. | A fixed "day" tick. Game speed changes the number of ticks per second, not the length of a tick. Player commands are queued to a tick number. | At the start of stage 2, together with the simulation worker. |
+| **Saves.** In short: a save must open even if the generator has changed since. | A save is a binary snapshot of the world arrays (`height`, `provinceOf` and so on) plus JSON with the game state; or the seed + `GEN_VERSION` + content version + command list. If `GEN_VERSION` does not match the current one, the saved world snapshot is used instead of regenerating. | When saves appear. |
+| **Province ownership.** In short: who owns each province. | "Owner" and "controller" arrays by province id in the game state. They reach the screen through the province data texture (`render/provinceData.ts`), without rebaking the world. | Stage 2. |
+| **Fog of war.** In short: each player sees only part of the map. | Visibility is per province, separately for each player. Online, where all clients compute the same thing (lockstep), everyone has the full state, so the fog is only visual: a modified client can see everything. The shader needs a province visibility flag in the province data texture. | When the fog appears. |
+| **Armies and paths.** In short: armies need distances between provinces without approximate math in the game logic. | The `adjacency` graph with `length`, `riverLength`, `river` and `strait` already exists; a province has `center`, `water` (`'sea'`, `'lake'` or none), `coastal` (sea only) and `lakeside`. The integer cost of crossing each edge is computed in advance in `src/sim` (`Math.sqrt` for the distance between centres is allowed there: it is exact), so `src/game` finds paths in integers. Fleets sail only the sea: straits (`strait`) may also pass through lake water, so sea code checks `water === 'sea'`, not just "water". Game code on each tick takes only ready-made `src/sim` results (for example integer edge costs) and does not call noise, geometry and other generation helpers: they are slow and compute in fractional numbers. | Edge costs — together with army movement in stage 2. |
+| **Economy.** In short: resources and population are part of the game, not of the world. | Province data (biome, coastal, lake nearby, rivers on edges, `cellCount`) already exists. Resources and population are new game state fields, not `World`: the world does not change because of what happens in a game. Game logic relies on the `biome` of a cell and of a province, not on its own temperature and moisture thresholds: the biome is chosen by climate shifted with noise, so a threshold on raw climate would diverge from what is visible on the map. | Stage 2. |
+| **Size and ids.** In short: province numbers are plentiful. | Province ids are below 65535 (`Uint16Array`). On medium there are about 3200 land and 300–340 sea provinces plus a few lakes (seed "1": 3280 / 342 / 17; "worldbox": 3180 / 308 / 5). Game state tables are better made arrays by id from the start. | Stage 2. |
+| **Generation time.** In short: the world must build in no more than 8 s. Stage 1.5 measurement (medium): in a browser on an idle machine 4.7–4.9 s; in node (esbuild build) 3.4–3.5 s versus 3.1–3.5 s before the stage, so there is no growth. The earlier 11.9 s in the browser was a loaded machine, and 5.3 s in node was Vitest overhead for code transformation. | The simulation worker will own the world, so generation stays in it and must fit in 8 s; otherwise the start of a game and loading an online world become slower. Measure on an idle machine and outside Vitest. | Watch it on every generation change. |
+| **Map editor and terraforming.** In short: editing cells during a game does not update all textures. | `updateDerivedRect` and `MapView.updateRegion` recompute and upload per rectangle only the terrain, the height, the biome colours and the water kind (channel A of `provinceSeaRG`). The surface (gradient, shoreline, shore proximity), the display owner maps (`displayProvinceOf` / `displaySeaProvinceOf`) and the sea depth `seaDepth` are not updated per rectangle. Editing the height, the shoreline or the provinces requires a full `buildDerived` rebuild and `setWorld`. | When an editor or terraforming appears. |
 
-## Как добавить режим карты
+## How to add a map mode
 
-Режим — запись в `MAP_MODES` (`src/render/mapModes.ts`):
+A mode is an entry in `MAP_MODES` (`src/render/mapModes.ts`):
 
 ```ts
 {
@@ -128,34 +128,34 @@
 }
 ```
 
-- `color(p, world)` возвращает цвет заливки провинции (RGB 0..255, четвёртое число — флаги режима,
-  обычно 0) или `null` — без заливки.
-- Перевод названия добавляется в `src/i18n/ru.ts` (`'mapMode.coastal': '…'`); тест проверяет, что он есть.
-- Цвета приглушённые: насыщенность не выше 0.45, как у биомов.
-- Необязательное поле `fill` — сила заливки поверх рельефа (по умолчанию `DEFAULT_FILL`).
+- `color(p, world)` returns the fill colour of a province (RGB 0..255, the fourth number is the mode flags,
+  usually 0) or `null` — no fill.
+- The name translation is added to `src/i18n/ru.ts` (`'mapMode.coastal': '…'`); a test checks that it exists.
+- The colours are muted: saturation no higher than 0.45, as for biomes.
+- The optional `fill` field is the fill strength over the terrain (`DEFAULT_FILL` by default).
 
-Шейдер менять не нужно. При смене режима `MapView.setMapMode(id)` пересчитывает цвета всех провинций и
-загружает текстуру данных один раз. Клавиша M перебирает режимы по кругу.
+The shader does not need to change. On a mode switch `MapView.setMapMode(id)` recomputes the colours of all
+provinces and uploads the data texture once. The M key cycles through the modes.
 
-Текстура данных провинций: RGBA8, тексель на провинцию, `id` лежит в `(id % width, id / width)`;
-ширина — число провинций, но не больше `MAX_TEXTURE_SIZE`. RGB — цвет заливки. A — флаги: бит 0 «не
-разведано», бит 1 «не видно», бит 2 «подсветка цели» (зарезервированы, смена режима их не трогает),
-бит 3 «есть заливка», биты 4–7 — резерв. Отдельную провинцию меняет `MapView.setProvinceData(id, rgba)`:
-на GPU уходит только изменённый диапазон, один раз за кадр.
+The province data texture: RGBA8, one texel per province, the `id` sits at `(id % width, id / width)`;
+the width is the province count, but no more than `MAX_TEXTURE_SIZE`. RGB is the fill colour. A holds the
+flags: bit 0 "unexplored", bit 1 "not visible", bit 2 "target highlight" (reserved, a mode switch does not
+touch them), bit 3 "has fill", bits 4–7 are reserved. A single province is changed by
+`MapView.setProvinceData(id, rgba)`: only the changed range goes to the GPU, once per frame.
 
-## Как добавить горячую клавишу
+## How to add a hotkey
 
-Все клавиши — в `appHotkeys` (`src/ui/hotkeys.ts`):
+All keys are in `appHotkeys` (`src/ui/hotkeys.ts`):
 
 ```ts
 { id: 'screenshot', code: 'F2', nameKey: 'key.screenshot', action: a.screenshot },
 ```
 
-- `code` — `KeyboardEvent.code` (физическая клавиша, не зависит от раскладки): `KeyM`, `F3`, `Digit1`.
-- Действие добавляется в `HotkeyActions` и передаётся из `main.ts`.
-- Перевод `nameKey` — в `src/i18n/ru.ts`. Клавиша сама появится в списке панели F3.
+- `code` is `KeyboardEvent.code` (the physical key, independent of layout): `KeyM`, `F3`, `Digit1`.
+- The action is added to `HotkeyActions` and passed from `main.ts`.
+- The `nameKey` translation goes to `src/i18n/ru.ts`. The key appears in the F3 panel list by itself.
 
-`registerHotkeys` вешает один обработчик `keydown` на окно, пропускает нажатия в полях ввода и
-сочетания с Ctrl/Alt/Meta, у своих клавиш отменяет действие браузера. Повтор `code` — ошибка при запуске;
-тест проверяет, что повторов нет и у каждой клавиши есть перевод. Отдельные обработчики `keydown` на
-окне вне реестра не заводятся.
+`registerHotkeys` attaches one `keydown` handler to the window, skips presses in inputs and
+Ctrl/Alt/Meta combinations, and for its own keys cancels the browser action. A repeated `code` is an error at
+startup; a test checks that there are no duplicates and that every key has a translation. Separate `keydown`
+handlers on the window outside the registry are not created.
