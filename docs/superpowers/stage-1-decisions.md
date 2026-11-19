@@ -1,8 +1,8 @@
-# Этап 1: решения и отложенные мелочи
+# Stage 1: decisions and deferred small items
 
-Выписка из рабочего журнала (subagent-driven development, 2026-11-16…18). Решения принимал контроллер без автора; в каждом указано, чем грозит ошибка. Отложенные мелочи — кандидаты на следующие этапы.
+An extract from the working journal (subagent-driven development, 2026-11-16…18). The controller made the decisions without the author; each one states what a mistake would cost. The deferred small items are candidates for the next stages.
 
-## Решения
+## Decisions
 
 - | 2 self / 2→3,4,6,7 | Rng, Noise2D | Noise2D type used in fbm signature but not declared → Ruling: export `type Noise2D = (x:number,y:number)=>number` from noise.ts — trivial — none |
 - | 4 self | classifyBiome order | tests imply order water→mountains→hills→glacier→...; Ruling: implementer fixes rest of order, must keep latitude tests green — cost: rebalance later |
@@ -21,9 +21,9 @@
 - Ruling: vector borders (10b) dropped — land borders now smooth at max zoom in browser (YAGNI). Task 10b = render polish: biome colour boundary staircase at high zoom, jagged hovered-province outline, foamy shallow-water halo; plus sim nit: damp fine warp on KIND_WATER (sea saw-tooth borders). → Task 10 implementer a49c78beb90554120, BASE 583e0c3
 - Task 10b: DONE_WITH_CONCERNS f116163. Controller browser (#1 mid zoom): looks good — soft biome transitions, calm coast, organic borders. Ruling: sea fine warp halved (not skipped) accepted; sea saw-tooth at half amplitude acceptable for now (borders on sea are faint).
 - Ruling: flaky wall-clock test — node generateWorld test becomes a smoke bound ≤ 12 s; the spec's 8 s budget is verified in the browser worker via debug-panel timings (Task 11). Cost if wrong: perf regressions in node caught later.
-- Ruling: прежний implementer a0ae24f149102fba0 недоступен в новой сессии → свежий implementer (opus) доделывает задачу 11 поверх незакоммиченных изменений — cost: повторное чтение кода.
-- Ruling: шрифт UI — PT Sans (ParaType, OFL; Regular+Bold, статические Web-ttf из google/fonts). Создан для кириллицы, нейтральный гуманистический гротеск, без «фэнтези»; EB Garamond удалить. Cost if wrong: замена одного файла.
-- Task 11 controller browser (#1, vite dev, pane hidden): loading compact & plain, map OK, tooltip follows cursor, F3 toggles, total gen 5 420 ms (Рельеф 1 688 incl. worker cold start, Текстуры 803) — ≤6 s met. FPS not measurable: pane hidden → rAF throttled to 1/s; no console errors. Ruling: FPS figure reported as 'not measured' unless pane becomes visible.
+- Ruling: the previous implementer a0ae24f149102fba0 is unavailable in the new session → a fresh implementer (opus) finishes task 11 on top of the uncommitted changes — cost: re-reading the code.
+- Ruling: the UI font is PT Sans (ParaType, OFL; Regular+Bold, static Web ttf from google/fonts). Designed for Cyrillic, a neutral humanist sans, without "fantasy"; delete EB Garamond. Cost if wrong: replace one file.
+- Task 11 controller browser (#1, vite dev, pane hidden): loading compact & plain, map OK, tooltip follows cursor, F3 toggles, total gen 5 420 ms (Terrain 1 688 incl. worker cold start, Textures 803) — ≤6 s met. FPS not measurable: pane hidden → rAF throttled to 1/s; no console errors. Ruling: FPS figure reported as 'not measured' unless pane becomes visible.
 - Task 11: review Approved (a4ef3ee2e150aff4f), 0 Crit/Imp; 11 minors. Ruling: fold minors 1-8 (nested-worker timeout, debug CSS, aria-live, dead font exports, dedupe, stale comment, golden-hash test, early hashchange) into one polish round to implementer — cheap now; minors 8(mixed-language errors),9(genWorker untested),10(memory) → minor (deferred).
 - Ruling (Task 12): default world (fantasy off) must keep golden hashes of tests/golden.test.ts unchanged → base biome order in registry = old BIOMES order, arcana from separate rng stream; fantasy biomes appended after base. Cost if wrong: golden update needed.
 - Docs: Task 13 (13A data / 13B render+wiring) written into plan, spec §7.2–7.4; commit after Task 12 implementer finishes. Ruling: Task 13 split into two dispatches with separate reviews — 8 items too large for one implementer context; cost: one extra review.
@@ -33,7 +33,7 @@
 - Ruling: final fix wave = minors 1,2,3,4,6(docs+determinism note),7,8,9 + assignCorridor comment; rest keep deferred per reviewer triage; minor 10 (texture release test) keep deferred — code verified correct. Cost: test gap only.
 - Ruling: jungle recolour is render-only, no GEN_VERSION bump — only baked-colour hashes may change.
 
-## Отложенные мелочи
+## Deferred small items
 
 - Task 3: minor (deferred): cx random range unintuitive; overlapping blob accepted at attempt 39; hard-coded edge offset needs comment
 - Task 3: minor (deferred): ridge elongation untested; 0.85/0.72 thresholds duplicated between shape01 and tests (Task 4 told to export shared constants)
@@ -57,12 +57,12 @@
 - Task 13A: minor (deferred): bakeBiomeColorsRect duplicates blurInterleaved gaussian (add sync comment in fix round); buildWorldUrl packs=[] round-trip; two import paths for levels
 - Task 13A: minor (deferred): ray-check exemption leaves 'missed river' untested for mostly-land-touching edges
 
-## Этап 1.5 (план 2026-11-18-stage-1-5-feedback)
+## Stage 1.5 (plan 2026-11-18-stage-1-5-feedback)
 
-### Решения
+### Decisions
 
 - | T4→T5 | both edit provinces.ts/provinceSeeds.ts | sequential, ok. T5 count "150–300 sea" must count water==='sea' only (lakes excluded) → Ruling below |
-- | T4→T7 | lake must be distinguishable in shader; T7 "озёра без изобат" | T4 does not name the mechanism → Ruling below |
+- | T4→T7 | lake must be distinguishable in shader; T7 "озёра без изобат" (lakes without isobaths) | T4 does not name the mechanism → Ruling below |
 - | T10 vs fingerprint test | worldHash duplicates hashing in fingerprint.test | → Ruling below |
 - Ruling: T5 sea-count bounds (150–300) count provinces with water==='sea' only — lakes are their own kind — cost: none.
 - Ruling: T4 exposes lake to the shader through the biome code (lake biome in palette / water flag texture), T7 reads the same — cost: one extra texture channel if palette is not enough.
@@ -75,11 +75,11 @@
 - Ruling: accept moisture jitter ±0.15 + test «≤11% of jungle N/S edge cells in any 4-row band» (fails on base, passes) — shares move ≤0.93 p.p.; re-pin fingerprints (no GEN bump) — cost: brief values changed. Also raise generateWorld smoke limit 12→20 s (real budget checked in browser) — cost: slower node regressions caught later. Sequenced AFTER 6b commits (both touch fingerprint.test.ts).
 - Ruling: accept fixed jitter scale (brief says 40–120 cells) — cost: small-world province headroom 7 below the 999 cap; watch.
 - Task 8: dispatched a3a993219f5d9aef2 (opus), BASE 40f6695. Ruling: brief mouth test rewritten against blurred-coast field (coastSignedDistance no longer exists after Task 3 fallback); lake mouths allowed — cost: none.
-- Author (2026-11-19, screenshot): sea after Task 7 «некрасивое и нереалистичное» — uniform glowing halo around every island, dark lanes between. Task 7 REOPENED. Controller error: accepted look on a glance; reviewers only check code. Ruling: visual tasks now close only after author OK on screenshots. Sea rework waits for Task 8 (palette.ts overlap) and author choice of direction.
+- Author (2026-11-19, screenshot): the sea after Task 7 is "некрасивое и нереалистичное" (ugly and unrealistic) — uniform glowing halo around every island, dark lanes between. Task 7 REOPENED. Controller error: accepted look on a glance; reviewers only check code. Ruling: visual tasks now close only after author OK on screenshots. Sea rework waits for Task 8 (palette.ts overlap) and author choice of direction.
 - Task 10: dispatched a9971d234578fe95a (opus), BASE bc7b6b7. Ruling: fingerprint.test migration onto worldHash deferred to Task 11 (file busy with Task 7 round 3) — cost: one extra small edit later.
 - Ruling: perf investigation stopped (a1fa4e9bdbb9598aa) — superseded by final reviewer esbuild timing — cost: none.
 
-### Отложенные мелочи
+### Deferred small items
 
 - Task 1: review Approved (a24e221b6bb0bd34b). Push verified via ls-remote. minor (deferred → Task 11): CLAUDE.md stray comma line 64; plan-specific GEN 2→3 line goes stale (update at end of plan).
 - Task 2: review Approved (a00bc38a2973224cd), 0 Crit/Imp. minor (deferred → Task 11): edt 2x2 checkerboard test missing; blur.ts mixed-language comments; labelComponents copies mask per call.
@@ -89,11 +89,11 @@
 - Task 6: fix round 1/5 (2 addressed, 0 open; 44af390..c2df6a0), re-review a64b24bc85af3b00f Approved. minor (deferred): small "1" province headroom 7 (test bound, not a throw); raw-side band test rebuilds climate from seed.
 - Task 7: review Approved (abe20a903ce98958b), 0 Crit/Imp. minor (deferred → Task 11): smoothSeaDepth allocs 4 arrays; WATER_GRAIN literal in GLSL vs seaDepth.ts constants.
 - Task 8: code review Approved (a0e2f4bfb3cdc6db8), 0 Crit/Imp. minor (deferred): per-bucket re-tessellation at max zoom (cull to viewport if hitch); default no-coast path untested; riverLayer.ts ~400 lines. Awaiting author look OK (with sea).
-- Task 9: review Approved (a2869926f55c71744), 0 Crit/Imp. minor (deferred → Task 11): non-WebGL path silently optimistic (show «недоступно»); warm-up frames; disable button while running; ui imports render type.
+- Task 9: review Approved (a2869926f55c71744), 0 Crit/Imp. minor (deferred → Task 11): non-WebGL path silently optimistic (show «недоступно» (unavailable)); warm-up frames; disable button while running; ui imports render type.
 - Task 7: final review Approved (a37715fc1e678f1d2), 0 Crit/Imp. minor (deferred → Task 11): mapShader.ts 438 lines (split next time); precompute wave cos/sin; skip zero-weight octave; UV partial block when w,h not multiple of 4; lake water feeds sea depth sum; no test pins TS/GLSL tone curve.
 
-### Итог
+### Summary
 
-- Финальное ревью ветки: чисто после одной волны исправлений. npm test зелёный (exit 0), 480 тестов.
-- Генерация medium 4,7–4,9 с в браузере; кадр 4,3–5,2 мс.
-- Вид моря и рек принимал контроллер по чек-листу (автор делегировал на ночь); автору показать скриншоты docs/screenshots/stage-1-5/.
+- Final review of the branch: clean after one fix wave. npm test green (exit 0), 480 tests.
+- Medium generation 4.7–4.9 s in the browser; a frame 4.3–5.2 ms.
+- The controller accepted the look of the sea and the rivers against a checklist (the author delegated it for the night); show the screenshots in docs/screenshots/stage-1-5/ to the author.
