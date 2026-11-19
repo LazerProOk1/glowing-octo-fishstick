@@ -34,6 +34,7 @@ export const ru = {
   'debug.frame': 'Кадр',
   'debug.bench': 'Замерить кадр',
   'debug.benchRunning': 'замер…',
+  'debug.benchUnavailable': 'недоступно',
   'debug.benchResult': '{avg} мс (p95 {p95} мс) ≈ {fps} к/с',
   'debug.provinces': 'Провинции',
   'debug.land': 'суша',
@@ -58,6 +59,7 @@ export const ru = {
   'error.init': 'Не удалось запустить графику.',
   'error.webgl2': 'Браузер не поддерживает WebGL 2. Обновите браузер или включите аппаратное ускорение.',
   'error.generation': 'Не удалось сгенерировать мир.',
+  'error.cleanupNoConverge': 'Не удалось собрать провинции из-за сложного рельефа. Попробуйте другой сид.',
   'error.retry': 'Перезагрузить',
 
   'seed.words': 'Альфа,Бета,Гамма,Дельта,Эпсилон,Дзета,Эта,Тета,Йота,Каппа,Лямбда,Сигма,Омега',

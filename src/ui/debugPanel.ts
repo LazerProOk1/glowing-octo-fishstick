@@ -2,8 +2,14 @@ import { t, translate } from '../i18n/ru';
 import type { World } from '../sim/world/types';
 import { LOAD_STEPS, type GenTimings, type LoadStep } from '../worker/protocol';
 import { el, formatMs } from './dom';
-import type { FrameStats } from '../render/frameBench';
 import { keyLabel, type Hotkey } from './hotkeys';
+
+/** Итоги замера кадра (мс и к/с); null вместо них — замер недоступен. Форму задаёт панель, рендер её лишь выдаёт. */
+export interface BenchResult {
+  avg: number;
+  p95: number;
+  fps: number;
+}
 
 const FPS_INTERVAL_MS = 500;
 const NONE = '-';
@@ -33,13 +39,14 @@ export class DebugPanel {
   private readonly keys: HTMLElement;
   private readonly stageValues = new Map<LoadStep, HTMLElement>();
   private readonly input: HTMLInputElement;
+  private readonly benchBtn: HTMLButtonElement;
   private timer = 0;
 
   constructor(
     parent: HTMLElement,
     private readonly getFps: () => number,
     private readonly onSeed: (seed: string) => void,
-    private readonly onBench: () => FrameStats,
+    private readonly onBench: () => BenchResult | null,
   ) {
     this.root = el('section', 'debug ui-panel');
     this.root.hidden = true;
@@ -57,6 +64,7 @@ export class DebugPanel {
     const benchBtn = el('button', 'ui-button debug__bench', t('debug.bench'));
     benchBtn.type = 'button';
     benchBtn.addEventListener('click', this.runBench);
+    this.benchBtn = benchBtn;
     const prov = row(t('debug.provinces'));
     this.provValue = prov.value;
     const land = row(t('debug.land'));
@@ -159,14 +167,22 @@ export class DebugPanel {
   };
 
   private readonly runBench = (): void => {
+    if (this.benchBtn.disabled) return;
+    this.benchBtn.disabled = true;
     this.benchValue.textContent = t('debug.benchRunning');
     // Даём браузеру показать надпись, затем считаем (замер блокирует поток на время кадров).
     window.setTimeout(() => {
-      const r = this.onBench();
-      this.benchValue.textContent = t('debug.benchResult')
-        .replace('{avg}', r.avg.toFixed(1))
-        .replace('{p95}', r.p95.toFixed(1))
-        .replace('{fps}', String(Math.round(r.fps)));
+      try {
+        const r = this.onBench();
+        this.benchValue.textContent = r
+          ? t('debug.benchResult')
+              .replace('{avg}', r.avg.toFixed(1))
+              .replace('{p95}', r.p95.toFixed(1))
+              .replace('{fps}', String(Math.round(r.fps)))
+          : t('debug.benchUnavailable');
+      } finally {
+        this.benchBtn.disabled = false;
+      }
     }, 30);
   };
 

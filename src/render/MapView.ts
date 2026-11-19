@@ -33,6 +33,8 @@ import {
 
 /** Множитель зума на одну «ступеньку» колеса (deltaY = 100 px). */
 const ZOOM_STEP = 1.12;
+/** Кадры прогрева перед замером, без учёта в итогах. */
+const BENCH_WARMUP_FRAMES = 2;
 
 /**
  * Карта: полноэкранный quad с шейдером рельефа/биомов/границ и слой рек поверх.
@@ -203,26 +205,32 @@ export class MapView {
 
   /**
    * Меняет тексель одной провинции (RGB — цвет заливки, A — флаги, см. PROVINCE_FLAGS).
-   * На GPU уходит только изменённый диапазон, один раз за кадр. Смена режима карты
+   * Если RGB не нулевой, бит FILL ставится сам (вызывающему его указывать не нужно).
+   * Канал вне целых 0..255 — RangeError. На GPU уходит только изменённый диапазон, один раз за кадр. Смена режима карты
    * пересчитывает цвета заново (флаги состояния — биты 0–2 — сохраняются).
    */
   setProvinceData(id: number, rgba: ProvinceRGBA): void {
     if (!this.provData) return;
-    this.provData.set(id, rgba);
+    const filled = rgba[0] !== 0 || rgba[1] !== 0 || rgba[2] !== 0;
+    this.provData.set(id, filled ? [rgba[0], rgba[1], rgba[2], rgba[3] | PROVINCE_FLAGS.FILL] : rgba);
     // Заливка в режиме без заливки: шейдер начинает читать текстуру данных.
-    if ((rgba[3] & PROVINCE_FLAGS.FILL) !== 0 && this.uniforms.uniforms.uFill === 0) this.applyFill(true);
+    if (filled && this.uniforms.uniforms.uFill === 0) this.applyFill(true);
   }
 
   /**
    * Загружает на GPU строки текстур рельефа, цветов биомов и высоты, которые задевает rect —
    * после updateDerivedRect над теми же массивами, что были переданы в setWorld (bake).
+   * Прямоугольник обрезается по границам карты; целиком за картой или пустой — ничего не делает.
    */
   updateRegion(rect: Rect): void {
     const t = this.textures;
     if (!t || rect.w <= 0 || rect.h <= 0) return;
     const w = this.map.w;
-    const start = rect.y * w;
-    const end = (rect.y + rect.h) * w;
+    const y0 = Math.max(0, Math.floor(rect.y));
+    const y1 = Math.min(this.map.h, Math.ceil(rect.y + rect.h));
+    if (y1 <= y0) return;
+    const start = y0 * w;
+    const end = y1 * w;
     for (const src of [t.terrain, t.height, t.biomeColor]) {
       if (src instanceof BufferImageSource) src.update(start, end);
     }
@@ -245,15 +253,22 @@ export class MapView {
   /**
    * Честный замер кадра: синхронно рисует frames кадров и после каждого ждёт конца работы
    * видеокарты (gl.finish). От requestAnimationFrame не зависит, поэтому верен и в скрытой вкладке.
+   * Два первых кадра не замеряются (прогрев: компиляция шейдера, загрузка текстур).
+   * Не WebGL (ждать конца работы нечем) — null.
    */
-  benchmark(frames = 120): FrameStats {
+  benchmark(frames = 120): FrameStats | null {
     const { renderer, stage } = this.app;
-    const gl = renderer.type === RendererType.WEBGL ? (renderer as WebGLRenderer).gl : null;
+    if (renderer.type !== RendererType.WEBGL) return null;
+    const gl = (renderer as WebGLRenderer).gl;
+    for (let i = 0; i < BENCH_WARMUP_FRAMES; i++) {
+      renderer.render(stage);
+      gl.finish();
+    }
     const samples: number[] = [];
     for (let i = 0; i < frames; i++) {
       const t0 = performance.now();
       renderer.render(stage);
-      gl?.finish();
+      gl.finish();
       samples.push(performance.now() - t0);
     }
     return frameStats(samples);

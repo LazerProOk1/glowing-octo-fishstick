@@ -28,6 +28,9 @@ export const SEA_DEPTH_SIGMA = 20;
  */
 export const DEPTH_TONE_K = 0.5;
 
+/** Доля зерна бумаги на воде относительно суши (шейдер карты; 0 — вода гладкая, 1 — как суша). */
+export const WATER_GRAIN = 0.35;
+
 export function depthTone(depth: number): number {
   const t = Math.min(Math.max(depth / SEA_DEPTH_MAX, 0), 1);
   return (t * (1 + DEPTH_TONE_K)) / (t + DEPTH_TONE_K);

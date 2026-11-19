@@ -42,6 +42,16 @@ describe('ProvinceData', () => {
     expect(() => d.set(-1, [0, 0, 0, 0])).toThrow();
   });
 
+  it('set: канал не целое 0..255 — RangeError', () => {
+    const d = new ProvinceData(3, 4);
+    expect(() => d.set(0, [256, 0, 0, 0])).toThrow(RangeError);
+    expect(() => d.set(0, [0, -1, 0, 0])).toThrow(RangeError);
+    expect(() => d.set(0, [0, 0, 1.5, 0])).toThrow(RangeError);
+    expect(() => d.set(0, [0, 0, 0, Number.NaN])).toThrow(RangeError);
+    expect(() => d.set(0, [0, 255, 0, 0])).not.toThrow();
+    expect(d.takeDirty()).toEqual({ start: 0, end: 1 });
+  });
+
   it('applyMode: цвет и флаг FILL, null — без заливки; флаги состояния сохраняются; грязное сброшено', () => {
     const world = fakeWorld(4);
     const d = new ProvinceData(4, 4);

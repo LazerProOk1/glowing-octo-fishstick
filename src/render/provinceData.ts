@@ -54,9 +54,12 @@ export class ProvinceData {
     this.data = new Uint8Array(width * height * 4);
   }
 
-  /** Записывает тексель провинции как есть и помечает его для загрузки. */
+  /** Записывает тексель провинции как есть и помечает его для загрузки. Канал — целое от 0 до 255, иначе RangeError. */
   set(id: number, rgba: ProvinceRGBA): void {
     if (!Number.isInteger(id) || id < 0 || id >= this.count) throw new Error(`bad province id ${id}`);
+    for (const ch of rgba) {
+      if (!Number.isInteger(ch) || ch < 0 || ch > 255) throw new RangeError(`province channel out of 0..255: ${ch}`);
+    }
     const o = id * 4;
     this.data[o] = rgba[0];
     this.data[o + 1] = rgba[1];

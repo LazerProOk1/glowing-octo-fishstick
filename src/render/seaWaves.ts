@@ -21,6 +21,9 @@ export const WAVE_STRETCH = 1.8;
  * волна в пару пикселей дала бы муар.
  */
 export const WAVE_PX = [3, 8] as const;
+/** cos и sin поворотов октав: считаются здесь один раз и подставляются в GLSL константами. */
+export const WAVE_COS = WAVE_ANGLE.map((a) => Math.cos(a));
+export const WAVE_SIN = WAVE_ANGLE.map((a) => Math.sin(a));
 /** Направление на свет в плоскости карты (как LIGHT в шейдере: с северо-запада). */
 const LIGHT_XY = [-Math.SQRT1_2, -Math.SQRT1_2] as const;
 
@@ -80,9 +83,11 @@ export function waveShade(x: number, y: number, zoom: number, pxPerCell: number)
   let norm = 0;
   for (let i = 0; i < 3; i++) {
     const f = WAVE_FREQ[i] as number;
-    const ang = WAVE_ANGLE[i] as number;
-    const co = Math.cos(ang);
-    const si = Math.sin(ang);
+    const co = WAVE_COS[i] as number;
+    const si = WAVE_SIN[i] as number;
+    const a = (WAVE_OCT_AMP[i] as number) * smoothstep(WAVE_PX[0], WAVE_PX[1], pxPerCell / f);
+    norm += WAVE_OCT_AMP[i] as number;
+    if (a <= 0) continue;
     // q = R·p·f, затем сжатие по второй оси; градиент возвращается в оси мира через Rᵀ.
     const qx = (co * x - si * y) * f + 17.1 * i;
     const qy = (si * x + co * y) * f * WAVE_STRETCH + 31.7 * i;
@@ -91,15 +96,15 @@ export function waveShade(x: number, y: number, zoom: number, pxPerCell: number)
     const gy = n[2] * WAVE_STRETCH;
     const wx = co * gx + si * gy;
     const wy = -si * gx + co * gy;
-    const a = (WAVE_OCT_AMP[i] as number) * smoothstep(WAVE_PX[0], WAVE_PX[1], pxPerCell / f);
     s += a * (wx * LIGHT_XY[0] + wy * LIGHT_XY[1]);
-    norm += WAVE_OCT_AMP[i] as number;
   }
   return strength * WAVE_AMP * Math.min(Math.max(s / norm, -1), 1);
 }
 
 const f4 = (n: number): string => n.toFixed(4);
-const vec3 = (v: readonly number[]): string => `float[3](${v.map(f4).join(', ')})`;
+const vec3 = (v: readonly number[], f: (n: number) => string = f4): string => `float[3](${v.map(f).join(', ')})`;
+/** Для cos/sin: четыре знака дали бы заметную ошибку поворота. */
+const f8 = (n: number): string => n.toFixed(8);
 
 /** GLSL: vnoiseD и waveShade (нужен hash12 и LIGHT шейдера карты). */
 export const WAVE_GLSL = /* glsl */ `
@@ -109,7 +114,8 @@ const vec2 WAVE_PX = vec2(${WAVE_PX.map(f4).join(', ')});
 const float WAVE_STRETCH = ${f4(WAVE_STRETCH)};
 const float WAVE_FREQ[3] = ${vec3(WAVE_FREQ)};
 const float WAVE_OCT_AMP[3] = ${vec3(WAVE_OCT_AMP)};
-const float WAVE_ANGLE[3] = ${vec3(WAVE_ANGLE)};
+const float WAVE_COS[3] = ${vec3(WAVE_COS, f8)};
+const float WAVE_SIN[3] = ${vec3(WAVE_SIN, f8)};
 
 // Value noise, quintic interpolation (no creases in the derivative at cell lines): value, d/dx, d/dy.
 vec3 vnoiseD(vec2 p) {
@@ -138,16 +144,17 @@ float waveShade(vec2 p, float zoom, float pxPerCell) {
   float norm = 0.0;
   for (int i = 0; i < 3; i++) {
     float f = WAVE_FREQ[i];
-    float co = cos(WAVE_ANGLE[i]);
-    float si = sin(WAVE_ANGLE[i]);
+    float co = WAVE_COS[i];
+    float si = WAVE_SIN[i];
+    float a = WAVE_OCT_AMP[i] * smoothstep(WAVE_PX.x, WAVE_PX.y, pxPerCell / f);
+    norm += WAVE_OCT_AMP[i];
+    if (a <= 0.0) continue; // octave faded out: skip its noise
     vec2 q = vec2(co * p.x - si * p.y, (si * p.x + co * p.y) * WAVE_STRETCH) * f
       + vec2(17.1, 31.7) * float(i);
     vec3 n = vnoiseD(q);
     vec2 g = vec2(n.y, n.z * WAVE_STRETCH);
     vec2 wg = vec2(co * g.x + si * g.y, -si * g.x + co * g.y);
-    float a = WAVE_OCT_AMP[i] * smoothstep(WAVE_PX.x, WAVE_PX.y, pxPerCell / f);
     s += a * dot(wg, l);
-    norm += WAVE_OCT_AMP[i];
   }
   return strength * WAVE_AMP * clamp(s / norm, -1.0, 1.0);
 }

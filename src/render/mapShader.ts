@@ -3,7 +3,7 @@ import { MAP_COLORS, glslVec3 } from './palette';
 import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../content/terrainLevels';
 import { PROVINCE_FLAGS } from './provinceData';
 import { LAKE_SLOT, PALETTE_SIZE, WATER_SLOT } from './textures';
-import { DEPTH_TONE_K, SEA_DEPTH_MAX, SEA_DEPTH_STEP } from './seaDepth';
+import { DEPTH_TONE_K, SEA_DEPTH_MAX, SEA_DEPTH_STEP, WATER_GRAIN } from './seaDepth';
 import { WAVE_GLSL } from './seaWaves';
 
 /** Число как литерал GLSL float. */
@@ -95,7 +95,7 @@ const vec3 SEA_COAST = ${glslVec3(MAP_COLORS.seaCoast)};
 const float DEPTH_MAX = ${f(SEA_DEPTH_MAX)};
 const float TONE_K = ${f(DEPTH_TONE_K)};
 const float DEPTH_STEP = ${f(SEA_DEPTH_STEP)};
-const float WATER_GRAIN = 0.35; // paper grain on water, share of the land grain
+const float WATER_GRAIN = ${f(WATER_GRAIN)}; // paper grain on water, share of the land grain
 const vec3 LAKE_DEEP = ${glslVec3(MAP_COLORS.lakeDeep)};
 const vec3 LAKE_SHALLOW = ${glslVec3(MAP_COLORS.lakeShallow)};
 const vec3 COAST_LINE = ${glslVec3(MAP_COLORS.coastLine)};

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WAVE_AMP, WAVE_GLSL, waveShade, waveStrength } from '../../src/render/seaWaves';
+import { WAVE_AMP, WAVE_ANGLE, WAVE_COS, WAVE_GLSL, WAVE_SIN, waveShade, waveStrength } from '../../src/render/seaWaves';
 
 describe('рябь на воде', () => {
   it('на общем виде нет, вблизи есть', () => {
@@ -41,5 +41,18 @@ describe('рябь на воде', () => {
 
   it('GLSL без выборок текстур', () => {
     expect(WAVE_GLSL).not.toMatch(/texture(Lod)?\s*\(|texelFetch/);
+  });
+
+  it('GLSL: cos и sin поворотов подставлены константами из TS, в цикле их не считают', () => {
+    expect(WAVE_GLSL).not.toMatch(/(cos|sin)\s*\(/);
+    WAVE_ANGLE.forEach((a, i) => {
+      expect(WAVE_COS[i]).toBe(Math.cos(a));
+      expect(WAVE_SIN[i]).toBe(Math.sin(a));
+    });
+    for (const v of [...WAVE_COS, ...WAVE_SIN]) expect(WAVE_GLSL).toContain(v.toFixed(8));
+  });
+
+  it('GLSL пропускает октаву с нулевым весом', () => {
+    expect(WAVE_GLSL).toMatch(/if \(a <= 0\.0\) continue;/);
   });
 });

@@ -1,4 +1,5 @@
 import { t } from '../i18n/ru';
+import { ERR_CLEANUP_NO_CONVERGE } from '../sim/world/provinceCleanup';
 import { el } from './dom';
 
 /**
@@ -24,7 +25,8 @@ export function showError(parent: HTMLElement, message: string, detail?: string,
   return () => root.remove();
 }
 
+/** Подробность ошибки: известные коды из sim — по-русски, остальное — текст исключения как есть. */
 export function errorDetail(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
+  const raw = err instanceof Error ? err.message : String(err);
+  return raw === ERR_CLEANUP_NO_CONVERGE ? t('error.cleanupNoConverge') : raw;
 }

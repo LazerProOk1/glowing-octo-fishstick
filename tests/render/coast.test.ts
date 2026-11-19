@@ -93,6 +93,66 @@ function nearVisibleWater(coast: Float32Array, w: number, h: number, i: number):
   return false;
 }
 
+/** Прежняя реализация обхода (затравка — вся сторона-источник): эталон для проверки оптимизации. */
+function referenceSpread(world: World, coast: Float32Array, toLand: boolean): Uint16Array {
+  const { w, h, provinces, provinceOf } = world;
+  const n = w * h;
+  const out = provinceOf.slice();
+  const sourceOf = provinces.map((p) => (p.isLand === toLand ? 1 : 0));
+  const sign = toLand ? 1 : -1;
+  const state = new Uint8Array(n);
+  let frontier: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (sourceOf[provinceOf[i]!]) {
+      frontier.push(i);
+      continue;
+    }
+    const x = i % w;
+    const y = (i - x) / w;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx >= 0 && ny >= 0 && nx < w && ny < h && sign * coast[ny * w + nx]! > 0) state[i] = 1;
+      }
+    }
+  }
+  while (frontier.length > 0) {
+    const next: number[] = [];
+    for (const i of frontier) {
+      const id = out[i]!;
+      const x = i % w;
+      const y = (i - x) / w;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const j = ny * w + nx;
+          if (state[j] === 1) {
+            state[j] = 2;
+            out[j] = id;
+            next.push(j);
+          } else if (state[j] === 2 && id < out[j]!) {
+            out[j] = id;
+          }
+        }
+      }
+    }
+    for (const j of next) state[j] = 3;
+    frontier = next;
+  }
+  return out;
+}
+
+describe('обход карт показа', () => {
+  it('затравка только у полосы даёт тот же результат, что обход от всей стороны (сид "1", small)', () => {
+    const coast = coastHeight(world.height, world.w, world.h);
+    expect(displayProvinceOf(world, coast)).toEqual(referenceSpread(world, coast, true));
+    expect(displaySeaProvinceOf(world, coast)).toEqual(referenceSpread(world, coast, false));
+  }, 60000);
+});
+
 describe('displaySeaProvinceOf', () => {
   it('visible water picks a water province (сид "1", small)', () => {
     const { w, h, provinces, provinceOf } = world;

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { SEA_LEVEL } from '../../src/content/terrainLevels';
-import { SEA_DEPTH_MAX, SEA_DEPTH_STEP, depthTone, seaDepthSize, smoothSeaDepth } from '../../src/render/seaDepth';
+import { MAP_FRAGMENT } from '../../src/render/mapShader';
+import {
+  DEPTH_TONE_K,
+  SEA_DEPTH_MAX,
+  SEA_DEPTH_STEP,
+  WATER_GRAIN,
+  depthTone,
+  seaDepthSize,
+  smoothSeaDepth,
+} from '../../src/render/seaDepth';
 
 describe('depthTone', () => {
   it('0 у берега, 1 на самом дне, вне диапазона обрезается', () => {
@@ -20,6 +29,25 @@ describe('depthTone', () => {
       const v = depthTone((i / 100) * SEA_DEPTH_MAX);
       expect(v).toBeGreaterThan(prev);
       prev = v;
+    }
+  });
+});
+
+describe('depthTone и шейдер карты', () => {
+  const f = (n: number): string => n.toFixed(4);
+
+  it('в GLSL те же константы K, глубина и зерно воды, формула та же', () => {
+    expect(MAP_FRAGMENT).toContain(`const float TONE_K = ${f(DEPTH_TONE_K)};`);
+    expect(MAP_FRAGMENT).toContain(`const float DEPTH_MAX = ${f(SEA_DEPTH_MAX)};`);
+    expect(MAP_FRAGMENT).toContain(`const float WATER_GRAIN = ${f(WATER_GRAIN)};`);
+    // TS: t·(1 + K)/(t + K).
+    expect(MAP_FRAGMENT).toContain('t * (1.0 + TONE_K) / (t + TONE_K)');
+  });
+
+  it('TS-формула даёт значение из GLSL-формулы с теми же константами', () => {
+    const k = Number(f(DEPTH_TONE_K));
+    for (const t of [0, 0.1, 0.25, 0.6, 1]) {
+      expect(depthTone(t * SEA_DEPTH_MAX)).toBeCloseTo((t * (1 + k)) / (t + k), 4);
     }
   });
 });

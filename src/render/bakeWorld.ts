@@ -101,12 +101,11 @@ function spreadAcrossCoast(
   const sign = toLand ? 1 : -1;
   // 0 — не трогаем, 1 — полоса, ещё без владельца, 2 — владелец найден на этом слое.
   const state = new Uint8Array(n);
-  let frontier: number[] = [];
+  // Затравка обхода — только клетки-источники, у которых среди 8 соседей есть клетка полосы: остальные
+  // ничего не раздают, так что результат тот же, а обход не трогает всю сушу (воду).
+  const seeded = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
-    if (sourceOf[provinceOf[i] as number]) {
-      frontier.push(i);
-      continue;
-    }
+    if (sourceOf[provinceOf[i] as number]) continue;
     const x = i % w;
     const y = (i - x) / w;
     let near = false;
@@ -121,8 +120,21 @@ function spreadAcrossCoast(
         }
       }
     }
-    if (near) state[i] = 1;
+    if (!near) continue;
+    state[i] = 1;
+    for (let dy = -1; dy <= 1; dy++) {
+      const ny = y + dy;
+      if (ny < 0 || ny >= h) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx;
+        if (nx < 0 || nx >= w) continue;
+        const j = ny * w + nx;
+        if (sourceOf[provinceOf[j] as number]) seeded[j] = 1;
+      }
+    }
   }
+  let frontier: number[] = [];
+  for (let i = 0; i < n; i++) if (seeded[i]) frontier.push(i);
   // Послойный обход: на слое d владелец клетки — наименьший id среди соседей слоя d − 1.
   while (frontier.length > 0) {
     const next: number[] = [];
