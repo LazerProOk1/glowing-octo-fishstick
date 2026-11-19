@@ -13,10 +13,11 @@ Browser strategy game: TypeScript strict, PixiJS 8 (WebGL2), Vite, Vitest, ESLin
 Stages 1 (map) and 1.5 (feedback fixes) are closed; branch `stage-1-map` pushed, not merged into `main`.
 Still to show the author: sea and river screenshots (`docs/screenshots/stage-1-5/`; look accepted by Claude via checklist).
 Next session, in order (once the author's weekly limits reset):
-1. Build the code graph with graphify (`/graphify`, later `--update`) so agents stop re-reading/duplicating code.
-2. Author runs `/ponytail-audit`; triage the findings together.
-3. Try OpenCode as a second reviewer on one diff and compare.
-4. Stage 2 (one settlement): start with brainstorming with the author, based on «Готовность к этапу 2» in `docs/architecture.md`.
+1. Read every report in `docs/reports/` (`arena-translate-review.md`, `docs-audit.md`, `project-status.md`, `deepseek-review.md`) and fix the confirmed findings; keep unresolved ones in the stage decisions.
+2. Build the code graph with graphify (`/graphify`, later `--update`) so agents stop re-reading/duplicating code.
+3. Run `ponytail-audit` (installed as a skill; Task B of `docs/reports/deepseek-review.md`) and triage the findings together.
+4. Try OpenCode as a second reviewer on one diff and compare.
+5. Stage 2 (one settlement): start with brainstorming with the author, based on «Готовность к этапу 2» in `docs/architecture.md`.
 
 ## Workflow
 - New stage/feature: brainstorming with the author → spec → plan of tasks (superpowers:writing-plans).
