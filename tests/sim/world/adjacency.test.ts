@@ -8,7 +8,7 @@ import { MAJOR_RIVER } from './provinceMetrics';
 
 const key = (a: number, b: number): string => `${Math.min(a, b)}:${Math.max(a, b)}`;
 
-/** Число пограничных пар клеток по ключу пары провинций. */
+/** Number of border cell pairs per province pair key. */
 function borderPairs(world: World): { length: Map<string, number> } {
   const { w, h, provinceOf } = world;
   const length = new Map<string, number>();
@@ -29,7 +29,7 @@ function borderPairs(world: World): { length: Map<string, number> } {
   return { length };
 }
 
-/** Пары границы, где обе клетки — суша без крупной реки, по ключу пары провинций. */
+/** Border pairs where both cells are land without a major river, per province pair key. */
 function freePairs(world: World): Map<string, number> {
   const { w, h, height, riverMask, provinceOf } = world;
   const free = (i: number): boolean => height[i]! > SEA_LEVEL && riverMask[i]! < MAJOR_RIVER;
@@ -49,8 +49,8 @@ function freePairs(world: World): Map<string, number> {
 }
 
 /**
- * Переправы через крупные реки по ключу пары провинций: лучи вправо и вниз из свободной клетки
- * суши через 1..8 клеток крупной реки (суша, riverMask ≥ 2) до свободной клетки суши другой провинции.
+ * Crossings over major rivers per province pair key: rays right and down from a free land cell
+ * through 1..8 major-river cells (land, riverMask ≥ 2) to a free land cell of another province.
  */
 function crossings(world: Pick<World, 'w' | 'h' | 'height' | 'riverMask' | 'provinceOf'>): Map<string, number> {
   const { w, h, height, riverMask, provinceOf } = world;
@@ -80,7 +80,7 @@ function crossings(world: Pick<World, 'w' | 'h' | 'height' | 'riverMask' | 'prov
   return out;
 }
 
-describe('рёбра соседства (сид "1")', () => {
+describe('adjacency edges (seed "1")', () => {
   let world: World;
   let pairs: ReturnType<typeof borderPairs>;
   beforeAll(() => {
@@ -88,7 +88,7 @@ describe('рёбра соседства (сид "1")', () => {
     pairs = borderPairs(world);
   }, 60000);
 
-  it('a < b, без повторов; edgesOf — индексы рёбер провинции', () => {
+  it('a < b, no duplicates; edgesOf gives the edge indices of a province', () => {
     const seen = new Set<string>();
     world.adjacency.forEach((e, i) => {
       expect(e.a).toBeLessThan(e.b);
@@ -104,7 +104,7 @@ describe('рёбра соседства (сид "1")', () => {
     expect(total).toBe(world.adjacency.length * 2);
   });
 
-  it('length = числу граничных пар клеток; соседи из neighbors — ровно рёбра с length > 0', () => {
+  it('length equals the number of border cell pairs; neighbours from neighbors are exactly the edges with length > 0', () => {
     const touching = world.adjacency.filter((e) => e.length > 0);
     expect(touching.length).toBe(pairs.length.size);
     for (const e of touching) expect(e.length).toBe(pairs.length.get(key(e.a, e.b)));
@@ -112,22 +112,22 @@ describe('рёбра соседства (сид "1")', () => {
     for (const p of world.provinces) for (const q of p.neighbors) expect(byKey.has(key(p.id, q))).toBe(true);
   });
 
-  it('river ⇔ граница пересекает крупную реку (геометрическая проверка лучами)', () => {
-    // Независимо от реализации: луч по оси из свободной клетки суши A через 1..8 клеток крупной
-    // реки в свободную клетку суши B — переправа A→B. У рёбер-рек переправы есть; ребро, у
-    // которого переправ не меньше половины длины границы, — река, если только провинции не
-    // соприкасаются в основном по суше (больше половины пар границы — «суша без реки | суша без
-    // реки»): тогда река разделяет их где-то в стороне, а граница идёт не по ней.
+  it('river ⇔ the border crosses a major river (geometric ray check)', () => {
+    // Independent of the implementation: an axial ray from a free land cell A through 1..8 major-river
+    // cells into a free land cell B is a crossing A→B. River edges have crossings; an edge with at least
+    // half its border length in crossings is a river, unless the provinces mostly touch over land
+    // (more than half of the border pairs are "land without river | land without river"): then the river
+    // separates them somewhere off to the side, and the border does not run along it.
     const cross = crossings(world);
     const landPairs = freePairs(world);
     const landEdges = world.adjacency.filter(
       (e) => e.length > 0 && world.provinces[e.a]!.isLand && world.provinces[e.b]!.isLand,
     );
-    // Исключение — угловой стык: граница из 2 пар, одна «река | берег», другая сухая. Диагональная
-    // река проходит через угол стыка, и луч по оси её не пересекает, хотя по правилу
-    // 2·riverLength ≥ length ребро — река. На сиде "1" таких 2: пары провинций 246–1607 и 979–3415
-    // (обе length 2, riverLength 1; появились после смещения климата биомов в задаче 6). Их не
-    // больше 3, чтобы исключение не прятало регрессию.
+    // The exception is a corner joint: a border of 2 pairs, one "river | bank" and one dry. A diagonal
+    // river passes through the corner, and an axial ray does not cross it, although by the rule
+    // 2·riverLength ≥ length the edge is a river. On seed "1" there are 2 of them: province pairs
+    // 246–1607 and 979–3415 (both length 2, riverLength 1; they appeared after the biome climate
+    // jitter in task 6). There are no more than 3, so the exception does not hide a regression.
     const corner = (e: (typeof landEdges)[number]): boolean => e.length === 2 && e.riverLength === 1;
     const riverNoCrossing = landEdges.filter((e) => e.river && !cross.get(key(e.a, e.b)));
     expect(riverNoCrossing.filter((e) => !corner(e)).map((e) => [e.a, e.b, e.length])).toEqual([]);
@@ -142,7 +142,7 @@ describe('рёбра соседства (сид "1")', () => {
     expect(landEdges.filter((e) => e.river).length).toBeGreaterThan(50);
   });
 
-  it('riverLength — пары «река | не река» у рёбер суша–суша, 0 у остальных; river = 2·riverLength ≥ length', () => {
+  it('riverLength — "river | non-river" pairs on land–land edges, 0 on the others; river = 2·riverLength ≥ length', () => {
     for (const e of world.adjacency) {
       const land = world.provinces[e.a]!.isLand && world.provinces[e.b]!.isLand;
       if (!land || e.length === 0) expect(e.riverLength).toBe(0);
@@ -151,7 +151,7 @@ describe('рёбра соседства (сид "1")', () => {
     }
   });
 
-  it('проливы — только между сухопутными провинциями без общей границы', () => {
+  it('straits exist only between land provinces without a shared border', () => {
     const straits = world.adjacency.filter((e) => e.strait);
     expect(straits.length).toBeGreaterThan(0);
     for (const e of straits) {
@@ -159,14 +159,14 @@ describe('рёбра соседства (сид "1")', () => {
       expect(e.length).toBe(0);
       expect(e.river).toBe(false);
     }
-    // Рёбра без общей границы бывают только проливами.
+    // Edges without a shared border can only be straits.
     expect(world.adjacency.filter((e) => e.length === 0 && !e.strait)).toEqual([]);
   });
 });
 
 /**
- * Синтетическая карта: вода (провинция 0) и два острова-квадрата 4×4 (провинции 1 и 2) на одной
- * строке, между ними `gap` клеток воды по горизонтали.
+ * Synthetic map: water (province 0) and two 4×4 square islands (provinces 1 and 2) on one
+ * row, with `gap` cells of water between them horizontally.
  */
 function islands(gap: number, dy = 0): { provinceOf: Uint16Array; height: Float32Array; w: number; h: number } {
   const w = 30;
@@ -192,39 +192,39 @@ function edgesFor(gap: number, dy = 0): ReturnType<typeof computeAdjacency>['adj
   return computeAdjacency(m.provinceOf, provinces, m.height, new Uint8Array(m.w * m.h), m.w, m.h).adjacency;
 }
 
-describe('проливы на синтетической карте', () => {
-  it(`ширина пролива — до ${STRAIT_MAX_WATER} клеток воды`, () => {
+describe('straits on a synthetic map', () => {
+  it(`strait width — up to ${STRAIT_MAX_WATER} cells of water`, () => {
     expect(STRAIT_MAX_WATER).toBe(3);
   });
 
-  it('два острова через 2 клетки воды — пролив', () => {
+  it('two islands across 2 cells of water — a strait', () => {
     const e = edgesFor(2).find((x) => x.a === 1 && x.b === 2);
     expect(e).toEqual({ a: 1, b: 2, length: 0, riverLength: 0, river: false, strait: true });
   });
 
-  it('через 3 клетки — пролив, через 4 и 5 — нет', () => {
+  it('across 3 cells — a strait, across 4 and 5 — not', () => {
     expect(edgesFor(3).some((x) => x.a === 1 && x.b === 2 && x.strait)).toBe(true);
     expect(edgesFor(4).some((x) => x.a === 1 && x.b === 2)).toBe(false);
     expect(edgesFor(5).some((x) => x.a === 1 && x.b === 2)).toBe(false);
   });
 
-  it('острова, смещённые по диагонали (угол к углу через 2 клетки по диагонали) — пролив', () => {
-    // Второй остров ниже на 4 + 2 строки: ближайшие клетки берега — углы, 2 клетки воды по диагонали.
+  it('islands offset diagonally (corner to corner across 2 diagonal cells) — a strait', () => {
+    // The second island is 4 + 2 rows lower: the nearest shore cells are corners, 2 cells of water diagonally.
     expect(edgesFor(2, 6).some((x) => x.a === 1 && x.b === 2 && x.strait)).toBe(true);
   });
 
-  it('рёбра острова с морем: длина — периметр острова', () => {
+  it('edges of an island with the sea: the length is the island perimeter', () => {
     const list = edgesFor(5);
     expect(list.find((x) => x.a === 0 && x.b === 1)).toEqual({ a: 0, b: 1, length: 16, riverLength: 0, river: false, strait: false });
   });
 });
 
 /**
- * Синтетическая карта 20×12, вся суша: вертикальная крупная река шириной 2 (x = 9, 10).
- * Левый берег — провинции 0 (y < 6) и 1 (y ≥ 6); клетки реки отданы левому берегу, как в
- * assignCorridor; правый берег (x ≥ 11) — провинция 2.
+ * Synthetic 20×12 map, all land: a vertical major river 2 cells wide (x = 9, 10).
+ * The left bank is provinces 0 (y < 6) and 1 (y ≥ 6); river cells are given to the left bank, as in
+ * assignCorridor; the right bank (x ≥ 11) is province 2.
  */
-describe('реки на синтетической карте', () => {
+describe('rivers on a synthetic map', () => {
   const w = 20;
   const h = 12;
   const provinceOf = new Uint16Array(w * h);
@@ -242,21 +242,21 @@ describe('реки на синтетической карте', () => {
   const edge = (a: number, b: number): (typeof adjacency)[number] | undefined =>
     adjacency.find((e) => e.a === a && e.b === b);
 
-  it('провинции по разные берега реки ширины 2 — river, riverLength = длине границы', () => {
+  it('provinces on opposite banks of a 2-wide river — river, riverLength equals the border length', () => {
     expect(edge(0, 2)).toEqual({ a: 0, b: 2, length: 6, riverLength: 6, river: true, strait: false });
     expect(edge(1, 2)).toEqual({ a: 1, b: 2, length: 6, riverLength: 6, river: true, strait: false });
   });
 
-  it('провинции одного берега у реки — не river, riverLength = 0', () => {
+  it('provinces on the same bank at a river — not river, riverLength = 0', () => {
     expect(edge(0, 1)).toEqual({ a: 0, b: 1, length: 11, riverLength: 0, river: false, strait: false });
   });
 
-  it('лучевая проверка видит переправы ровно у рёбер через реку', () => {
+  it('the ray check finds crossings exactly on the edges across a river', () => {
     const cross = crossings({ w, h, height, riverMask, provinceOf });
     expect([...cross.keys()].sort()).toEqual(['0:2', '1:2']);
   });
 
-  it('узкий ручей (riverMask 1) рекой не считается', () => {
+  it('a narrow stream (riverMask 1) does not count as a river', () => {
     const thin = riverMask.map((v) => (v > 0 ? 1 : 0));
     const e = computeAdjacency(provinceOf, provinces, height, thin, w, h).adjacency.find((x) => x.a === 0 && x.b === 2);
     expect(e).toEqual({ a: 0, b: 2, length: 6, riverLength: 0, river: false, strait: false });

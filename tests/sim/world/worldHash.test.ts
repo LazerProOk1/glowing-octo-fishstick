@@ -16,20 +16,20 @@ describe('worldHash', () => {
     a = smallWorld('1');
   }, 60000);
 
-  // Эталонный хеш (литерал) лежит только в tests/sim/world/fingerprint.test.ts.
-  it('выглядит как 8 hex-символов', () => {
+   // The reference hash (a literal) lives only in tests/sim/world/fingerprint.test.ts.
+  it('looks like 8 hex characters', () => {
     expect(worldHash(a)).toMatch(/^[0-9a-f]{8}$/);
   });
 
-  it('совпадает у двух генераций с одними параметрами', () => {
+  it('is the same for two generations with the same params', () => {
     expect(worldHash(smallWorld('1'))).toBe(worldHash(a));
   }, 60000);
 
-  it('меняется при смене сида', () => {
+  it('changes when the seed changes', () => {
     expect(worldHash(smallWorld('2'))).not.toBe(worldHash(a));
   }, 60000);
 
-  it('учитывает параметры мира, даже если массивы те же', () => {
+  it('takes the world params into account even if the arrays are the same', () => {
     const other: World = { ...a, params: { ...a.params, options: { ...a.params.options, fantasy: true } } };
     expect(worldHash(other)).not.toBe(worldHash(a));
   });

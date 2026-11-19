@@ -2,7 +2,7 @@ import type { PackManifest } from '../../biomes/types';
 import { BASE_BIOMES, LAKE_BIOME } from './biomes';
 import { FANTASY_BIOMES } from './fantasyBiomes';
 
-/** Базовый пак: обычные биомы, затем фэнтези (коды фэнтези идут после обычных), затем озеро. */
+/** Base pack: ordinary biomes, then fantasy (fantasy codes come after the ordinary ones), then the lake. */
 export const BASE_PACK: PackManifest = {
   id: 'base',
   nameKey: 'pack.base',

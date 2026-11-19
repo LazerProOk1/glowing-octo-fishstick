@@ -13,7 +13,7 @@ import { defaultParams } from '../../src/sim/world/params';
 import type { Province, World } from '../../src/sim/world/types';
 
 describe('encodeProvinceId', () => {
-  it('круговое преобразование', () => {
+  it('round-trip conversion', () => {
     for (const id of [0, 255, 256, 65535]) {
       expect(decodeProvinceId(...encodeProvinceId(id))).toBe(id);
     }
@@ -60,7 +60,7 @@ describe('bakeTextures', () => {
     };
   });
 
-  it('раскладка provinceRG, terrain; поля границ нет', () => {
+  it('provinceRG and terrain layout; no border field', () => {
     const t = bakeTextures(world);
     expect(t.provinceRG.length).toBe(w * h * 4);
     expect(Array.from(t.provinceRG.subarray(0, 4))).toEqual([0, 0, 255, 255]);
@@ -74,11 +74,11 @@ describe('bakeTextures', () => {
     expect(Object.keys(t).sort()).toEqual(['provinceRG', 'terrain']);
   });
 
-  it('бросает при отсутствующей провинции', () => {
+  it('throws on a missing province', () => {
     expect(() => bakeTextures({ ...world, provinces: [] })).toThrow();
   });
 
-  it('provinceIdPixels: та же раскладка, что provinceRG, для любой карты владельцев', () => {
+  it('provinceIdPixels: the same layout as provinceRG, for any owner map', () => {
     const owner = new Uint16Array(w * h).fill(300);
     owner[0] = 0;
     const px = provinceIdPixels(owner, world.provinces);
@@ -87,7 +87,7 @@ describe('bakeTextures', () => {
     expect(() => provinceIdPixels(new Uint16Array([301]), world.provinces)).toThrow();
   });
 
-  it('writeWaterClass: канал A по виду воды биома, тот же разбор, что слоты палитры', () => {
+  it('writeWaterClass: alpha by the biome water kind, the same mapping as the palette slots', () => {
     const defs = world.biomes;
     const biome = Uint8Array.from(defs.map((_, code) => code));
     const px = new Uint8Array(biome.length * 4).fill(7);

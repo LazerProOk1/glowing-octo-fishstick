@@ -3,9 +3,9 @@ import { findLakes } from '../../../src/sim/world/lakes';
 import { build } from './provincesSuite';
 
 /**
- * Review Focus этапа 1: 20 сидов, включая пустой и "Бета-7" (почти вся вода / почти вся суша).
- * Размер small, чтобы прогон оставался быстрым: переменный радиус моря зависит от расстояния до
- * суши в клетках, и на small крошечные моря встречаются чаще.
+ * Stage 1 review focus: 20 seeds, including the empty one and "Бета-7" (almost all water / almost
+ * all land). Small size to keep the run fast: the variable sea radius depends on the distance to
+ * land in cells, and tiny seas are more common on small.
  */
 describe('sea provinces over 20 seeds (small)', () => {
   const SEEDS = [...Array.from({ length: 17 }, (_, i) => String(i + 1)), '', 'Бета-7', 'worldbox'];

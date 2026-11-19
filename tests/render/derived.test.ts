@@ -5,13 +5,13 @@ import { generateWorld } from '../../src/sim/world/generateWorld';
 import { defaultParams } from '../../src/sim/world/params';
 import type { World } from '../../src/sim/world/types';
 
-/** Небольшой мир: полное запекание быстрое. */
+/** A small world: the full bake is fast. */
 function smallWorld(): World {
   const p = defaultParams('производные');
   return generateWorld({ ...p, options: { ...p.options, size: 'small' } });
 }
 
-/** Копия мира с отдельными массивами биомов (остальное общее — не меняется). */
+/** Copy of the world with its own biome arrays (the rest is shared — unchanged). */
 function withBiome(world: World, biome: Uint8Array): World {
   return { ...world, biome };
 }
@@ -22,7 +22,7 @@ function bytes(v: ArrayBufferView): Buffer {
 
 const BLUR_R = Math.ceil(3 * BIOME_SIGMA);
 
-describe('производные данные: пересчёт прямоугольника', () => {
+describe('derived data: rectangle recompute', () => {
   let world: World;
   let base: DerivedWorld;
   beforeAll(() => {
@@ -30,7 +30,7 @@ describe('производные данные: пересчёт прямоуго
     base = buildDerived(world);
   }, 60000);
 
-  /** Перекрашивает клетки прямоугольника в другой биом суши (по коду) и сравнивает с полным пересчётом. */
+  /** Repaints the cells of a rectangle with another land biome (by code) and compares with a full rebuild. */
   const check = (rect: { x: number; y: number; w: number; h: number }, code: number): void => {
     const biome = world.biome.slice();
     for (let y = rect.y; y < rect.y + rect.h; y++) {
@@ -49,7 +49,7 @@ describe('производные данные: пересчёт прямоуго
     for (const k of Object.keys(full) as Array<keyof DerivedWorld>) {
       expect(bytes(partial[k]).equals(bytes(full[k])), k).toBe(true);
     }
-    // Записанная область — прямоугольник с запасом на радиус размытия, обрезанный краями карты.
+    // The written area is the rectangle plus the blur radius margin, clipped to the map edges.
     const x0 = Math.max(0, rect.x - BLUR_R);
     const y0 = Math.max(0, rect.y - BLUR_R);
     const x1 = Math.min(world.w, rect.x + rect.w + BLUR_R);
@@ -59,18 +59,18 @@ describe('производные данные: пересчёт прямоуго
 
   const landCode = (id: string): number => world.biomes.findIndex((d) => d.id === id);
 
-  it('биом в середине карты сменился — те же байты, что при полном пересчёте', () => {
-    // Центр самой крупной провинции суши: там точно суша.
+  it('a biome changed in the middle of the map — the same bytes as a full rebuild', () => {
+    // Centre of the largest land province: definitely land there.
     const p = world.provinces.filter((q) => q.isLand).sort((a, b) => b.cellCount - a.cellCount)[0]!;
     check({ x: p.center.x - 3, y: p.center.y - 2, w: 7, h: 5 }, landCode('desert'));
   });
 
-  it('прямоугольник у края карты (обрезка размытия) — те же байты', () => {
+  it('a rectangle at the map edge (blur clipping) — the same bytes', () => {
     check({ x: 0, y: 0, w: 6, h: 4 }, landCode('plains'));
     check({ x: world.w - 5, y: world.h - 3, w: 5, h: 3 }, landCode('forest'));
   });
 
-  it('прямоугольник, выходящий за карту, обрезается', () => {
+  it('a rectangle extending past the map is clipped', () => {
     const d: DerivedWorld = { ...base, biomeColor: base.biomeColor.slice(), terrain: base.terrain.slice(), height: base.height.slice() };
     expect(updateDerivedRect(world, d, { x: -10, y: -10, w: 5, h: 5 })).toEqual({ x: 0, y: 0, w: 0, h: 0 });
     expect(bytes(d.biomeColor).equals(bytes(base.biomeColor))).toBe(true);

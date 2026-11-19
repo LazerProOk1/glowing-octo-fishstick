@@ -1,34 +1,34 @@
-// Глубина моря для шейдера карты: тон воды. Формула тона здесь и в GLSL (mapShader.ts) одна и та
-// же; TS-копия нужна для тестов. Глубина берётся с настоящего дна (высота − SEA_LEVEL на воде),
-// сглаженного только в крупном масштабе: видны котловины, хребты и шельфы материков, а мелкий шум
-// рельефа дна (он давал «облака») — нет. Суша в сглаживании не участвует вовсе, поэтому вокруг
-// островов нет ореолов: у берега только узкая полоса из шейдера.
+// Sea depth for the map shader: the water tint. The tint formula here and in GLSL (mapShader.ts) is
+// the same; the TS copy exists for the tests. Depth comes from the real bottom (height − SEA_LEVEL
+// on water), smoothed at coarse scale only: basins, ridges and continental shelves show, fine bottom
+// noise (it produced "clouds") does not. Land takes no part in the smoothing at all, so there are no
+// halos around islands: near the shore only a narrow band comes from the shader.
 import { SEA_LEVEL } from '../content/terrainLevels';
 import { blur } from '../sim/geom/blur';
 
 /**
- * Наибольшая глубина: высоты мира лежат в 0..1, поэтому дно не глубже SEA_LEVEL ниже уровня моря.
- * Замер на medium (сиды 1, 2, 3): минимум высоты воды 0.0, медиана глубины 0.12–0.16,
- * около 10% моря лежит на самом дне (глубина ≥ 0.44).
+ * Maximum depth: world heights lie in 0..1, so the bottom is no deeper than SEA_LEVEL below sea level.
+ * Measured on medium (seeds 1, 2, 3): the minimum water height is 0.0, the median depth 0.12–0.16,
+ * about 10% of the sea lies at the very bottom (depth ≥ 0.44).
  */
 export const SEA_DEPTH_MAX = SEA_LEVEL;
 
-/** Шаг сетки глубины, клеток: текстура в SEA_DEPTH_STEP² раз меньше карты, GPU интерполирует. */
+/** Depth grid step, cells: the texture is SEA_DEPTH_STEP² times smaller than the map, the GPU interpolates. */
 export const SEA_DEPTH_STEP = 4;
 /**
- * Масштаб сглаживания дна, клеток (σ гаусса). Шум дна мельче ~30 клеток пропадает, котловины и
- * шельфы в сотни клеток остаются.
+ * Bottom smoothing scale, cells (Gaussian σ). Bottom noise finer than ~30 cells disappears, basins and
+ * shelves hundreds of cells across remain.
  */
 export const SEA_DEPTH_SIGMA = 20;
 
 /**
- * Тон воды по глубине: 0 — мелководье, 1 — глубина. Кривая t·(1 + K)/(t + K), t = глубина / SEA_DEPTH_MAX,
- * K = 0.5: половина перехода приходится на первые 25% глубины, наклон у берега конечный (3),
- * без излома.
+ * Water tint by depth: 0 — shallow, 1 — deep. Curve t·(1 + K)/(t + K), t = depth / SEA_DEPTH_MAX,
+ * K = 0.5: half of the transition falls on the first 25% of the depth, the slope at the shore is finite (3),
+ * with no kink.
  */
 export const DEPTH_TONE_K = 0.5;
 
-/** Доля зерна бумаги на воде относительно суши (шейдер карты; 0 — вода гладкая, 1 — как суша). */
+/** Share of paper grain on water relative to land (map shader; 0 — smooth water, 1 — same as land). */
 export const WATER_GRAIN = 0.35;
 
 export function depthTone(depth: number): number {
@@ -36,24 +36,25 @@ export function depthTone(depth: number): number {
   return (t * (1 + DEPTH_TONE_K)) / (t + DEPTH_TONE_K);
 }
 
-/** Размер сетки глубины для карты w×h клеток. */
+/** Depth grid size for a w×h cell map. */
 export function seaDepthSize(w: number, h: number): { w: number; h: number } {
   return { w: Math.ceil(w / SEA_DEPTH_STEP), h: Math.ceil(h / SEA_DEPTH_STEP) };
 }
 
 /**
- * Крупномасштабная глубина настоящего дна на сетке seaDepthSize (узел (bx, by) — центр блока
- * SEA_DEPTH_STEP² клеток). Средняя глубина воды по блокам, затем нормированное размытие
- * σ = SEA_DEPTH_SIGMA: размываются отдельно сумма глубин воды и доля воды, ответ — их отношение.
- * Так суша не тянет глубину ни к нулю, ни куда-либо ещё: в узле — средняя глубина окружающей воды.
- * Где воды поблизости нет совсем (глубь материка), значение 0; на экран оно не попадает.
+ * Large-scale depth of the real bottom on the seaDepthSize grid (node (bx, by) is the centre of a
+ * SEA_DEPTH_STEP² cell block). Mean water depth per block, then a normalized blur
+ * σ = SEA_DEPTH_SIGMA: the sum of water depths and the water share are blurred separately, and the
+ * answer is their ratio. Thus land pulls the depth neither to zero nor anywhere else: a node holds
+ * the mean depth of the surrounding water. With no water nearby at all (deep inland) it is 0 and
+ * never reaches the screen.
  */
 export function smoothSeaDepth(height: Float32Array, w: number, h: number): Float32Array {
   const s = SEA_DEPTH_STEP;
   const size = seaDepthSize(w, h);
   const sigma = SEA_DEPTH_SIGMA / s;
-  // Поля с нулевой каймой в 3σ: размытие clamp иначе повторяет крайний блок и даёт ему у края
-  // карты половину веса (полосы шума вдоль края). Ноль в обоих полях из отношения выпадает.
+  // Fields with a zero border of 3σ: otherwise the clamp blur repeats the edge block and gives it
+  // half the weight at the map edge (noise stripes along the edge). Zero in both fields cancels out.
   const pad = Math.ceil(3 * sigma);
   const pw = size.w + 2 * pad;
   const ph = size.h + 2 * pad;

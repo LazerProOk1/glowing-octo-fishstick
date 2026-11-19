@@ -1,6 +1,6 @@
-// Модульный воркер: генерация мира и запекание текстур карты, чтобы главный поток
-// не блокировался на несколько секунд. Текстуры рельефа запекает вложенный воркер
-// параллельно рекам и провинциям; без вложенных воркеров они пекутся здесь же, после генерации.
+// Module worker: world generation and map texture baking, so the main thread is not
+// blocked for several seconds. Terrain textures are baked by a nested worker in parallel
+// with rivers and provinces; without nested workers they are baked here, after generation.
 import type { BiomeDef } from '../content/biomes/types';
 import { bakeProvinces, bakeSurface, bakeTransferables, type SurfaceBake, type WorldBake } from '../render/bakeWorld';
 import { generateWorld } from '../sim/world/generateWorld';
@@ -31,18 +31,18 @@ interface SurfaceResult {
   ms: number;
 }
 
-/** Вложенный воркер создаётся один раз; null — недоступен (тогда печём в этом потоке). */
+/** The nested worker is created once; null — unavailable (then we bake on this thread). */
 let surfaceWorker: Worker | null | undefined;
 const surfacePending = new Map<number, { resolve(r: SurfaceResult): void; reject(e: Error): void }>();
 /**
- * Сколько ждать вложенный воркер с момента запроса. Он печёт ~0,5–1 с; если за это время нет ответа,
- * воркер считается зависшим, останавливается, и рельеф печётся в этом потоке.
+ * How long to wait for the nested worker from the moment of the request. It bakes in ~0.5–1 s; if there
+ * is no answer in that time, the worker is considered hung, it is stopped, and the terrain is baked here.
  */
 const SURFACE_TIMEOUT_MS = 15000;
 
 /**
- * Останавливает вложенный воркер и отклоняет ожидающие запросы.
- * retry — пересоздать его при следующей генерации (зависание), иначе больше не пробовать (сбой).
+ * Stops the nested worker and rejects the pending requests.
+ * retry — recreate it on the next generation (a hang), otherwise do not try again (a failure).
  */
 function dropSurfaceWorker(worker: Worker, err: Error, retry: boolean): void {
   if (surfaceWorker === worker) surfaceWorker = retry ? undefined : null;
@@ -60,7 +60,7 @@ function getSurfaceWorker(): Worker | null {
       const msg = e.data;
       const mismatch = protocolMismatch(msg);
       if (mismatch !== null) {
-        // Вложенный воркер другой версии: больше его не используем, рельеф печём здесь.
+        // Nested worker of a different version: stop using it, bake the terrain here.
         dropSurfaceWorker(worker, new Error(mismatch), false);
         return;
       }
@@ -72,7 +72,7 @@ function getSurfaceWorker(): Worker | null {
     };
     worker.onerror = (e: ErrorEvent) => {
       e.preventDefault();
-      // Воркер не поднялся или упал: дальше печём в этом потоке.
+      // The worker did not start or crashed: bake on this thread from now on.
       dropSurfaceWorker(worker, new Error(e.message || 'surface worker failed'), false);
     };
     worker.onmessageerror = () => {
@@ -87,13 +87,13 @@ function getSurfaceWorker(): Worker | null {
 
 interface SurfaceJob {
   result: Promise<SurfaceResult>;
-  /** Запускает таймаут ожидания результата (вызывается, когда generateWorld закончил). */
+  /** Starts the wait timeout for the result (called when generateWorld has finished). */
   startTimeout(): void;
-  /** Отменяет задачу: вложенный воркер завершается (если ещё не ответил), следующий мир создаст нового. */
+  /** Cancels the job: the nested worker is terminated (if it has not answered yet), the next world creates a new one. */
   cancel(): void;
 }
 
-/** Отправляет копии высоты и биомов во вложенный воркер; null — если его нет. */
+/** Sends copies of height and biomes to the nested worker; null if there is none. */
 function startSurfaceBake(
   id: number,
   height: Float32Array,
@@ -130,8 +130,8 @@ function startSurfaceBake(
     });
     worker.postMessage(req, [req.height.buffer, req.biome.buffer]);
   });
-  // Таймаут отсчитывается от конца generateWorld, а не от отправки запроса: вложенный воркер
-  // конкурирует с генерацией за процессор, и долгая генерация большого мира не должна его ронять.
+  // The timeout counts from the end of generateWorld, not from sending the request: the nested worker
+  // competes with generation for the CPU, and long generation of a large world must not bring it down.
   const startTimeout = (): void => {
     if (settled) return;
     timer = setTimeout(
@@ -179,8 +179,8 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     const job: SurfaceJob | null = parallel;
     job?.startTimeout();
     enter('bake');
-    // Текстуры провинций зависят от всей генерации — их печём здесь, пока вложенный воркер
-    // доделывает рельеф; потом ждём его результата.
+    // Province textures depend on the whole generation — they are baked here while the nested worker
+    // finishes the terrain; then we wait for its result.
     const own = bakeProvinces(world);
     const pending: Promise<SurfaceResult> | null = job ? job.result : null;
     let surface: SurfaceResult;
@@ -195,7 +195,7 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     const transfer = [...new Set([...collectTransferables(world), ...bakeTransferables(bake)])];
     scope.postMessage({ v: PROTOCOL_VERSION, type: 'done', id, world, bake, timings }, transfer);
   } catch (err) {
-    // Генерация упала, когда запекание рельефа уже шло: не оставляем вложенный воркер работать вхолостую.
+    // Generation failed while terrain baking was already running: do not leave the nested worker spinning.
     const job: SurfaceJob | null = parallel;
     job?.cancel();
     const message = err instanceof Error ? err.message : String(err);

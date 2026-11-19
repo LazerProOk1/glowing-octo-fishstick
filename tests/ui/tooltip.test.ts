@@ -9,10 +9,10 @@ function province(p: Partial<Province>): Province {
 
 describe('provinceInfo', () => {
   const biomes = resolveBiomes({});
-  it('озеро подписано «Озеро · вода»', () => {
+  it('a lake is labelled "Озеро · вода"', () => {
     expect(provinceInfo(province({ isLand: false, water: 'lake', biome: 'lake' }), biomes)).toBe('Озеро · вода');
   });
-  it('море и суша', () => {
+  it('sea and land', () => {
     expect(provinceInfo(province({ isLand: false, water: 'sea', biome: 'ocean' }), biomes)).toBe('Океан · море');
     expect(provinceInfo(province({ biome: 'taiga', coastal: true }), biomes)).toBe('Тайга · суша · прибрежная');
   });

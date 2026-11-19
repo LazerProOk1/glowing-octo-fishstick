@@ -1,7 +1,7 @@
-// Адрес мира в hash: `#<seed>?fantasy=1&size=small&off=id1,id2&packs=base,x`. Сид — в кодировке
-// URI (кириллица, «?» и «&» в сиде переживают круг), параметры — после первого «?».
-// Значения по умолчанию в адрес не пишутся. Версия генератора в адрес не входит: адрес — рецепт
-// мира для текущей версии (сохранения хранят WorldParams целиком, с версией).
+// World address in the hash: `#<seed>?fantasy=1&size=small&off=id1,id2&packs=base,x`. The seed is URI
+// encoded (cyrillic, "?" and "&" in the seed survive the round trip), the params go after the first "?".
+// Default values are not written to the address. The generator version is not part of it: the address is
+// a world recipe for the current version (saves store WorldParams whole, with the version).
 import { DEFAULT_PACKS } from './content/registry';
 import { DEFAULT_SIZE, defaultParams, isWorldSize, type WorldParams } from './sim/world/params';
 
@@ -13,12 +13,12 @@ function decode(s: string): string {
   }
 }
 
-/** Выключенные биомы без повторов и по алфавиту: `off=a,b` и `off=b,a` — один и тот же мир. */
+/** Disabled biomes without duplicates, alphabetical: `off=a,b` and `off=b,a` are the same world. */
 function normalizeOff(ids: readonly string[]): string[] {
   return [...new Set(ids)].sort();
 }
 
-/** Значения из URLSearchParams уже раскодированы (повторно не декодируем: «%41» в id остался бы «A»). Запятая разделяет id. */
+/** Values from URLSearchParams are already decoded (we do not decode again: "%41" in an id would stay "A"). A comma separates ids. */
 function list(raw: string | null): string[] {
   return (raw ?? '')
     .split(',')
@@ -30,7 +30,7 @@ function sameList(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
-/** Разбор `location.hash`; неизвестные параметры игнорируются, неизвестный размер → medium. */
+/** Parses `location.hash`; unknown params are ignored, an unknown size → medium. */
 export function parseWorldUrl(hash: string): WorldParams {
   const raw = hash.startsWith('#') ? hash.slice(1) : hash;
   const q = raw.indexOf('?');
@@ -41,14 +41,14 @@ export function parseWorldUrl(hash: string): WorldParams {
     const size = params.get('size') ?? DEFAULT_SIZE;
     out.options.size = isWorldSize(size) ? size : DEFAULT_SIZE;
     out.options.disabledBiomes = normalizeOff(list(params.get('off')));
-    // Пустой `packs=` (обрезанная ссылка) — паки по умолчанию: без паков мир не построить.
+    // Empty `packs=` (truncated link) — default packs: the world cannot be built without packs.
     const packs = list(params.get('packs'));
     if (packs.length > 0) out.packs = packs;
   }
   return out;
 }
 
-/** Обратная сборка; значения по умолчанию не пишутся. */
+/** Reverse assembly; default values are not written. */
 export function buildWorldUrl(p: WorldParams): string {
   const params: string[] = [];
   if (p.options.fantasy) params.push('fantasy=1');

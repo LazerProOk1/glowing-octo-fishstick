@@ -79,8 +79,8 @@ function distanceToSea(height: Float32Array, w: number, h: number): Uint16Array 
       queue[tail++] = i;
     }
   }
-  // Соседи обходятся без замыкания на каждую клетку: замыкание в цикле по 2 млн клеток
-  // стоило больше полсекунды. Порядок обхода тот же — результат побитно совпадает.
+  // Neighbours are visited without a per-cell closure: a closure in a loop over 2M cells
+  // cost more than half a second. The traversal order is the same — the result matches bit for bit.
   while (head < tail) {
     const i = queue[head++]!;
     const d = dist[i]! + 1;
@@ -105,15 +105,15 @@ function distanceToSea(height: Float32Array, w: number, h: number): Uint16Array 
   return dist;
 }
 
-/** Число «пятен» магичности по ширине карты (по высоте вдвое меньше: карта 2:1). */
+/** Number of arcana "patches" across the map width (half as many in height: the map is 2:1). */
 const ARCANA_FREQ = 9;
-/** Растяжка fbm вокруг 0.5: хвосты распределения (пятна) становятся достижимыми. */
+/** fbm stretch around 0.5: the distribution tails (patches) become reachable. */
 const ARCANA_GAIN = 1.6;
 
 /**
- * Поле «магичности» arcana ∈ [0, 1]: низкочастотный fbm из отдельного потока ГСЧ
- * (`seed + ':arcana'`), поэтому остальные поля мира от него не зависят. Фэнтези-биомы
- * занимают его высокие и низкие значения внутри подходящего климата.
+ * "Arcana" field arcana ∈ [0, 1]: low-frequency fbm from a separate RNG stream
+ * (`seed + ':arcana'`), so the other world fields do not depend on it. Fantasy biomes
+ * occupy its high and low values within a suitable climate.
  */
 export function computeArcana(seed: string, w: number, h: number): Float32Array {
   const noise = createNoise2D(createRng(seed + ':arcana'));

@@ -11,13 +11,13 @@ function smallWorld(): World {
   return generateWorld({ ...p, options: { ...p.options, size: 'small' } });
 }
 
-describe('режимы карты', () => {
+describe('map modes', () => {
   let world: World;
   beforeAll(() => {
     world = smallWorld();
   }, 60000);
 
-  it('id без повторов, у каждого режима есть перевод названия', () => {
+  it('ids have no duplicates, every mode has a name translation', () => {
     const ids = MAP_MODES.map((m) => m.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toContain('terrain');
@@ -25,12 +25,12 @@ describe('режимы карты', () => {
     for (const m of MAP_MODES) expect(translate(m.nameKey), m.id).not.toBe(m.nameKey);
   });
 
-  it('terrain ничего не заливает', () => {
+  it('terrain fills nothing', () => {
     const terrain = mapModeById('terrain')!;
     for (const p of world.provinces) expect(terrain.color(p, world)).toBeNull();
   });
 
-  it('provinces: каждая суша залита, соседи по суше разного цвета', () => {
+  it('provinces: every land cell is filled, land neighbours have different colours', () => {
     const mode = mapModeById('provinces')!;
     const colors = world.provinces.map((p) => mode.color(p, world));
     const key = (c: readonly number[] | null): string => (c ? c.slice(0, 3).join(',') : 'none');
@@ -46,7 +46,7 @@ describe('режимы карты', () => {
     for (const p of world.provinces) if (p.isLand) expect(colors[p.id]).not.toBeNull();
   });
 
-  it('provinces: цвета приглушённые (насыщенность ≤ 0.45), каналы 0..255', () => {
+  it('provinces: muted colours (saturation ≤ 0.45), channels 0..255', () => {
     const mode = mapModeById('provinces')!;
     for (const p of world.provinces) {
       const c = mode.color(p, world);
@@ -60,13 +60,13 @@ describe('режимы карты', () => {
     }
   });
 
-  it('provinces: раскраска детерминирована', () => {
+  it('provinces: the colouring is deterministic', () => {
     const mode = mapModeById('provinces')!;
     const again = smallWorld();
     for (const p of world.provinces) expect(mode.color(again.provinces[p.id]!, again)).toEqual(mode.color(p, world));
   }, 60000);
 
-  it('nextMapMode идёт по кругу', () => {
+  it('nextMapMode cycles through the modes', () => {
     let id = MAP_MODES[0]!.id;
     const seen: string[] = [];
     for (let i = 0; i < MAP_MODES.length; i++) {
@@ -78,7 +78,7 @@ describe('режимы карты', () => {
     expect(nextMapMode('нет такого').id).toBe(MAP_MODES[0]!.id);
   });
 
-  it('saturation: серый 0, чистый красный 1', () => {
+  it('saturation: grey 0, pure red 1', () => {
     expect(saturation(128, 128, 128)).toBe(0);
     expect(saturation(255, 0, 0)).toBe(1);
   });

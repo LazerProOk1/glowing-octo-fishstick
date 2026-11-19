@@ -17,7 +17,7 @@ import type { World } from '../../src/sim/world/types';
 import { bakeTransferables, type SurfaceBake, type WorldBake } from '../../src/render/bakeWorld';
 import { defaultParams, type WorldParams } from '../../src/sim/world/params';
 
-/** Параметры по умолчанию для сида. */
+/** Default params for a seed. */
 const P = (seed: string): WorldParams => defaultParams(seed);
 
 function fakeWorld(seed: string): World {
@@ -62,7 +62,7 @@ interface FakeWorker {
   fail(message: string): void;
 }
 
-/** Фабрика поддельных воркеров: запоминает каждый созданный экземпляр. */
+/** Fake worker factory: remembers every created instance. */
 function fakeFactory(): { factory: WorkerFactory; workers: FakeWorker[] } {
   const workers: FakeWorker[] = [];
   const factory: WorkerFactory = (onMessage, onError) => {
@@ -90,7 +90,7 @@ const timings = {
 };
 
 describe('genClient', () => {
-  it('запрос возвращает мир с текстурами и таймингами, этапы доходят до колбэка', async () => {
+  it('a request returns the world with textures and timings, the stages reach the callback', async () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     const stages: string[] = [];
@@ -111,21 +111,21 @@ describe('genClient', () => {
     expect(stages).toEqual(['height', 'climate']);
   });
 
-  it('второй запрос до ответа первого: результат первого игнорируется', async () => {
+  it('a second request before the first answer: the first result is ignored', async () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     const first = client.requestWorld(P('старый'));
     const firstReq = workers[0]!.requests[0]!;
     const second = client.requestWorld(P('новый'));
     await expect(first).rejects.toSatisfy(isSuperseded);
-    // Занятый воркер прерывается, новый запрос идёт в свежий.
+    // The busy worker is killed, the new request goes to a fresh one.
     expect(workers[0]!.terminated).toBe(true);
     const secondWorker = workers[workers.length - 1]!;
     const secondReq = secondWorker.requests[0]!;
     expect(secondReq.params).toEqual(P('новый'));
     expect(secondReq.id).not.toBe(firstReq.id);
 
-    // Запоздалый ответ на первый запрос ничего не ломает и не подменяет мир.
+    // A late answer to the first request breaks nothing and does not replace the world.
     const stale = fakeWorld('старый');
     workers[0]!.emit({ v: PROTOCOL_VERSION, type: 'done', id: firstReq.id, world: stale, bake, timings });
     secondWorker.emit({ v: PROTOCOL_VERSION, type: 'done', id: firstReq.id, world: stale, bake, timings });
@@ -134,7 +134,7 @@ describe('genClient', () => {
     expect((await second).world).toBe(fresh);
   });
 
-  it('свободный воркер переиспользуется', async () => {
+  it('an idle worker is reused', async () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     const p1 = client.requestWorld(P('a'));
@@ -146,7 +146,7 @@ describe('genClient', () => {
     expect((await p2).world.params.seed).toBe('b');
   });
 
-  it('ошибка генерации и падение воркера отклоняют запрос', async () => {
+  it('a generation error and a worker crash reject the request', async () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     const p1 = client.requestWorld(P('a'));
@@ -158,20 +158,20 @@ describe('genClient', () => {
     await expect(p2).rejects.toThrow('script error');
     expect(workers[workers.length - 1]!.terminated).toBe(true);
 
-    // После падения следующий запрос получает новый воркер.
+    // After a crash the next request gets a new worker.
     const before = workers.length;
     void client.requestWorld(P('c')).catch(() => undefined);
     expect(workers.length).toBe(before + 1);
   });
 
-  it('запрос несёт версию протокола', () => {
+  it('the request carries the protocol version', async () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     void client.requestWorld(P('a')).catch(() => undefined);
     expect(workers[0]!.requests[0]!.v).toBe(PROTOCOL_VERSION);
   });
 
-  it('ответ другой версии протокола отклоняет запрос понятной ошибкой', async () => {
+  it('an answer of another protocol version rejects the request with a clear error', async () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     const p = client.requestWorld(P('a'));
@@ -179,7 +179,7 @@ describe('genClient', () => {
     const alien = { v: PROTOCOL_VERSION + 1, type: 'done', id, world: fakeWorld('a'), bake, timings };
     workers[0]!.emit(alien as unknown as GenResponse);
     await expect(p).rejects.toThrow(/protocol version/);
-    // Воркер другой версии не переиспользуется.
+    // A worker of another version is not reused.
     expect(workers[0]!.terminated).toBe(true);
 
     const p2 = client.requestWorld(P('b'));
@@ -188,8 +188,8 @@ describe('genClient', () => {
   });
 });
 
-describe('versionErrorReply (сторона воркера)', () => {
-  it('своя версия — ответа нет; чужая или без версии — сообщение об ошибке с id запроса', () => {
+describe('versionErrorReply (worker side)', () => {
+  it('own version — no reply; foreign or missing version — an error message with the request id', async () => {
     expect(versionErrorReply({ v: PROTOCOL_VERSION, id: 3 })).toBeNull();
     const reply = versionErrorReply({ v: PROTOCOL_VERSION + 1, id: 3 });
     expect(reply).toMatchObject({ v: PROTOCOL_VERSION, type: 'error', id: 3 });
@@ -200,7 +200,7 @@ describe('versionErrorReply (сторона воркера)', () => {
 });
 
 describe('collectTransferables', () => {
-  it('отдаёт буферы всех типизированных массивов без повторов', () => {
+  it('returns the buffers of all typed arrays without duplicates', async () => {
     const world = fakeWorld('x');
     const shared = new ArrayBuffer(16);
     world.biome = new Uint8Array(shared, 0, 8);
@@ -218,7 +218,7 @@ describe('collectTransferables', () => {
 });
 
 describe('bakeTransferables', () => {
-  it('отдаёт все семь буферов запечённых текстур', () => {
+  it('returns all seven buffers of the baked textures', async () => {
     const b = fakeBake();
     const list = bakeTransferables(b);
     expect(list.length).toBe(7);
@@ -227,7 +227,7 @@ describe('bakeTransferables', () => {
     expect(list).toContain(b.provinceSeaRG.buffer);
   });
 
-  it('surfaceTransferables: все поля текстур рельефа, включая будущие', () => {
+  it('surfaceTransferables: all terrain texture fields, including future ones', async () => {
     const { height, surface, biomeColor, seaDepth } = fakeBake();
     const extra = new Float32Array(4);
     const s = { height, surface, biomeColor, seaDepth, extra } as SurfaceBake;

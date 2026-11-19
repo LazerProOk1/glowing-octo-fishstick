@@ -5,7 +5,7 @@ import { defaultParams, GEN_VERSION } from '../../../src/sim/world/params';
 import type { World } from '../../../src/sim/world/types';
 import { fnv1a, worldHash } from '../../../src/sim/world/worldHash';
 
-/** Рёбра соседства одним массивом: a, b, length, riverLength, флаги (бит 0 — река, бит 1 — пролив). */
+/** Adjacency edges as one array: a, b, length, riverLength, flags (bit 0 — river, bit 1 — strait). */
 function edgesBytes(world: World): Int32Array {
   const out = new Int32Array(world.adjacency.length * 5);
   world.adjacency.forEach((e, i) => {
@@ -15,36 +15,36 @@ function edgesBytes(world: World): Int32Array {
 }
 
 /**
- * Отпечаток мира по умолчанию (сид "1", medium, базовый пак) — единственное место с эталонными
- * хэшами. Ловит любое изменение результата генерации или запекания, в том числе от «чистых»
- * оптимизаций. Если результат генерации меняется намеренно — поднимите GEN_VERSION
- * (src/sim/world/params.ts) и обновите здесь genVersion и хэши в том же коммите, с пояснением.
- * Хэши запекания (provinceRG … biomeColor) меняются и без смены версии — при правке рендера.
+ * Fingerprint of the default world (seed "1", medium, base pack) — the only place with reference
+ * hashes. It catches any change of the generation or baking result, including "pure"
+ * optimisations. If the generation result changes on purpose, bump GEN_VERSION
+ * (src/sim/world/params.ts) and update genVersion and the hashes here in the same commit, with a
+ * note why. The baking hashes (provinceRG … biomeColor) also change without a version bump — when the renderer changes.
  */
 const FINGERPRINT = {
-  // Поля климата — отдельными ключами, чтобы не менять эталон world выше.
+  // Climate fields as separate keys, so the world reference above is not changed.
   climate: {
     temperature: '72579061',
     moisture: 'df0babb0',
     arcana: 'eaaa4394',
   },
-  // v3 (озёра): биом lake на клетках замкнутых водоёмов — меняются biome и terrain (канал G).
-  // v3, Task 5 этапа 1.5 (та же версия): морские провинции крупнее вдали от берега — меняются
-  // provinceOf, рёбра и запекание provinceRG.
-  // v3, Task 6 (та же версия): биом выбирается по температуре и влажности со смещением шумом
-  // (classifyTemperatureJitter / classifyMoistureJitter) — меняются biome, provinceOf, рёбра и
-  // запекание provinceRG, terrain, biomeColor. Поля климата не меняются.
-  // Там же, раунд правок: смещение влажности ±0.05 → ±0.15 — те же массивы плюс provinceSeaRG;
-  // масштаб смещения 40–120 клеток на любом размере (меняет только small/large, здесь FANTASY_SMALL).
-  // Task 6b (рендер, версия та же): новая текстура provinceSeaRG — владельцы там, где на экране
-  // вода (displaySeaProvinceOf). Остальные хэши не меняются.
-  // Раунд правок 6b: одно из запечённых полей больше не запекается (шейдер его не читал) — его хэш убран.
-  // Task 7, раунд правок (рендер): новая текстура seaDepth — гладкая глубина моря. Остальные не меняются.
-  // Task 7, раунд 2: seaDepth — крупномасштабная глубина настоящего дна на сетке в 4 раза меньше
-  // (без ореолов у берега). Раунд 3: σ 24 → 16, затем 20. Каждый раз меняется только хэш seaDepth.
-  // Финальные правки этапа 1.5 (рендер): в канал A provinceSeaRG записан вид воды клетки (суша 255,
-  // море 128, озеро 0; было всегда 255) — шейдер берёт озеро оттуда без лишних выборок. Меняется
-  // только хэш provinceSeaRG.
+  // v3 (lakes): the lake biome on closed water body cells — biome and terrain (channel G) change.
+  // v3, stage 1.5 task 5 (same version): sea provinces are larger away from the shore — provinceOf,
+  // the edges and the provinceRG bake change.
+  // v3, task 6 (same version): the biome is chosen by temperature and moisture jittered with noise
+  // (classifyTemperatureJitter / classifyMoistureJitter) — biome, provinceOf, the edges and the
+  // provinceRG, terrain, biomeColor bakes change. The climate fields do not change.
+  // There too, fix round: moisture jitter ±0.05 → ±0.15 — the same arrays plus provinceSeaRG;
+  // the jitter scale is 40–120 cells at any size (changes only small/large, here FANTASY_SMALL).
+  // Task 6b (render, same version): a new provinceSeaRG texture — owners where the screen shows
+  // water (displaySeaProvinceOf). The other hashes do not change.
+  // Fix round 6b: one of the baked fields is no longer baked (the shader never read it) — its hash is gone.
+  // Task 7, fix round (render): a new seaDepth texture — smooth sea depth. The others do not change.
+  // Task 7, round 2: seaDepth — large-scale depth of the real bottom on a grid 4 times smaller
+  // (no halos at the shore). Round 3: σ 24 → 16, then 20. Only the seaDepth hash changes each time.
+  // Final stage 1.5 fixes (render): channel A of provinceSeaRG now stores the water kind of the cell
+  // (land 255, sea 128, lake 0; it used to be always 255) — the shader takes the lake from there with
+  // no extra lookups. Only the provinceSeaRG hash changes.
   genVersion: 3,
   world: {
     height: '9f842423',
@@ -64,7 +64,7 @@ const FINGERPRINT = {
   },
 };
 
-/** Фэнтези включено (fantasy=1), размер small: ловит дрейф арканы и фэнтези-биомов. */
+/** Fantasy on (fantasy=1), small size: catches drift of arcana and fantasy biomes. */
 const FANTASY_SMALL = {
   world: { height: 'a62966d8', biome: 'af01c386', provinceOf: '457112f3', riverMask: '285b5862', edges: '6a0d52d3' },
   climate: { temperature: '7911d17e', moisture: 'c26fbf9e', arcana: 'a5ff6b92' },
@@ -86,7 +86,7 @@ function worldHashes(world: World): Record<string, string> {
 
 const CHANGED = 'генерация изменилась — подними GEN_VERSION и обнови отпечаток (tests/sim/world/fingerprint.test.ts)';
 
-describe('отпечаток мира (сид "1", параметры по умолчанию)', () => {
+describe('world fingerprint (seed "1", default params)', () => {
   let world: World;
   let bake: WorldBake;
   beforeAll(() => {
@@ -94,20 +94,20 @@ describe('отпечаток мира (сид "1", параметры по ум�
     bake = bakeWorld(world);
   }, 60000);
 
-  it('версия генератора совпадает с версией отпечатка и записана в мир', () => {
+  it('the generator version matches the fingerprint version and is stored in the world', () => {
     expect(GEN_VERSION, CHANGED).toBe(FINGERPRINT.genVersion);
     expect(world.params.genVersion).toBe(GEN_VERSION);
   });
 
-  it('массивы мира и рёбра побитно совпадают с отпечатком', () => {
+  it('the world arrays and edges match the fingerprint bit for bit', () => {
     expect(worldHashes(world), CHANGED).toEqual(FINGERPRINT.world);
   });
 
-  it('поля климата побитно совпадают с отпечатком', () => {
+  it('the climate fields match the fingerprint bit for bit', () => {
     expect(climateHashes(world), CHANGED).toEqual(FINGERPRINT.climate);
   });
 
-  it('запечённые текстуры побитно совпадают с эталоном', () => {
+  it('the baked textures match the reference bit for bit', () => {
     expect(
       {
         provinceRG: fnv1a(bake.provinceRG),
@@ -123,8 +123,8 @@ describe('отпечаток мира (сид "1", параметры по ум�
   });
 });
 
-describe('отпечаток мира с фэнтези (сид "1", small, fantasy=1)', () => {
-  it('массивы мира и климат побитно совпадают с отпечатком', () => {
+describe('world fingerprint with fantasy (seed "1", small, fantasy=1)', () => {
+  it('the world arrays and climate match the fingerprint bit for bit', () => {
     const p = defaultParams('1');
     p.options.fantasy = true;
     p.options.size = 'small';
@@ -133,11 +133,11 @@ describe('отпечаток мира с фэнтези (сид "1", small, fant
   }, 60000);
 });
 
-/** worldHash (хеш мира для сверки в онлайне) сида "1", small, без фэнтези — ещё один эталон, он же здесь. */
+/** worldHash (the world hash for online comparison) of seed "1", small, without fantasy — another reference, also here. */
 const WORLD_HASH_SMALL = '1cbd4496';
 
-describe('worldHash сида "1", small', () => {
-  it('совпадает с эталоном', () => {
+describe('worldHash of seed "1", small', () => {
+  it('matches the reference', () => {
     const p = defaultParams('1');
     p.options.size = 'small';
     expect(worldHash(generateWorld(p)), CHANGED).toBe(WORLD_HASH_SMALL);

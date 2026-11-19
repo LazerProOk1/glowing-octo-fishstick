@@ -1,8 +1,8 @@
 /**
- * Размытия полей на сетке клеток: гауссово (отделимое, с обрезкой у краёв) и вертикальное
- * скользящее среднее. Одна реализация для генерации мира (sim) и запекания текстур (render).
- * Порядок операций с плавающей точкой здесь закреплён отпечатками tests/sim/world/fingerprint.test.ts:
- * менять его — значит менять мир и текстуры.
+ * Field blurring on the cell grid: Gaussian (separable, with clamping at the edges) and a vertical
+ * moving average. One implementation for world generation (sim) and texture baking (render).
+ * The order of floating-point operations here is pinned by tests/sim/world/fingerprint.test.ts:
+ * changing it means changing the world and the textures.
  */
 
 export function gaussianKernel(sigma: number): Float32Array {
@@ -19,9 +19,9 @@ export function gaussianKernel(sigma: number): Float32Array {
 }
 
 /**
- * Разделимое гауссово размытие с продлением краёв (clamp).
- * Внутри карты отсчёты считаются без проверки границ; вертикальный проход копит целые строки
- * (память идёт подряд) в буфере Float64, поэтому точность как у скалярной суммы в double.
+ * Separable Gaussian blur with edge extension (clamp).
+ * Inside the map, samples are taken without bounds checks; the vertical pass accumulates whole rows
+ * (memory is contiguous) in a Float64 buffer, so precision matches a scalar double sum.
  */
 export function blur(src: Float32Array, w: number, h: number, sigma: number): Float32Array {
   const k = gaussianKernel(sigma);
@@ -63,9 +63,9 @@ export function blur(src: Float32Array, w: number, h: number, sigma: number): Fl
 }
 
 /**
- * То же размытие для `c` чередующихся каналов (длина src = w·h·c) за один проход: у каждого канала
- * отсчёты и порядок сложения те же, что в `blur`, поэтому канал совпадает с ним бит в бит;
- * циклы по карте идут один раз, а не c раз.
+ * The same blur for `c` interleaved channels (src length = w·h·c) in one pass: each channel has the
+ * same samples and summation order as in `blur`, so a channel matches it bit for bit;
+ * the map loops run once instead of c times.
  */
 export function blurInterleaved(src: Float32Array, w: number, h: number, c: number, sigma: number): Float32Array {
   const k = gaussianKernel(sigma);
@@ -110,9 +110,8 @@ export function blurInterleaved(src: Float32Array, w: number, h: number, c: numb
 }
 
 /**
- * Вертикальное размытие окном радиуса r на месте (края продлеваются), скользящие суммы по строкам
- * в float32. Не гаусс: скользящее среднее по 2r+1 строкам (климат дважды размывает им полосы
- * дождевой тени).
+ * Vertical blur with a window of radius r in place (edges extended), running row sums in float32.
+ * Not Gaussian: a moving average over 2r+1 rows (climate blurs the rain-shadow bands with it twice).
  */
 export function boxBlurRows(a: Float32Array, w: number, h: number, r: number): void {
   const src = a.slice();

@@ -1,32 +1,32 @@
-// Данные провинций для шейдера: одна RGBA8-текстура, тексель на провинцию (по id).
-// Без Pixi — только раскладка и CPU-копия; загрузку на GPU делает MapView.
+// Province data for the shader: one RGBA8 texture, one texel per province (by id).
+// No Pixi here — only the layout and the CPU copy; MapView uploads it to the GPU.
 import type { World } from '../sim/world/types';
 import type { MapMode, ProvinceRGBA } from './mapModes';
 
 /**
- * Биты канала A. 0–2 — состояние игры (не меняются при смене режима карты; пока не
- * используются шейдером, зарезервированы), 3 — у провинции есть заливка режима, 4–7 — резерв.
+ * Bits of channel A. 0–2 — game state (unchanged when the map mode changes; not used by the
+ * shader yet, reserved), 3 — the province has a mode fill, 4–7 — reserved.
  */
 export const PROVINCE_FLAGS = {
-  /** Не разведано. */
+  /** Not explored. */
   UNEXPLORED: 1 << 0,
-  /** Не видно сейчас (туман войны). */
+  /** Not visible right now (fog of war). */
   HIDDEN: 1 << 1,
-  /** Подсветка цели. */
+  /** Target highlight. */
   TARGET: 1 << 2,
-  /** Заливка режима карты (RGB — её цвет). */
+  /** Map mode fill (RGB — its colour). */
   FILL: 1 << 3,
 } as const;
 
-/** Биты состояния игры, которые сохраняются при смене режима. */
+/** Game state bits kept when the mode changes. */
 const STATE_BITS = PROVINCE_FLAGS.UNEXPLORED | PROVINCE_FLAGS.HIDDEN | PROVINCE_FLAGS.TARGET;
 
-/** Минимальный MAX_TEXTURE_SIZE, гарантированный WebGL 2. */
+/** The minimum MAX_TEXTURE_SIZE guaranteed by WebGL 2. */
 export const WEBGL2_MIN_TEXTURE_SIZE = 2048;
 
 /**
- * Раскладка «id → тексель»: одна строка шириной в число провинций, а если их больше maxSize —
- * строки по maxSize: id лежит в (id % width, id / width).
+ * "id → texel" layout: one row as wide as the province count, or, if there are more than maxSize,
+ * rows of maxSize: id sits at (id % width, id / width).
  */
 export function provinceDataLayout(count: number, maxSize: number): { width: number; height: number } {
   const n = Math.max(1, count);
@@ -36,12 +36,12 @@ export function provinceDataLayout(count: number, maxSize: number): { width: num
   return { width, height };
 }
 
-/** CPU-копия текстуры данных провинций и грязный диапазон текселей для частичной загрузки. */
+/** CPU copy of the province data texture and the dirty texel range for partial upload. */
 export class ProvinceData {
   readonly width: number;
   readonly height: number;
   readonly count: number;
-  /** RGBA8 по id, длина width·height·4 (хвост последней строки не используется). */
+  /** RGBA8 by id, length width·height·4 (the tail of the last row is unused). */
   readonly data: Uint8Array;
   private dirtyStart = Infinity;
   private dirtyEnd = -Infinity;
@@ -54,7 +54,7 @@ export class ProvinceData {
     this.data = new Uint8Array(width * height * 4);
   }
 
-  /** Записывает тексель провинции как есть и помечает его для загрузки. Канал — целое от 0 до 255, иначе RangeError. */
+  /** Writes a province texel as is and marks it for upload. A channel must be an integer 0..255, else RangeError. */
   set(id: number, rgba: ProvinceRGBA): void {
     if (!Number.isInteger(id) || id < 0 || id >= this.count) throw new Error(`bad province id ${id}`);
     for (const ch of rgba) {
@@ -69,7 +69,7 @@ export class ProvinceData {
     if (id + 1 > this.dirtyEnd) this.dirtyEnd = id + 1;
   }
 
-  /** Диапазон текселей [start, end), изменённых с прошлого вызова; null — ничего не менялось. */
+  /** Texel range [start, end) changed since the last call; null — nothing changed. */
   takeDirty(): { start: number; end: number } | null {
     if (this.dirtyEnd <= this.dirtyStart) return null;
     const range = { start: this.dirtyStart, end: this.dirtyEnd };
@@ -79,9 +79,9 @@ export class ProvinceData {
   }
 
   /**
-   * Пересчитывает цвета всех провинций по режиму. Биты состояния (0–2) сохраняются, бит FILL
-   * ставится у провинций с цветом. Грязный диапазон сбрасывается — загружать нужно всё целиком.
-   * Возвращает, есть ли хоть одна заливка (нет — шейдер может не читать текстуру).
+   * Recomputes the colours of all provinces for the mode. The state bits (0–2) are kept, the FILL
+   * bit is set on provinces with a colour. The dirty range is reset — everything must be uploaded.
+   * Returns whether there is at least one fill (if not, the shader may skip the texture).
    */
   applyMode(mode: MapMode, world: World): boolean {
     const d = this.data;

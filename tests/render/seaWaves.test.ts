@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { WAVE_AMP, WAVE_ANGLE, WAVE_COS, WAVE_GLSL, WAVE_SIN, waveShade, waveStrength } from '../../src/render/seaWaves';
 
-describe('рябь на воде', () => {
-  it('на общем виде нет, вблизи есть', () => {
+describe('water ripple', () => {
+  it('absent in the overview, present up close', () => {
     expect(waveStrength(0.3)).toBe(0);
     expect(waveStrength(0.9)).toBe(0);
     expect(waveStrength(8)).toBe(1);
     expect(waveShade(100.3, 200.7, 0.9, 1.3)).toBe(0);
   });
 
-  it('детерминирована в координатах мира и не выходит за ±WAVE_AMP', () => {
+  it('is deterministic in world coordinates and stays within ±WAVE_AMP', () => {
     let sum = 0;
     let sq = 0;
     const n = 4000;
@@ -22,13 +22,13 @@ describe('рябь на воде', () => {
       sum += v;
       sq += v * v;
     }
-    // В среднем около нуля (не темнит и не светлит воду), но не пустая.
+    // Around zero on average (it neither darkens nor brightens the water), but not empty.
     expect(Math.abs(sum / n)).toBeLessThan(0.004);
     expect(Math.sqrt(sq / n)).toBeGreaterThan(0.004);
   });
 
-  it('мелкие октавы гаснут, когда волна короче нескольких пикселей', () => {
-    // При 2 px на клетку остаётся только крупная октава: поле глаже, чем при 20 px.
+  it('fine octaves fade out when the wave is shorter than a few pixels', () => {
+    // At 2 px per cell only the coarse octave remains: the field is smoother than at 20 px.
     let dCoarse = 0;
     let dFine = 0;
     for (let i = 0; i < 2000; i++) {
@@ -39,11 +39,11 @@ describe('рябь на воде', () => {
     expect(dCoarse).toBeLessThan(dFine);
   });
 
-  it('GLSL без выборок текстур', () => {
+  it('the GLSL has no texture samples', () => {
     expect(WAVE_GLSL).not.toMatch(/texture(Lod)?\s*\(|texelFetch/);
   });
 
-  it('GLSL: cos и sin поворотов подставлены константами из TS, в цикле их не считают', () => {
+  it('GLSL: the cos and sin of the rotations are injected as TS constants, not computed in the loop', () => {
     expect(WAVE_GLSL).not.toMatch(/(cos|sin)\s*\(/);
     WAVE_ANGLE.forEach((a, i) => {
       expect(WAVE_COS[i]).toBe(Math.cos(a));
@@ -52,7 +52,7 @@ describe('рябь на воде', () => {
     for (const v of [...WAVE_COS, ...WAVE_SIN]) expect(WAVE_GLSL).toContain(v.toFixed(8));
   });
 
-  it('GLSL пропускает октаву с нулевым весом', () => {
+  it('the GLSL skips an octave with zero weight', () => {
     expect(WAVE_GLSL).toMatch(/if \(a <= 0\.0\) continue;/);
   });
 });

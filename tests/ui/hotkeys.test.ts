@@ -4,7 +4,7 @@ import { appHotkeys, keyLabel, registerHotkeys, type Hotkey, type KeyTarget } fr
 
 type Listener = (e: KeyboardEvent) => void;
 
-/** Поддельное окно: хранит обработчики keydown. */
+/** Fake window: stores the keydown handlers. */
 function fakeTarget(): KeyTarget & { listeners: Set<Listener>; press(e: Partial<KeyEventLike>): KeyEventLike } {
   const listeners = new Set<Listener>();
   return {
@@ -51,8 +51,8 @@ function counter(): { list: Hotkey[]; calls: Record<string, number> } {
   return { list, calls };
 }
 
-describe('горячие клавиши', () => {
-  it('в списке приложения нет повторов code и id, у каждой есть перевод', () => {
+describe('hotkeys', () => {
+  it('the app list has no duplicate codes or ids, every key has a translation', () => {
     const { list } = counter();
     const codes = list.map((h) => h.code);
     expect(new Set(codes).size).toBe(codes.length);
@@ -62,7 +62,7 @@ describe('горячие клавиши', () => {
     expect(codes).toContain('KeyM');
   });
 
-  it('один обработчик на окно; нажатие вызывает действие и отменяет поведение браузера', () => {
+  it('one handler per window; a press runs the action and cancels the browser behaviour', () => {
     const { list, calls } = counter();
     const target = fakeTarget();
     const off = registerHotkeys(list, target);
@@ -78,7 +78,7 @@ describe('горячие клавиши', () => {
     expect(target.listeners.size).toBe(0);
   });
 
-  it('ввод в поле не перехватывается', () => {
+  it('typing in an input is not intercepted', () => {
     const { list, calls } = counter();
     const target = fakeTarget();
     registerHotkeys(list, target);
@@ -92,7 +92,7 @@ describe('горячие клавиши', () => {
     expect(calls.mapMode).toBe(1);
   });
 
-  it('F3 работает в поле ввода и отменяет поиск браузера, буквенные клавиши — нет', () => {
+  it('F3 works in an input and cancels the browser search, letter keys do not', () => {
     const { list, calls } = counter();
     const target = fakeTarget();
     registerHotkeys(list, target);
@@ -104,7 +104,7 @@ describe('горячие клавиши', () => {
     expect(m.defaultPrevented).toBe(false);
   });
 
-  it('сочетания с Ctrl/Alt/Meta и автоповтор не вызывают действие', () => {
+  it('Ctrl/Alt/Meta combinations and auto-repeat do not run the action', () => {
     const { list, calls } = counter();
     const target = fakeTarget();
     registerHotkeys(list, target);
@@ -114,11 +114,11 @@ describe('горячие клавиши', () => {
     const held = target.press({ code: 'F3', repeat: true });
     expect(calls.mapMode).toBe(0);
     expect(calls.debug).toBe(0);
-    // Автоповтор F3 всё равно не должен открыть поиск браузера.
+    // Auto-repeat of F3 still must not open the browser search.
     expect(held.defaultPrevented).toBe(true);
   });
 
-  it('повтор code при регистрации — ошибка', () => {
+  it('a duplicate code at registration is an error', () => {
     const a: Hotkey = { id: 'a', code: 'KeyA', nameKey: 'key.debug', action: () => undefined };
     expect(() => registerHotkeys([a, { ...a, id: 'b' }], fakeTarget())).toThrow();
   });

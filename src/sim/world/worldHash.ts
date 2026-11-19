@@ -1,12 +1,12 @@
-// Короткий хеш мира: у всех игроков онлайн-партии должен быть один и тот же мир (docs/architecture.md,
-// «Готовность к этапу 2»). Единственная реализация хеша мира в проекте.
+// Short world hash: all players in an online game must have the same world (docs/architecture.md,
+// "Readiness for stage 2"). The only world hash implementation in the project.
 import { GEN_VERSION } from './params';
 import type { World } from './types';
 
 const FNV_OFFSET = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
 
-/** Продолжает FNV-1a (32 бита) байтами массива. */
+/** Continues FNV-1a (32 bit) with the bytes of an array. */
 function fnvBytes(h: number, v: ArrayBufferView): number {
   const bytes = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
   for (let i = 0; i < bytes.length; i++) {
@@ -16,7 +16,7 @@ function fnvBytes(h: number, v: ArrayBufferView): number {
   return h;
 }
 
-/** Продолжает FNV-1a строкой: оба байта каждого кода UTF-16, без TextEncoder. */
+/** Continues FNV-1a with a string: both bytes of each UTF-16 code, without TextEncoder. */
 function fnvString(h: number, s: string): number {
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
@@ -32,12 +32,12 @@ function hex(h: number): string {
   return (h >>> 0).toString(16).padStart(8, '0');
 }
 
-/** FNV-1a (32 бита) по байтам одного массива, 8 hex-символов. */
+/** FNV-1a (32 bit) over the bytes of one array, 8 hex characters. */
 export function fnv1a(v: ArrayBufferView): string {
   return hex(fnvBytes(FNV_OFFSET, v));
 }
 
-/** Параметры мира и включённые биомы (id по порядку кодов) строкой с постоянным порядком полей. */
+/** World params and enabled biomes (ids in code order) as a string with a fixed field order. */
 function paramsKey(world: World): string {
   const p = world.params;
   return JSON.stringify([
@@ -52,12 +52,12 @@ function paramsKey(world: World): string {
 }
 
 /**
- * Хеш мира (8 hex-символов) по параметрам, списку биомов, версии генератора, размеру, высоте,
- * климату (температура, влажность, аркана), биомам клеток, рекам и провинциям клеток.
- * Список провинций, рёбра соседства, тип воды, прибрежность и `lakeside` выводятся из этих массивов
- * точной арифметикой (сравнения и целые счётчики), поэтому отдельно не хешируются.
- * Два мира с одним хешем побитно совпадают в этих массивах (с точностью до коллизий 32-битного хеша).
- * Нужен при входе в онлайн-игру: если хеш у игрока не совпал с хостом, мир присылает хост.
+ * World hash (8 hex characters) over the params, biome list, generator version, size, height,
+ * climate (temperature, moisture, arcana), cell biomes, rivers and cell provinces.
+ * The province list, adjacency edges, water type, coastal flag and `lakeside` are derived from these
+ * arrays with exact arithmetic (comparisons and integer counters), so they are not hashed separately.
+ * Two worlds with the same hash match bit for bit in these arrays (up to 32-bit hash collisions).
+ * Needed when joining an online game: if the player's hash differs from the host's, the host sends it.
  */
 export function worldHash(world: World): string {
   let h = FNV_OFFSET;

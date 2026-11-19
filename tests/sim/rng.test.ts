@@ -53,7 +53,7 @@ describe('rng', () => {
     expect([...seen].sort()).toEqual([3, 4, 5, 6]);
   });
 
-  it('int: нецелые аргументы и пустой диапазон — ошибка', () => {
+  it('int: non-integer arguments and an empty range are an error', () => {
     const r = createRng('int-bad');
     expect(() => r.int(1.5, 4)).toThrow(RangeError);
     expect(() => r.int(1, 4.5)).toThrow(RangeError);

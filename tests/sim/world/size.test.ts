@@ -14,20 +14,20 @@ function counts(world: World): { land: number; sea: number } {
   return { land, sea: world.provinces.length - land };
 }
 
-describe('размер мира small', () => {
+describe('small world size', () => {
   let world: World;
   beforeAll(() => {
     world = generateWorld(paramsOf('1', 'small'));
   }, 60000);
 
-  it('размеры из пресета, параметры записаны в мир', () => {
+  it('sizes come from the preset, the params are stored in the world', () => {
     expect([world.w, world.h]).toEqual([1024, 512]);
     expect(world.height.length).toBe(1024 * 512);
     expect(world.provinceOf.length).toBe(1024 * 512);
     expect(world.params.options.size).toBe('small');
   });
 
-  it('число провинций пропорционально площади суши и моря', () => {
+  it('the province count is proportional to the land and sea area', () => {
     const b = provinceBounds(world.height, world.w, world.h);
     const c = counts(world);
     expect(c.land).toBeGreaterThanOrEqual(b.land[0]);
@@ -36,7 +36,7 @@ describe('размер мира small', () => {
     expect(c.sea).toBeLessThanOrEqual(b.sea[1]);
   });
 
-  it('каждая клетка принадлежит провинции, рёбра построены', () => {
+  it('every cell belongs to a province, the edges are built', () => {
     let max = 0;
     for (const v of world.provinceOf) if (v > max) max = v;
     expect(max).toBe(world.provinces.length - 1);
@@ -44,9 +44,9 @@ describe('размер мира small', () => {
   });
 });
 
-// Большой мир генерируется ~10 с; запуск: WORLD_LARGE=1 npx vitest run tests/sim/world/size.test.ts
-describe.skipIf(!process.env.WORLD_LARGE)('размер мира large (дымовой тест)', () => {
-  it('генерируется, провинций в пределах, id влезают в uint16', { timeout: 120000 }, () => {
+// A large world takes ~10 s to generate; run: WORLD_LARGE=1 npx vitest run tests/sim/world/size.test.ts
+describe.skipIf(!process.env.WORLD_LARGE)('large world size (smoke test)', () => {
+  it('it generates, provinces are within bounds, ids fit in uint16', { timeout: 120000 }, () => {
     const world = generateWorld(paramsOf('1', 'large'));
     expect([world.w, world.h]).toEqual([3072, 1536]);
     const b = provinceBounds(world.height, world.w, world.h);

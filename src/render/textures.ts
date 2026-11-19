@@ -6,43 +6,43 @@ import { ATLAS_URL, DETAIL_SLOT_OF } from './assets';
 import { bakeWorld, type WorldBake } from './bakeWorld';
 import { seaDepthSize } from './seaDepth';
 
-/** GPU-текстуры одного мира. Все без мипмапов: читаются texelFetch или билинейно на нулевом уровне. */
+/** GPU textures of one world. All without mipmaps: read by texelFetch or bilinearly at level 0. */
 export interface WorldTextures {
-  /** RGBA8: R,G — id провинции, B — суша; владельцы там, где на экране суша. Только texelFetch. */
+  /** RGBA8: R,G — province id, B — land; owners where the screen shows land. texelFetch only. */
   province: TextureSource;
   /**
-   * RGBA8, та же раскладка: владельцы там, где на экране вода (provinceSeaRG); A — вид воды по биому
-   * клетки (SEA_MAP_ALPHA в bake.ts: суша, море, озеро). Только texelFetch.
+   * RGBA8, same layout: owners where the screen shows water (provinceSeaRG); A — water kind by the
+   * cell biome (SEA_MAP_ALPHA in bake.ts: land, sea, lake). texelFetch only.
    */
   provinceSea: TextureSource;
-  /** RGBA8 LINEAR: G — код биома (texelFetch), B — влажность (билинейно). */
+  /** RGBA8 LINEAR: G — biome code (texelFetch), B — moisture (bilinear). */
   terrain: TextureSource;
-  /** R16F LINEAR: высота − SEA_LEVEL (половинная точность у нуля ~1e-6, у гор ~1e-4). */
+  /** R16F LINEAR: height − SEA_LEVEL (half precision ~1e-6 near zero, ~1e-4 at mountains). */
   height: TextureSource;
   /**
-   * RGBA16F LINEAR: RG — сглаженный градиент высоты (dh/dx, dh/dy на клетку) для отмывки,
-   * B — слегка размытая высота − SEA_LEVEL для береговой линии,
-   * A — размытая доля суши (σ 3.5) для полосы мелководья.
+   * RGBA16F LINEAR: RG — smoothed height gradient (dh/dx, dh/dy per cell) for shading,
+   * B — slightly blurred height − SEA_LEVEL for the shoreline,
+   * A — blurred land fraction (σ 3.5) for the shallow-water band.
    */
   surface: TextureSource;
-  /** RGBA8 LINEAR: размытый цвет биомов (RGB) и покрытие сушей (A), см. bakeBiomeColors. */
+  /** RGBA8 LINEAR: blurred biome colour (RGB) and land coverage (A), see bakeBiomeColors. */
   biomeColor: TextureSource;
-  /** R16F LINEAR, в SEA_DEPTH_STEP раз меньше карты по каждой оси: крупномасштабная глубина дна (seaDepth.ts). */
+  /** R16F LINEAR, SEA_DEPTH_STEP times smaller than the map on each axis: large-scale bottom depth (seaDepth.ts). */
   seaDepth: TextureSource;
-  /** Палитра биомов этого мира, см. createPaletteTexture. */
+  /** Biome palette of this world, see createPaletteTexture. */
   palette: TextureSource;
 }
 
-/** Альфа палитры: слот детали, а у водных биомов — этот маркер (море). */
+/** Palette alpha: the detail slot, and for water biomes this marker (sea). */
 export const WATER_SLOT = 255;
 /**
- * Маркер озёрной воды (биом с тегом lake). Всё, что ≥ LAKE_SLOT, — вода без детали; по нему шейдер
- * отличает озеро от моря.
+ * Lake water marker (a biome tagged lake). Everything ≥ LAKE_SLOT is water without a detail slot; the
+ * shader tells a lake from the sea by it.
  */
 export const LAKE_SLOT = 254;
 export const PALETTE_SIZE = MAX_BIOMES;
 
-/** RGBA8-источник из массива пикселей (альфа — данные, без премультипликации, без мипмапов). */
+/** RGBA8 source from a pixel array (alpha is data, no premultiplication, no mipmaps). */
 export function rgba8(data: Uint8Array, width: number, height: number, linear: boolean): BufferImageSource {
   return new BufferImageSource({
     resource: data,
@@ -51,13 +51,13 @@ export function rgba8(data: Uint8Array, width: number, height: number, linear: b
     format: 'rgba8unorm',
     scaleMode: linear ? 'linear' : 'nearest',
     addressMode: 'clamp-to-edge',
-    // Альфа здесь — данные (ширина реки), а не прозрачность: без премультипликации.
+    // Alpha here is data (river width), not opacity: no premultiplication.
     alphaMode: 'no-premultiply-alpha',
     autoGenerateMipmaps: false,
   });
 }
 
-/** R16F-источник, билинейный, без мипмапов. */
+/** R16F source, bilinear, no mipmaps. */
 function r16f(data: Uint16Array, width: number, height: number): BufferImageSource {
   return new BufferImageSource({
     resource: data,
@@ -71,7 +71,7 @@ function r16f(data: Uint16Array, width: number, height: number): BufferImageSour
   });
 }
 
-/** bake — данные, запечённые заранее (в воркере); без него печём здесь, в главном потоке. */
+/** bake — data baked in advance (in the worker); without it we bake here, on the main thread. */
 export function createWorldTextures(world: World, bake: WorldBake = bakeWorld(world)): WorldTextures {
   const { w, h } = world;
   return {
@@ -106,7 +106,7 @@ export function destroyWorldTextures(t: WorldTextures): void {
   t.palette.destroy();
 }
 
-/** Пиксели палитры: по коду биома RGB — цвет, A — слот детали атласа (у моря WATER_SLOT, у озёр LAKE_SLOT). */
+/** Palette pixels: by biome code RGB is the colour, A the detail atlas slot (WATER_SLOT for sea, LAKE_SLOT for lakes). */
 export function paletteData(biomes: readonly BiomeDef[]): Uint8Array {
   const data = new Uint8Array(PALETTE_SIZE * 4);
   biomes.forEach((def, code) => {
@@ -119,20 +119,20 @@ export function paletteData(biomes: readonly BiomeDef[]): Uint8Array {
   return data;
 }
 
-/** PALETTE_SIZE×1 RGBA8 — палитра биомов мира (см. paletteData). */
+/** PALETTE_SIZE×1 RGBA8 — the biome palette of the world (see paletteData). */
 export function createPaletteTexture(biomes: readonly BiomeDef[]): BufferImageSource {
   return rgba8(paletteData(biomes), PALETTE_SIZE, 1, false);
 }
 
-/** Нейтральная заглушка атласа (яркость 0.5 = «без детали»), пока PNG грузится. */
+/** Neutral atlas placeholder (luminance 0.5 = "no detail") while the PNG loads. */
 export function createAtlasPlaceholder(): BufferImageSource {
   return rgba8(new Uint8Array([128, 128, 128, 255]), 1, 1, true);
 }
 
 /**
- * Атлас деталей с мипмапами. Уровень выбирается в шейдере вручную (textureLod) и ограничен 5:
- * тайлы по 512 выровнены по 2^9, поэтому уровни 0..5 не смешивают соседние тайлы, а отступ
- * в полтекселя текущего уровня исключает подмешивание при билинейной выборке.
+ * Detail atlas with mipmaps. The level is chosen manually in the shader (textureLod) and capped at 5:
+ * the 512-pixel tiles are aligned to 2^9, so levels 0..5 do not mix neighbouring tiles, and the
+ * half-texel inset of the current level prevents bleeding in bilinear sampling.
  */
 export async function loadAtlas(): Promise<ImageSource> {
   const img = new Image();

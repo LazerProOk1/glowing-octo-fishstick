@@ -31,14 +31,14 @@ import {
   type WorldTextures,
 } from './textures';
 
-/** Множитель зума на одну «ступеньку» колеса (deltaY = 100 px). */
+/** Zoom multiplier per wheel notch (deltaY = 100 px). */
 const ZOOM_STEP = 1.12;
-/** Кадры прогрева перед замером, без учёта в итогах. */
+/** Warm-up frames before the measurement, not counted in the results. */
 const BENCH_WARMUP_FRAMES = 2;
 
 /**
- * Карта: полноэкранный quad с шейдером рельефа/биомов/границ и слой рек поверх.
- * Владеет камерой и вводом (перетаскивание, колесо, наведение).
+ * Map: a full-screen quad with the terrain/biomes/borders shader and the river layer on top.
+ * Owns the camera and the input (drag, wheel, hover).
  */
 export class MapView {
   private readonly app: Application;
@@ -50,17 +50,17 @@ export class MapView {
   private readonly uniforms: UniformGroup;
   private readonly camU = new Float32Array(4);
   private readonly viewU = new Float32Array(2);
-  /** Размер карты в клетках; до первого setWorld — размер по умолчанию. */
+  /** Map size in cells; before the first setWorld — the default size. */
   private map: MapSize = { ...SIZE_PRESETS[DEFAULT_SIZE] };
   private readonly worldU = new Float32Array([this.map.w, this.map.h]);
-  /** Заглушка для текстур мира до первого setWorld. */
+  /** Placeholder for the world textures before the first setWorld. */
   private readonly blank: TextureSource;
   private atlas: TextureSource;
   private textures: WorldTextures | null = null;
   private world: World | null = null;
-  /** Карты владельцев для показа и береговая высота (те же массивы, что в текстурах): по ним наведение. */
+  /** Display owner maps and the shore height (the same arrays as in the textures): used for hover. */
   private owners: ProvinceMaps | null = null;
-  /** Данные провинций (цвет заливки режима, флаги) и их текстура; есть, пока показан мир. */
+  /** Province data (mode fill colour, flags) and its texture; present while a world is shown. */
   private provData: ProvinceData | null = null;
   private provSource: BufferImageSource | null = null;
   private mode: MapMode;
@@ -142,19 +142,19 @@ export class MapView {
     this.sync();
   }
 
-  /** Текущий режим карты. */
+  /** Current map mode. */
   get mapMode(): MapMode {
     return this.mode;
   }
 
-  /** Текущая камера (копия). */
+  /** Current camera (a copy). */
   get camera(): Camera {
     return { ...this.cam };
   }
 
   /**
-   * Показывает мир; текстуры предыдущего мира освобождаются.
-   * bake — текстуры, запечённые в воркере; без него печём в главном потоке (несколько секунд).
+   * Shows the world; the textures of the previous world are released.
+   * bake — textures baked in the worker; without it we bake on the main thread (several seconds).
    */
   setWorld(world: World, bake: WorldBake = bakeWorld(world)): void {
     const next = createWorldTextures(world, bake);
@@ -171,7 +171,7 @@ export class MapView {
     this.map = { w: world.w, h: world.h };
     if (this.textures) destroyWorldTextures(this.textures);
     if (!this.textures || resized) {
-      // Первый мир или другой размер: вся карта на экране.
+      // First world or a different size: the whole map on screen.
       const { width, height } = this.app.screen;
       this.cam = { x: world.w / 2, y: world.h / 2, zoom: minZoom(width, height, this.map) };
     }
@@ -189,8 +189,8 @@ export class MapView {
   }
 
   /**
-   * Включает режим карты: пересчитывает цвета всех провинций по mode.color и загружает
-   * текстуру данных один раз. Неизвестный id — ошибка.
+   * Switches the map mode: recomputes the colours of all provinces by mode.color and uploads
+   * the data texture once. An unknown id is an error.
    */
   setMapMode(modeId: string): void {
     const mode = mapModeById(modeId);
@@ -204,24 +204,24 @@ export class MapView {
   }
 
   /**
-   * Меняет тексель одной провинции (RGB — цвет заливки, A — флаги, см. PROVINCE_FLAGS).
-   * Если RGB не нулевой, бит FILL ставится сам (вызывающему его указывать не нужно).
-   * Канал вне целых 0..255 — RangeError. На GPU уходит только изменённый диапазон, один раз за кадр. Смена режима карты
-   * пересчитывает цвета заново (флаги состояния — биты 0–2 — сохраняются).
+   * Changes the texel of one province (RGB — fill colour, A — flags, see PROVINCE_FLAGS).
+   * If RGB is non-zero, the FILL bit is set automatically (the caller need not set it).
+   * A channel outside the integers 0..255 is a RangeError. Only the changed range goes to the GPU, once
+   * per frame. Switching the map mode recomputes the colours (the state flags — bits 0–2 — are kept).
    */
   setProvinceData(id: number, rgba: ProvinceRGBA): void {
     if (!this.provData) return;
     const filled = rgba[0] !== 0 || rgba[1] !== 0 || rgba[2] !== 0;
     this.provData.set(id, filled ? [rgba[0], rgba[1], rgba[2], rgba[3] | PROVINCE_FLAGS.FILL] : rgba);
-    // Заливка в режиме без заливки: шейдер начинает читать текстуру данных.
+    // A fill in a mode without fills: the shader starts reading the data texture.
     if (filled && this.uniforms.uniforms.uFill === 0) this.applyFill(true);
   }
 
   /**
-   * Загружает на GPU строки текстур рельефа, цветов биомов, высоты и карты владельцев воды (её канал
-   * A — вид воды по биому), которые задевает rect —
-   * после updateDerivedRect над теми же массивами, что были переданы в setWorld (bake).
-   * Прямоугольник обрезается по границам карты; целиком за картой или пустой — ничего не делает.
+   * Uploads to the GPU the rows of the terrain, biome colour, height and water owner map textures
+   * (its alpha is the water kind by biome) that `rect` touches —
+   * after updateDerivedRect over the same arrays that were passed to setWorld (bake).
+   * The rectangle is clipped to the map edges; entirely off-map or empty — does nothing.
    */
   updateRegion(rect: Rect): void {
     const t = this.textures;
@@ -245,20 +245,20 @@ export class MapView {
     for (const cb of this.hoverListeners) cb(id);
   }
 
-  /** Подписка на смену провинции под курсором; возвращает отписку. */
+  /** Subscribes to province changes under the cursor; returns an unsubscribe function. */
   onHover(cb: (id: number | null) => void): () => void {
     this.hoverListeners.add(cb);
     return () => this.hoverListeners.delete(cb);
   }
 
   /**
-   * Честный замер кадра: синхронно рисует frames кадров и после каждого ждёт конца работы
-   * видеокарты. gl.finish() для этого не годится: Chrome (ANGLE) считает его обычным flush и
-   * возвращается сразу, так что мерилось бы только время отправки команд. Чтение одного пикселя
-   * (readPixels) заставляет дождаться результата рисования. renderer.render каждый раз
-   * выполняет весь шейдер заново. От requestAnimationFrame не зависит, верен и в скрытой вкладке.
-   * Два первых кадра не замеряются (прогрев: компиляция шейдера, загрузка текстур).
-   * Не WebGL или среднее меньше 0.05 мс (синхронизация не сработала) — null, «недоступно».
+   * Honest frame benchmark: draws `frames` frames synchronously and waits for the GPU to finish
+   * after each. gl.finish() does not work for this: Chrome (ANGLE) treats it as an ordinary flush and
+   * returns immediately, so only the command submission time would be measured. Reading one pixel
+   * (readPixels) forces a wait for the drawing result. renderer.render runs the whole shader again
+   * each time. Independent of requestAnimationFrame, and correct in a hidden tab too.
+   * The first two frames are not measured (warm-up: shader compilation, texture upload).
+   * No WebGL, or a mean below 0.05 ms (the sync did not work) — null, "unavailable".
    */
   benchmark(frames = 120): FrameStats | null {
     const { renderer, stage } = this.app;
@@ -312,7 +312,7 @@ export class MapView {
     this.root.destroy();
   }
 
-  /** Новая текстура данных провинций под мир, сразу с цветами текущего режима. */
+  /** A new province data texture for the world, with the current mode colours right away. */
   private setProvinceTexture(world: World): void {
     const data = new ProvinceData(world.provinces.length, this.maxTextureSize);
     const anyFill = data.applyMode(this.mode, world);
@@ -326,18 +326,18 @@ export class MapView {
   }
 
   private applyFill(anyFill: boolean): void {
-    // Режим без заливки — шейдер вовсе не читает текстуру данных: карта как без режимов.
+    // Mode without fills — the shader does not read the data texture at all: the map looks mode-less.
     this.uniforms.uniforms.uFill = anyFill ? (this.mode.fill ?? DEFAULT_FILL) : 0;
     this.uniforms.update();
   }
 
-  /** Раз в кадр: загрузка текселей, изменённых setProvinceData (один диапазон). */
+  /** Once per frame: upload of the texels changed by setProvinceData (one range). */
   private readonly flushProvinceData = (): void => {
     const range = this.provData?.takeDirty();
     if (range && this.provSource) this.provSource.update(range.start, range.end);
   };
 
-  /** Применяет ограничения камеры и обновляет uniform-ы, quad и слой рек. */
+  /** Applies the camera constraints and updates the uniforms, the quad and the river layer. */
   private sync(): void {
     const { width, height } = this.app.screen;
     this.cam = clampCamera(this.cam, width, height, this.map);
@@ -355,7 +355,7 @@ export class MapView {
     this.rivers.update(zoom);
   }
 
-  /** Координаты указателя в CSS-пикселях экрана Pixi. */
+  /** Pointer coordinates in CSS pixels of the Pixi screen. */
   private local(e: PointerEvent | WheelEvent): { x: number; y: number } {
     const rect = this.app.canvas.getBoundingClientRect();
     const { width, height } = this.app.screen;
@@ -366,9 +366,9 @@ export class MapView {
   }
 
   /**
-   * Наведение по CPU-копиям тех же карт, что у шейдера, без чтения с GPU: суша или вода в точке —
-   * по размытой высоте, затем провинция с наибольшей долей рядом по карте этой стороны
-   * (pickProvince повторяет softSide шейдера, поэтому выбранная провинция — подсвеченная).
+   * Hover over CPU copies of the same maps the shader uses, without reading from the GPU: land or water
+   * at the point comes from the blurred height, then the province with the largest share nearby from the
+   * map of that side (pickProvince mirrors the shader's softSide, so the picked province is the highlighted one).
    */
   private hoverAt(sx: number, sy: number): void {
     const world = this.world;
@@ -415,7 +415,7 @@ export class MapView {
 
   private readonly onWheel = (e: WheelEvent): void => {
     e.preventDefault();
-    // deltaMode: 0 — пиксели, 1 — строки, 2 — страницы. Одна ступенька мыши ≈ 100 px.
+    // deltaMode: 0 — pixels, 1 — lines, 2 — pages. One mouse notch ≈ 100 px.
     const px = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 300 : e.deltaY;
     const notches = Math.max(-3, Math.min(3, -px / 100));
     const { x, y } = this.local(e);

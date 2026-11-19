@@ -1,10 +1,10 @@
 import type { BiomeDef } from '../../biomes/types';
 
-// Фэнтези-биомы (включаются флагом fantasy). Каждый — «пятна» по полю arcana внутри
-// подходящего климата: высокая магичность даёт грибной лес во влажном тепле, пепельные
-// пустоши в сухой жаре и кристальные горы на вершинах; низкая — магический лес в прохладной
-// влажной полосе. Приоритеты выше климатических биомов, но ниже холмов и гор (кроме
-// кристальных гор, которые забирают вершины у обычных).
+// Fantasy biomes (enabled by the fantasy flag). Each one forms "patches" over the arcana field
+// within a suitable climate: high arcana gives mushroom forest in warm humidity, ash
+// wastes in dry heat and crystal mountains on peaks; low arcana gives magic forest
+// in a cool humid band. Priorities are above climate biomes but below hills and mountains
+// (except crystal mountains, which take peaks from the ordinary ones).
 
 export const FANTASY_BIOMES: BiomeDef[] = [
   {

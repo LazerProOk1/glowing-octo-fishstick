@@ -1,6 +1,6 @@
 /*
- * Интерфейс: тёмные нейтральные панели, рамка в 1 px, один приглушённый акцент.
- * Иерархия — размером и насыщенностью текста, без украшений.
+ * Interface: dark neutral panels, 1 px borders, one muted accent.
+ * Hierarchy via text size and weight, no ornaments.
  */
 
 @font-face {
@@ -79,7 +79,7 @@ body {
   outline-offset: 1px;
 }
 
-/* ---------- Загрузка: компактный блок по центру ---------- */
+/* ---------- Loading: compact block in the centre ---------- */
 
 .loading {
   position: fixed;
@@ -145,7 +145,7 @@ body {
   transition: width 0.2s linear;
 }
 
-/* ---------- Подсказка у курсора ---------- */
+/* ---------- Tooltip at the cursor ---------- */
 
 .tooltip {
   position: fixed;
@@ -172,7 +172,7 @@ body {
   text-transform: uppercase;
 }
 
-/* ---------- Панель отладки (F3) ---------- */
+/* ---------- Debug panel (F3) ---------- */
 
 .debug {
   position: fixed;
@@ -254,7 +254,7 @@ body {
   color: var(--text-faint);
 }
 
-/* ---------- Короткая надпись (режим карты) ---------- */
+/* ---------- Short caption (map mode) ---------- */
 
 .notice {
   position: fixed;
@@ -267,7 +267,7 @@ body {
   transform: translateX(-50%);
 }
 
-/* ---------- Ошибка ---------- */
+/* ---------- Error ---------- */
 
 .error-screen {
   position: fixed;

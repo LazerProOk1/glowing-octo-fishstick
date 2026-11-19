@@ -1,6 +1,6 @@
-// Общая часть тестов провинций. Наборы разнесены по файлам provinces.*.test.ts, чтобы Vitest
-// гонял их в разных потоках: один файл на ~80 с не давал воркеру вовремя отвечать на служебные
-// вызовы (ошибка «Timeout calling onTaskUpdate» и код выхода 1 при зелёных тестах).
+// Shared part of the province tests. The sets are split across provinces.*.test.ts files so Vitest
+// runs them in separate threads: a single file of ~80 s kept the worker from answering service calls
+// in time (the "Timeout calling onTaskUpdate" error and exit code 1 with green tests).
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createRng } from '../../../src/sim/rng';
 import { generateHeight } from '../../../src/sim/world/heightmap';
@@ -25,18 +25,19 @@ import type { Province } from '../../../src/sim/world/types';
 import { SEA_LEVEL } from '../../../src/content/terrainLevels';
 
 /**
- * Пороги качества провинций по размеру мира. Спец и настройка генератора — для medium. Материки и
- * климат заданы в долях карты, а провинции — в клетках (радиус Пуассона), поэтому на small пятна
- * биомов вдвое мельче относительно провинции: смешанных провинций и ступенек на границах
- * (растр биомов грубее) больше. Для small пороги ослаблены и записаны явно.
+ * Province quality thresholds by world size. The spec and the generator tuning target medium.
+ * Continents and climate are given in fractions of the map, while provinces are given in cells
+ * (Poisson radius), so on small biome patches are twice as fine relative to a province: more mixed
+ * provinces and more steps on the borders (the biome raster is coarser). For small the thresholds
+ * are relaxed and written out explicitly.
  *
- * Границы проверяются дважды. bumps и straight — доли по всем границам (суша и море), пороги
- * прежние, кроме straight на small: крупные морские провинции открытого моря (Task 5 этапа 1.5)
- * дают там пару прямых участков воды длиннее 12 клеток (0.0058 на "1", 0.0051 на "Бета-7"), отсюда
- * 0.006. landBumps и landStraight — только границы суши, чтобы морские границы (они глаже) не
- * разбавляли знаменатель и не прятали ухудшение на суше. Сухопутные провинции Task 5 не меняет;
- * пороги — наблюдаемые максимумы с небольшим запасом (medium: бугорки до 0.0076, прямые до 0.0049;
- * small: бугорки до 0.0119, прямые до 0.0060).
+ * The borders are checked twice. bumps and straight are shares over all borders (land and sea),
+ * with the old thresholds except straight on small: large open-sea provinces (stage 1.5 task 5)
+ * produce a couple of straight water stretches longer than 12 cells there (0.0058 on "1", 0.0051 on
+ * "Бета-7"), hence 0.006. landBumps and landStraight cover land borders only, so that sea borders
+ * (which are smoother) do not dilute the denominator and hide a regression on land. Task 5 does not
+ * touch land provinces; the thresholds are the observed maxima with a small margin (medium: bumps up
+ * to 0.0076, straight up to 0.0049; small: bumps up to 0.0119, straight up to 0.0060).
  */
 const QUALITY: Record<
   WorldSize,
@@ -108,7 +109,7 @@ function realNeighbors(f: Fixture): number[][] {
   return sets.map((s) => [...s].sort((a, b) => a - b));
 }
 
-/** Все проверки провинций для набора (сид, опции, размер); мир строится один раз на набор. */
+/** All province checks for a set (seed, options, size); the world is built once per set. */
 export function provinceSuite(cases: Array<[string, GenOptions, WorldSize]>): void {
   describe.each(cases)('provinces (seed %j, options %j, size %s)', (seed, options, size) => {
     let f: Fixture;

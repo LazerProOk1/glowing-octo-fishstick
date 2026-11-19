@@ -1,6 +1,6 @@
 import { provinceSuite } from './provincesSuite';
 
-// Особые сиды medium: мелкие острова, озёра, фэнтези.
+// Special medium seeds: small islands, lakes, fantasy.
 provinceSuite([
   ['tiny-islands', {}, 'medium'],
   ['lakes-check', {}, 'medium'],

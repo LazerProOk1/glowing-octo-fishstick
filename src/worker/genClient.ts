@@ -10,7 +10,7 @@ import {
 
 export type { GenResult, GenTimings, LoadStep } from './protocol';
 
-/** Минимальный интерфейс воркера; в тестах подменяется фабрикой. */
+/** Minimal worker interface; replaced by a factory in tests. */
 export interface WorkerPort {
   post(req: GenRequest): void;
   terminate(): void;
@@ -21,7 +21,7 @@ export type WorkerFactory = (
   onError: (message: string) => void,
 ) => WorkerPort;
 
-/** Запрос вытеснен более новым; его результат не нужен. */
+/** The request was superseded by a newer one; its result is not needed. */
 export class SupersededError extends Error {
   constructor() {
     super('superseded by a newer request');
@@ -47,7 +47,7 @@ interface Pending {
   onStage?: StageCallback;
 }
 
-/** Настоящий модульный воркер Vite. */
+/** The real Vite module worker. */
 export const viteWorkerFactory: WorkerFactory = (onMessage, onError) => {
   const worker = new Worker(new URL('./genWorker.ts', import.meta.url), { type: 'module' });
   worker.onmessage = (e: MessageEvent<GenResponse>) => onMessage(e.data);
@@ -63,8 +63,8 @@ export const viteWorkerFactory: WorkerFactory = (onMessage, onError) => {
 };
 
 /**
- * Клиент генерации. Одновременно выполняется один запрос: новый запрос прерывает воркер,
- * занятый старым, а обещание старого отклоняется SupersededError.
+ * Generation client. One request runs at a time: a new request kills the worker busy with
+ * the old one, and the old promise rejects with SupersededError.
  */
 export function createGenClient(factory: WorkerFactory = viteWorkerFactory): GenClient {
   let port: WorkerPort | null = null;
@@ -79,12 +79,12 @@ export function createGenClient(factory: WorkerFactory = viteWorkerFactory): Gen
   const onMessage = (msg: GenResponse): void => {
     const mismatch = protocolMismatch(msg);
     if (mismatch !== null) {
-      // Воркер другой версии: его ответам нельзя доверять — останавливаем и отклоняем запрос.
+      // Worker of a different version: its answers cannot be trusted — stop it and reject the request.
       onError(mismatch);
       return;
     }
     const p = current;
-    if (!p || msg.id !== p.id) return; // ответ на вытесненный запрос
+    if (!p || msg.id !== p.id) return; // answer to a superseded request
     if (msg.type === 'stage') {
       p.onStage?.(msg.stage);
       return;
@@ -109,7 +109,7 @@ export function createGenClient(factory: WorkerFactory = viteWorkerFactory): Gen
       if (current) {
         const old = current;
         current = null;
-        killPort(); // генерацию нельзя прервать изнутри — останавливаем воркер целиком
+        killPort(); // generation cannot be interrupted from inside — stop the whole worker
         old.reject(new SupersededError());
       }
       return new Promise<GenResult>((resolve, reject) => {
@@ -137,8 +137,8 @@ export function createGenClient(factory: WorkerFactory = viteWorkerFactory): Gen
 let defaultClient: GenClient | null = null;
 
 /**
- * Генерирует мир и запекает его текстуры в воркере; более новый вызов вытесняет предыдущий.
- * Типизированные массивы приходят передачей (transferable), без копирования.
+ * Generates the world and bakes its textures in the worker; a newer call supersedes the previous one.
+ * Typed arrays arrive by transfer, without copying.
  */
 export function requestWorld(params: WorldParams, onStage?: StageCallback): Promise<GenResult> {
   defaultClient ??= createGenClient();

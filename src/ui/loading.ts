@@ -3,9 +3,9 @@ import { LOAD_STEPS, type LoadStep } from '../worker/protocol';
 import { el, formatSeconds, NBSP } from './dom';
 
 /**
- * Компактный блок загрузки: название этапа, номер этапа, полоса по этапам и время.
- * Время обновляется из requestAnimationFrame: если главный поток встанет, счётчик замрёт,
- * так что блок заодно показывает, что генерация идёт в воркере.
+ * Compact loading block: stage name, stage number, progress bar over the stages and time.
+ * The time updates from requestAnimationFrame: if the main thread stalls, the counter freezes,
+ * so the block also shows that generation runs in the worker.
  */
 export class LoadingScreen {
   private readonly root: HTMLElement;
@@ -25,7 +25,7 @@ export class LoadingScreen {
 
     const head = el('div', 'loading__head');
     this.elapsedEl = el('span', 'loading__elapsed');
-    // Счётчик меняется каждый кадр — читалке экрана он не нужен (иначе живой регион не умолкает).
+    // The counter changes every frame — a screen reader does not need it (otherwise the live region never goes quiet).
     this.elapsedEl.setAttribute('aria-hidden', 'true');
     head.append(el('h1', 'loading__title', t('loading.title')), this.elapsedEl);
     this.seedEl = el('div', 'loading__seed');
@@ -40,7 +40,7 @@ export class LoadingScreen {
     parent.append(this.root);
   }
 
-  /** Показывает блок для нового зерна. */
+  /** Shows the block for a new seed. */
   show(seed: string): void {
     this.root.hidden = false;
     this.seedEl.textContent = `${t('loading.seed')}: ${seed}`;
@@ -55,7 +55,7 @@ export class LoadingScreen {
     if (i >= 0) this.setStep(i);
   }
 
-  /** Убирает блок сразу. */
+  /** Removes the block immediately. */
   hide(): void {
     this.root.hidden = true;
     cancelAnimationFrame(this.raf);

@@ -1,30 +1,30 @@
-// Фактура волн на воде: неподвижная мелкая рябь, освещённая тем же светом, что отмывка суши
-// (лёгкие блики и тени на гребнях). Процедурная, в координатах мира: при панорамировании не
-// «ползёт». Без выборок текстур: 3 октавы шума значений с аналитической производной (по 4 хэша).
-// GLSL (WAVE_GLSL) вставляется в шейдер карты; TS-копия — для тестов (на GPU точность float32,
-// поэтому побитного совпадения нет, совпадает форма).
+// Water wave texture: static fine ripple lit by the same light as the land shading
+// (faint highlights and shadows on the crests). Procedural, in world coordinates: it does not
+// "crawl" when panning. No texture samples: 3 octaves of value noise with an analytic derivative (4 hashes each).
+// The GLSL (WAVE_GLSL) is injected into the map shader; the TS copy is for tests (the GPU uses float32,
+// so there is no bit-exact match, only the same shape).
 
-/** Наибольшее отклонение яркости воды от ряби (±3.5%). */
+/** Largest water brightness deviation from the ripple (±3.5%). */
 export const WAVE_AMP = 0.035;
-/** Зум (CSS px на клетку): рябь появляется с WAVE_FADE[0] и в полную силу с WAVE_FADE[1]. Общий вид ≤ ~0.9. */
+/** Zoom (CSS px per cell): the ripple appears at WAVE_FADE[0] and reaches full strength at WAVE_FADE[1]. Overview ≤ ~0.9. */
 export const WAVE_FADE = [1.5, 5] as const;
-/** Частоты октав, 1/клетка: длина волны ~2.9, 1.25 и 0.55 клетки. */
+/** Octave frequencies, 1/cell: wavelength ~2.9, 1.25 and 0.55 cells. */
 export const WAVE_FREQ = [0.35, 0.8, 1.8] as const;
-/** Веса октав. */
+/** Octave weights. */
 export const WAVE_OCT_AMP = [1, 0.6, 0.35] as const;
-/** Повороты октав, радианы: разные углы, чтобы ни одна не легла на сетку клеток и не дала полос. */
+/** Octave rotations, radians: different angles so none aligns with the cell grid and produces stripes. */
 export const WAVE_ANGLE = [0.35, -0.6, 1.1] as const;
-/** Сжатие поперёк волны: гребни вытянуты в ~1.8 раза. */
+/** Compression across the wave: the crests are stretched ~1.8 times. */
 export const WAVE_STRETCH = 1.8;
 /**
- * Октава гаснет, когда её волна короче WAVE_PX[1] физических пикселей, и пропадает при WAVE_PX[0]:
- * волна в пару пикселей дала бы муар.
+ * An octave fades out when its wave is shorter than WAVE_PX[1] physical pixels and is gone at WAVE_PX[0]:
+ * a wave a couple of pixels long would produce moiré.
  */
 export const WAVE_PX = [3, 8] as const;
-/** cos и sin поворотов октав: считаются здесь один раз и подставляются в GLSL константами. */
+/** cos and sin of the octave rotations: computed here once and injected into GLSL as constants. */
 export const WAVE_COS = WAVE_ANGLE.map((a) => Math.cos(a));
 export const WAVE_SIN = WAVE_ANGLE.map((a) => Math.sin(a));
-/** Направление на свет в плоскости карты (как LIGHT в шейдере: с северо-запада). */
+/** Light direction in the map plane (like LIGHT in the shader: from the north-west). */
 const LIGHT_XY = [-Math.SQRT1_2, -Math.SQRT1_2] as const;
 
 function smoothstep(a: number, b: number, x: number): number {
@@ -32,14 +32,14 @@ function smoothstep(a: number, b: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-/** Сила ряби по зуму: 0 на общем виде, 1 вблизи. */
+/** Ripple strength by zoom: 0 in the overview, 1 up close. */
 export function waveStrength(zoom: number): number {
   return smoothstep(WAVE_FADE[0], WAVE_FADE[1], zoom);
 }
 
 const fract = (v: number): number => v - Math.floor(v);
 
-/** Тот же хэш, что hash12 в шейдере. */
+/** The same hash as hash12 in the shader. */
 function hash12(x: number, y: number): number {
   // p3 = fract(p.xyx · 0.1031); p3 += dot(p3, p3.yzx + 33.33); fract((p3.x + p3.y) · p3.z)
   let a = fract(x * 0.1031);
@@ -52,7 +52,7 @@ function hash12(x: number, y: number): number {
   return fract((a + b) * c);
 }
 
-/** Шум значений с квинтической интерполяцией: [значение, d/dx, d/dy]. */
+/** Value noise with quintic interpolation: [value, d/dx, d/dy]. */
 function vnoiseD(x: number, y: number): [number, number, number] {
   const ix = Math.floor(x);
   const iy = Math.floor(y);
@@ -73,8 +73,8 @@ function vnoiseD(x: number, y: number): [number, number, number] {
 }
 
 /**
- * Относительное изменение яркости воды от ряби в точке мира (x, y) клеток: в пределах ±WAVE_AMP.
- * pxPerCell — физических пикселей на клетку (для гашения мелких октав), zoom — CSS px на клетку.
+ * Relative change of water brightness from the ripple at the world point (x, y) in cells: within ±WAVE_AMP.
+ * pxPerCell is physical pixels per cell (to fade the fine octaves), zoom is CSS px per cell.
  */
 export function waveShade(x: number, y: number, zoom: number, pxPerCell: number): number {
   const strength = waveStrength(zoom);
@@ -88,7 +88,7 @@ export function waveShade(x: number, y: number, zoom: number, pxPerCell: number)
     const a = (WAVE_OCT_AMP[i] as number) * smoothstep(WAVE_PX[0], WAVE_PX[1], pxPerCell / f);
     norm += WAVE_OCT_AMP[i] as number;
     if (a <= 0) continue;
-    // q = R·p·f, затем сжатие по второй оси; градиент возвращается в оси мира через Rᵀ.
+    // q = R·p·f, then compression along the second axis; the gradient returns to world axes via Rᵀ.
     const qx = (co * x - si * y) * f + 17.1 * i;
     const qy = (si * x + co * y) * f * WAVE_STRETCH + 31.7 * i;
     const n = vnoiseD(qx, qy);
@@ -103,10 +103,10 @@ export function waveShade(x: number, y: number, zoom: number, pxPerCell: number)
 
 const f4 = (n: number): string => n.toFixed(4);
 const vec3 = (v: readonly number[], f: (n: number) => string = f4): string => `float[3](${v.map(f).join(', ')})`;
-/** Для cos/sin: четыре знака дали бы заметную ошибку поворота. */
+/** For cos/sin: four digits would give a noticeable rotation error. */
 const f8 = (n: number): string => n.toFixed(8);
 
-/** GLSL: vnoiseD и waveShade (нужен hash12 и LIGHT шейдера карты). */
+/** GLSL: vnoiseD and waveShade (needs hash12 and LIGHT from the map shader). */
 export const WAVE_GLSL = /* glsl */ `
 const float WAVE_AMP = ${f4(WAVE_AMP)};
 const vec2 WAVE_FADE = vec2(${WAVE_FADE.map(f4).join(', ')});

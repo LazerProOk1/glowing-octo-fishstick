@@ -2,7 +2,7 @@ import { el } from './dom';
 
 const SHOW_MS = 1400;
 
-/** Короткая надпись внизу по центру (например, название режима карты после переключения). */
+/** Short caption at the bottom centre (e.g. the map mode name after switching). */
 export class Notice {
   private readonly root: HTMLElement;
   private timer = 0;

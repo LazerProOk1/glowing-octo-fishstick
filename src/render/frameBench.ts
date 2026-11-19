@@ -4,7 +4,7 @@ export interface FrameStats {
   fps: number;
 }
 
-/** Итоги по времени кадров (мс): среднее, 95-й процентиль, кадров в секунду по среднему. */
+/** Frame timing results (ms): mean, 95th percentile, frames per second from the mean. */
 export function frameStats(samplesMs: readonly number[]): FrameStats {
   const n = samplesMs.length;
   if (n === 0) return { avg: 0, p95: 0, fps: 0 };

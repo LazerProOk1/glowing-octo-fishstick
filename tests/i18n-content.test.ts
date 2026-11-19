@@ -3,7 +3,7 @@ import { PACKS, resolveBiomes } from '../src/content/registry';
 import { ru, translate } from '../src/i18n/ru';
 import { LOAD_STEPS } from '../src/worker/protocol';
 
-/** Все ключи названий контента: биомы всех паков (с фэнтези), паки, этапы генерации. */
+/** All content name keys: biomes of all packs (with fantasy), packs, generation stages. */
 function contentKeys(): string[] {
   const keys: string[] = [];
   for (const pack of PACKS) {
@@ -15,20 +15,20 @@ function contentKeys(): string[] {
   return [...new Set(keys)];
 }
 
-describe('i18n контента', () => {
-  it('названия контента — ключи, а не готовый текст', () => {
+describe('content i18n', () => {
+  it('content names are keys, not ready-made text', () => {
     for (const pack of PACKS) {
       expect(pack.nameKey).toBe(`pack.${pack.id}`);
       for (const b of pack.biomes) expect(b.nameKey).toBe(`biome.${b.id}`);
     }
   });
 
-  it('у каждого ключа контента есть перевод в ru', () => {
+  it('every content key has a translation in ru', () => {
     const missing = contentKeys().filter((k) => !(k in ru));
     expect(missing).toEqual([]);
   });
 
-  it('translate: перевод по ключу, неизвестный ключ возвращается как есть', () => {
+  it('translate: lookup by key, an unknown key is returned as is', () => {
     expect(translate('biome.mushroom_forest')).toBe('грибной лес');
     expect(translate('pack.base')).toBe('Базовый');
     expect(translate('нет.такого')).toBe('нет.такого');

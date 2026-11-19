@@ -17,7 +17,7 @@ function distToPolyline(p: P, line: P[]): number {
   return best;
 }
 
-/** Длинный D8-путь: 40 клеток по x, затем 30 по диагонали. */
+/** A long D8 path: 40 cells along x, then 30 diagonally. */
 function d8(x0: number, y0: number): P[] {
   const pts: P[] = [];
   for (let i = 0; i < 40; i++) pts.push({ x: x0 + i + 0.5, y: y0 + 0.5 });
@@ -37,7 +37,7 @@ describe('meander', () => {
   ];
   const pinned = pinnedPoints(rivers);
 
-  it('концы и общие точки слияния не сдвигаются', () => {
+  it('the ends and shared confluence points do not move', () => {
     const m = meander(main, 0, pinned);
     expect(m[0]).toEqual(main[0]);
     expect(m[m.length - 1]).toEqual(main[main.length - 1]);
@@ -47,14 +47,14 @@ describe('meander', () => {
     expect(t[t.length - 1]).toEqual(junction);
   });
 
-  it('каждая точка в пределах 0.4 клетки от исходной ломаной', () => {
+  it('every point stays within 0.4 cells of the original polyline', () => {
     for (let seed = 0; seed < 20; seed++) {
       for (const p of meander(main, seed, pinned)) expect(distToPolyline(p, main)).toBeLessThanOrEqual(0.4);
     }
   });
 
-  it('прямые участки действительно изгибаются', () => {
-    // Средний по рекам максимум отклонения на прямом отрезке в 30 клеток.
+  it('straight stretches really bend', () => {
+    // The per-river average of the maximum deviation on a straight 30-cell segment.
     let sum = 0;
     for (let seed = 0; seed < 10; seed++) {
       const m = meander(main, seed, pinned);
@@ -63,7 +63,7 @@ describe('meander', () => {
     expect(sum / 10).toBeGreaterThan(0.1);
   });
 
-  it('детерминирован и зависит от номера реки', () => {
+  it('is deterministic and depends on the river number', () => {
     expect(meander(main, 5, pinned)).toEqual(meander(main, 5, pinned));
     expect(meander(main, 5, pinned)).not.toEqual(meander(main, 6, pinned));
   });

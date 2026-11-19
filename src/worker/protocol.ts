@@ -4,14 +4,14 @@ import { GEN_STAGES } from '../sim/world/generateWorld';
 import type { WorldParams } from '../sim/world/params';
 import type { World } from '../sim/world/types';
 
-/** Шаги работы воркера: шесть этапов генерации и запекание текстур карты. */
+/** Worker steps: six generation stages and map texture baking. */
 export const LOAD_STEPS = [...GEN_STAGES, 'bake'] as const;
 export type LoadStep = (typeof LOAD_STEPS)[number];
 
 /**
- * Время шагов, мс (замеряет воркер). total — от запроса до готового результата.
- * stages.bake — сколько запекание добавило после провинций; surface — запекание текстур рельефа
- * во вложенном воркере, параллельно рекам и провинциям (в total входит только то, что не перекрылось).
+ * Step times, ms (measured by the worker). total — from request to finished result.
+ * stages.bake — what baking added after the provinces; surface — terrain texture baking
+ * in the nested worker, in parallel with rivers and provinces (total counts only the non-overlapping part).
  */
 export interface GenTimings {
   stages: Record<LoadStep, number>;
@@ -19,7 +19,7 @@ export interface GenTimings {
   surface?: number;
 }
 
-/** Готовый мир вместе с запечёнными текстурами и замерами. */
+/** The finished world together with the baked textures and timings. */
 export interface GenResult {
   world: World;
   bake: WorldBake;
@@ -27,13 +27,13 @@ export interface GenResult {
 }
 
 /**
- * Версия протокола сообщений главного потока и воркеров (в обе стороны, включая вложенный воркер).
- * Поднимать при любом изменении формы сообщений. Сообщение другой версии (например, воркер из
- * старой вкладки или кэша) отклоняется с понятной ошибкой, а не разбирается вслепую.
+ * Protocol version of the messages between the main thread and the workers (both ways, nested worker included).
+ * Bump on any change of the message shape. A message of another version (e.g. a worker from an
+ * old tab or cache) is rejected with a clear error instead of being parsed blindly.
  */
 export const PROTOCOL_VERSION = 5;
 
-/** Общая часть всех сообщений. */
+/** Common part of all messages. */
 interface Versioned {
   v: typeof PROTOCOL_VERSION;
 }
@@ -43,7 +43,7 @@ export interface GenRequest extends Versioned {
   params: WorldParams;
 }
 
-/** Ответ-ошибка; так же воркер отвечает на запрос другой версии протокола. */
+/** Error reply; the worker answers a request of another protocol version the same way. */
 export interface ErrorResponse extends Versioned {
   type: 'error';
   id: number;
@@ -55,12 +55,12 @@ export type GenResponse =
   | (Versioned & { type: 'done'; id: number } & GenResult)
   | ErrorResponse;
 
-/** Запрос вложенному воркеру текстур рельефа (массивы — копии, передаются без копирования). */
+/** Request to the nested terrain-texture worker (the arrays are copies and are transferred without copying). */
 export interface SurfaceRequest extends Versioned {
   id: number;
   height: Float32Array;
   biome: Uint8Array;
-  /** Биомы мира: цвета и вид (вода/суша) по коду. */
+  /** World biomes: colours and kind (water/land) by code. */
   defs: BiomeDef[];
   w: number;
   h: number;
@@ -72,14 +72,14 @@ function versionOf(msg: unknown): unknown {
   return typeof msg === 'object' && msg !== null ? (msg as { v?: unknown }).v : undefined;
 }
 
-/** Текст ошибки, если сообщение другой версии протокола; null — версия своя. */
+/** Error text if the message has another protocol version; null — the version matches. */
 export function protocolMismatch(msg: unknown): string | null {
   const v = versionOf(msg);
   if (v === PROTOCOL_VERSION) return null;
   return `worker protocol version mismatch: got ${String(v)}, expected ${PROTOCOL_VERSION} (reload the page)`;
 }
 
-/** Ответ воркера на запрос другой версии протокола; null — версия своя, запрос можно разбирать. */
+/** Worker reply to a request of another protocol version; null — the version matches, the request can be parsed. */
 export function versionErrorReply(msg: unknown): ErrorResponse | null {
   const message = protocolMismatch(msg);
   if (message === null) return null;
@@ -87,7 +87,7 @@ export function versionErrorReply(msg: unknown): ErrorResponse | null {
   return { v: PROTOCOL_VERSION, type: 'error', id: typeof id === 'number' ? id : -1, message };
 }
 
-/** Буферы всех типизированных массивов мира, каждый один раз (повтор в списке передачи — ошибка). */
+/** Buffers of all world typed arrays, each exactly once (a repeat in the transfer list is an error). */
 export function collectTransferables(world: World): ArrayBuffer[] {
   return uniqueBuffers([
     world.height,
@@ -100,7 +100,7 @@ export function collectTransferables(world: World): ArrayBuffer[] {
   ]);
 }
 
-/** Буферы текстур рельефа, каждый один раз: все поля SurfaceBake, новые поля передаются сами. */
+/** Terrain texture buffers, each exactly once: all SurfaceBake fields, new fields transfer themselves. */
 export function surfaceTransferables(bake: SurfaceBake): ArrayBuffer[] {
   return bakeTransferables(bake);
 }

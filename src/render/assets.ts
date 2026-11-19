@@ -15,7 +15,7 @@ export const DetailSlot = {
 } as const;
 export type DetailSlot = (typeof DetailSlot)[keyof typeof DetailSlot];
 
-/** Слот атласа по имени из данных биома (BiomeDef.detail). Цвет биома — из его данных. */
+/** Atlas slot by the name from the biome data (BiomeDef.detail). The biome colour comes from its data. */
 export const DETAIL_SLOT_OF: Record<DetailSlotName, DetailSlot> = {
   grass: DetailSlot.GRASS,
   forest: DetailSlot.FOREST,

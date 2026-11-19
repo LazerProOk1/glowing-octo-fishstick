@@ -4,13 +4,13 @@ import { SIZE_PRESETS } from '../../../src/sim/world/params';
 import type { Province } from '../../../src/sim/world/types';
 import { SEA_LEVEL } from '../../../src/content/terrainLevels';
 
-/** Доля суши, к которой приводит генератор рельефа (TARGET_LAND в heightmap.ts). */
+/** Land share the terrain generator aims for (TARGET_LAND in heightmap.ts). */
 const LAND_SHARE = 0.38;
 const MEDIUM_AREA = SIZE_PRESETS.medium.w * SIZE_PRESETS.medium.h;
 
 /**
- * Границы числа провинций, пропорциональные площади суши (и моря): для medium (38% суши) это
- * 2000–4000 сухопутных и 150–560 морских; small и large — в отношении их площадей.
+ * Province count bounds proportional to the land (and sea) area: for medium (38% land) that is
+ * 2000–4000 land and 150–560 sea provinces; for small and large, in proportion to their areas.
  */
 export function provinceBounds(height: Float32Array, w: number, h: number): { land: [number, number]; sea: [number, number] } {
   let landCells = 0;
