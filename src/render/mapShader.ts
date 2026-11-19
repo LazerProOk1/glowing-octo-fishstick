@@ -2,7 +2,7 @@ import { ATLAS_GRID, DetailSlot } from './assets';
 import { MAP_COLORS, glslVec3 } from './palette';
 import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../content/terrainLevels';
 import { PROVINCE_FLAGS } from './provinceData';
-import { LAKE_SLOT, PALETTE_SIZE, WATER_SLOT } from './textures';
+import { LAKE_SLOT, PALETTE_SIZE } from './textures';
 import { DEPTH_TONE_K, SEA_DEPTH_MAX, SEA_DEPTH_STEP, WATER_GRAIN } from './seaDepth';
 import { WAVE_GLSL } from './seaWaves';
 
@@ -64,7 +64,7 @@ uniform sampler2D uSurface;   // RGBA16F linear: RG blurred Sobel gradient per c
 uniform sampler2D uBiomeColor; // RGBA8 linear: blurred land palette colour, A land coverage
 uniform sampler2D uSeaDepth;  // R16F linear: smooth sea depth 0..DEPTH_MAX (shelf at coasts, even open sea)
 uniform sampler2D uProvince;  // RGBA8: R,G id, B land. Owners where the screen shows land
-uniform sampler2D uProvinceSea; // same layout. Owners where the screen shows water
+uniform sampler2D uProvinceSea; // same, but A: the cell's own water class (1 land, 0.5 sea, 0 lake). Owners where the screen shows water
 uniform sampler2D uPalette;   // ${PALETTE_SIZE}x1: rgb biome colour, a detail slot (255 = sea, 254 = lake)
 uniform sampler2D uAtlas;     // 4x4 grayscale detail tiles, mipmapped
 uniform sampler2D uProvData;  // RGBA8 per province id (row by row, uProvDataW wide): rgb fill, a flags
@@ -83,7 +83,6 @@ const float ATLAS_PX = ${f(ATLAS_PX)};
 const float DETAIL_SPAN = ${f(DETAIL_SPAN_CELLS)};
 const float PAPER_SPAN = ${f(PAPER_SPAN_CELLS)};
 const float PAPER_SLOT = ${f(DetailSlot.PAPER)};
-const float WATER_SLOT = ${f(WATER_SLOT)};
 const float LAKE_SLOT = ${f(LAKE_SLOT)};
 const float MAX_LOD = 5.0;
 const float SLOT_GAIN[7] = float[7](${gains});
@@ -157,35 +156,40 @@ vec4 provFill(float id) {
   return vec4(d.rgb * on, on);
 }
 
-// Palette slot of a cell (detail slot, WATER_SLOT for sea, LAKE_SLOT for lake water).
+// Palette slot of a cell (detail slot; sea and lake water are >= LAKE_SLOT, see textures.ts).
 float slotAt(ivec2 c) {
   int code = int(round(texelFetch(uTerrain, c, 0).g * 255.0));
   return round(texelFetch(uPalette, ivec2(code, 0), 0).a * 255.0);
 }
 
-// Share of lake among the water cells around p (0 = sea, 1 = lake), from the biome codes: bilinear
-// over the 4 nearest cells; where those are all land (the smooth coastline can still show water
-// there), over the 3x3 cells around p. Lakes and the sea never touch along a cell edge.
-float lakeShare(vec2 pc, vec2 pw, vec2 p) {
+// Share of lake among the water cells around p (0 = sea, 1 = lake), from the cells' own biomes:
+// bilinear over the 4 nearest cells; where those are all land (the smooth coastline can still show
+// water there), over the 3x3 cells around p. Lakes and the sea never touch along a cell edge.
+// cls: A of the sea owner map for the 4x4 cells of softSide (k = column + 4 * row, cell pc - 1 + k),
+// already fetched there: 1 land biome, 0.5 sea, 0 lake (SEA_MAP_ALPHA in bake.ts). No fetches here.
+float lakeShare(float cls[16], vec2 pc, vec2 pw, vec2 p) {
   float lakeW = 0.0;
   float waterW = 0.0;
   for (int i = 0; i < 4; i++) {
     vec2 o = vec2(float(i & 1), float(i >> 1));
     vec2 ow = mix(1.0 - pw, pw, o);
     float wgt = ow.x * ow.y + 1e-4;
-    float slot = slotAt(cellAt(pc + o));
-    if (slot > LAKE_SLOT - 0.5) {
+    float a = cls[5 + (i & 1) + 4 * (i >> 1)];
+    if (a < 0.75) {
       waterW += wgt;
-      if (slot < WATER_SLOT - 0.5) lakeW += wgt;
+      if (a < 0.25) lakeW += wgt;
     }
   }
   if (waterW == 0.0) {
+    // The 3x3 cells around floor(p) lie inside the 4x4 block: floor(p) is pc or pc + 1 per axis.
+    ivec2 base = ivec2(pc) - 1;
     for (int dy = -1; dy <= 1; dy++) {
       for (int dx = -1; dx <= 1; dx++) {
-        float slot = slotAt(cellAt(p + vec2(float(dx), float(dy))));
-        if (slot > LAKE_SLOT - 0.5) {
+        ivec2 o = clamp(ivec2(floor(p + vec2(float(dx), float(dy)))) - base, ivec2(0), ivec2(3));
+        float a = cls[o.x + 4 * o.y];
+        if (a < 0.75) {
           waterW += 1.0;
-          if (slot < WATER_SLOT - 0.5) lakeW += 1.0;
+          if (a < 0.25) lakeW += 1.0;
         }
       }
     }
@@ -227,7 +231,8 @@ struct Side {
 // Limits (same on the CPU): slivers a cell wide or thinner may vanish (their share never wins);
 // at junctions of 4+ provinces a fifth one is not a candidate, a small seam is possible; the CPU
 // coast side (exact half-float maths) may differ from the GPU one (filtering precision) by <= 1 px.
-Side softSide(bool landSide, vec2 pc, vec2 pw, float pxPerCell) {
+// cls receives the A channel of the 16 texels (on the sea side: water class for lakeShare).
+Side softSide(bool landSide, vec2 pc, vec2 pw, float pxPerCell, out float cls[16]) {
   vec4 wx = bspline(pw.x);
   vec4 wy = bspline(pw.y);
   vec4 dx = bsplineD(pw.x);
@@ -236,6 +241,7 @@ Side softSide(bool landSide, vec2 pc, vec2 pw, float pxPerCell) {
   for (int k = 0; k < 16; k++) {
     vec4 t = provAt(cellAt(pc + vec2(float((k & 3) - 1), float((k >> 2) - 1))), landSide);
     ids[k] = (t.b > 0.5) == landSide ? decodeId(t) : -1.0;
+    cls[k] = t.a;
   }
   vec4 cand = vec4(ids[5], ids[6], ids[9], ids[10]);
   float sum = 0.0;
@@ -324,8 +330,10 @@ void main() {
   bool showSea = landMask < 1.0;
   Side sl = Side(-1.0, -1.0, 1e4, -1e4);
   Side ss = sl;
-  if (showLand) sl = softSide(true, pc, pw, pxPerCell);
-  if (showSea) ss = softSide(false, pc, pw, pxPerCell);
+  float landCls[16];
+  float seaCls[16];
+  if (showLand) sl = softSide(true, pc, pw, pxPerCell, landCls);
+  if (showSea) ss = softSide(false, pc, pw, pxPerCell, seaCls);
 
   // ---- map mode fill: switches between provinces on their smooth equal-share line.
   vec4 landFill = vec4(0.0);
@@ -335,37 +343,46 @@ void main() {
     if (showSea) seaFill = sideFill(ss);
   }
 
-  // ---- land colour: CPU-blurred biome colours (sigma 1.2 cells) looked up at a noise-warped
-  // position (up to ~1.2 cells), so transitions are soft and never align to the cell grid.
-  vec2 warp = vec2(vnoise(p * 0.23), vnoise(p * 0.23 + vec2(17.3, 5.9))) - 0.5;
-  warp += 0.45 * (vec2(vnoise(p * 0.9 + 3.1), vnoise(p * 0.9 + vec2(9.7, 1.3))) - 0.5);
-  warp *= 1.6;
-  vec3 land = texture(uBiomeColor, (p + warp) * inv).rgb;
-  // Fill replaces part of the biome tint; detail, moisture and hillshade still apply on top.
-  land = land * (1.0 - uFill * landFill.a) + uFill * landFill.rgb;
+  // ---- land: only where land shows. At landMask 0 the land colour is multiplied by 0 below
+  // (mix(water, land, 0.0) is exactly water), so skipping it there leaves the picture identical.
+  // No screen derivatives inside the branch: the coastline's dFdx/dFdy are taken above, and the
+  // textures read here have no mipmaps, so textureLod(..., 0.0) equals the former texture().
+  vec3 land = vec3(0.0);
+  if (landMask > 0.0) {
+    // Colour: CPU-blurred biome colours (sigma 1.2 cells) looked up at a noise-warped position
+    // (up to ~1.2 cells), so transitions are soft and never align to the cell grid.
+    vec2 warp = vec2(vnoise(p * 0.23), vnoise(p * 0.23 + vec2(17.3, 5.9))) - 0.5;
+    warp += 0.45 * (vec2(vnoise(p * 0.9 + 3.1), vnoise(p * 0.9 + vec2(9.7, 1.3))) - 0.5);
+    warp *= 1.6;
+    land = textureLod(uBiomeColor, (p + warp) * inv, 0.0).rgb;
+    // Fill replaces part of the biome tint; detail, moisture and hillshade still apply on top.
+    land = land * (1.0 - uFill * landFill.a) + uFill * landFill.rgb;
 
-  // Detail luminance: slots of the 4 cells around the same warped point, bilinear weights.
-  vec2 bq = p - 0.5 + warp;
-  vec2 bc = floor(bq);
-  vec2 bw = bq - bc;
-  float lodRaw = atlasLod(DETAIL_SPAN, pxPerCell);
-  float lod = clamp(lodRaw, 0.0, MAX_LOD);
-  float wSum = 0.0;
-  float detail = 0.0;
-  for (int i = 0; i < 4; i++) {
-    vec2 o = vec2(float(i & 1), float(i >> 1));
-    vec2 ow = mix(1.0 - bw, bw, o);
-    float wgt = ow.x * ow.y;
-    float slot = slotAt(cellAt(bc + o));
-    if (slot < LAKE_SLOT - 0.5) {
-      wSum += wgt;
-      detail += wgt * (atlasSample(slot, p, DETAIL_SPAN, lod) - 0.5) * SLOT_GAIN[int(slot)];
+    // Detail luminance: slots of the 4 cells around the same warped point, bilinear weights.
+    vec2 bq = p - 0.5 + warp;
+    vec2 bc = floor(bq);
+    vec2 bw = bq - bc;
+    float lodRaw = atlasLod(DETAIL_SPAN, pxPerCell);
+    float lod = clamp(lodRaw, 0.0, MAX_LOD);
+    float wSum = 0.0;
+    float detail = 0.0;
+    for (int i = 0; i < 4; i++) {
+      vec2 o = vec2(float(i & 1), float(i >> 1));
+      vec2 ow = mix(1.0 - bw, bw, o);
+      float wgt = ow.x * ow.y;
+      float slot = slotAt(cellAt(bc + o));
+      if (slot < LAKE_SLOT - 0.5) {
+        wSum += wgt;
+        detail += wgt * (atlasSample(slot, p, DETAIL_SPAN, lod) - 0.5) * SLOT_GAIN[int(slot)];
+      }
     }
+    detail = detail / max(wSum, 1e-4) * (1.0 - smoothstep(3.5, 5.0, lodRaw));
+    float moisture = textureLod(uTerrain, uv, 0.0).b;
+    land *= mix(vec3(1.03, 1.01, 0.95), vec3(0.98, 1.0, 1.01), moisture);
+    land *= 1.0 + detail;
   }
-  detail = detail / max(wSum, 1e-4) * (1.0 - smoothstep(3.5, 5.0, lodRaw));
-  float moisture = texture(uTerrain, uv).b;
-  land *= mix(vec3(1.03, 1.01, 0.95), vec3(0.98, 1.0, 1.01), moisture);
-  land *= 1.0 + detail;
+  // Snow and hillshade stay outside the branch: plain arithmetic, no fetches, and moving them in
+  // let the compiler reorder the maths so a few pixels per million changed by 1/255.
   land = mix(land, SNOW, 0.3 * smoothstep(0.40, 0.48, h));
 
   // ---- hillshade: gentle on plains, exaggerated on hills and mountains
@@ -389,9 +406,9 @@ void main() {
   float t = clamp(depth / DEPTH_MAX, 0.0, 1.0);
   vec3 water = mix(SEA_SHALLOW, SEA_DEEP, t * (1.0 + TONE_K) / (t + TONE_K));
   water = mix(water, SEA_COAST, smoothstep(0.12, 0.5, near));
-  // Lake lookup (up to 13 texel pairs) only where water shows at all: at landMask 1 the water
+  // Lake share only where water shows at all (seaCls is filled there): at landMask 1 the water
   // colour is multiplied by 0 below, so skipping it there leaves the picture identical.
-  float lake = landMask < 1.0 ? lakeShare(pc, pw, p) : 0.0;
+  float lake = showSea ? lakeShare(seaCls, pc, pw, p) : 0.0;
   if (lake > 0.0) water = mix(water, mix(LAKE_DEEP, LAKE_SHALLOW, smoothstep(0.28, 0.5, near)), lake);
   // Static ripple (seaWaves.ts), only where water shows; lakes calmer, at half amplitude.
   if (landMask < 1.0) water *= 1.0 + waveShade(p, zoom, pxPerCell) * (1.0 - 0.5 * lake);

@@ -42,6 +42,7 @@ describe('производные данные: пересчёт прямоуго
       biomeColor: base.biomeColor.slice(),
       terrain: base.terrain.slice(),
       height: base.height.slice(),
+      provinceSeaRG: base.provinceSeaRG.slice(),
     };
     const written = updateDerivedRect(edited, partial, rect);
     const full = buildDerived(edited);

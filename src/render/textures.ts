@@ -10,7 +10,10 @@ import { seaDepthSize } from './seaDepth';
 export interface WorldTextures {
   /** RGBA8: R,G — id провинции, B — суша; владельцы там, где на экране суша. Только texelFetch. */
   province: TextureSource;
-  /** RGBA8, та же раскладка: владельцы там, где на экране вода (provinceSeaRG). Только texelFetch. */
+  /**
+   * RGBA8, та же раскладка: владельцы там, где на экране вода (provinceSeaRG); A — вид воды по биому
+   * клетки (SEA_MAP_ALPHA в bake.ts: суша, море, озеро). Только texelFetch.
+   */
   provinceSea: TextureSource;
   /** RGBA8 LINEAR: G — код биома (texelFetch), B — влажность (билинейно). */
   terrain: TextureSource;

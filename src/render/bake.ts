@@ -1,3 +1,5 @@
+import type { BiomeDef } from '../content/biomes/types';
+import { hasTag } from '../content/registry';
 import type { World } from '../sim/world/types';
 
 export function encodeProvinceId(id: number): [r: number, g: number] {
@@ -51,6 +53,33 @@ export function provinceIdPixels(owner: Uint16Array, provinces: readonly Pick<Wo
     out[o + 3] = 255;
   }
   return out;
+}
+
+/**
+ * Канал A карты владельцев воды (provinceSeaRG): вид воды по биому самой клетки — суша, море или
+ * озеро. Шейдер (lakeShare в mapShader.ts) читает его из тех же 16 текселей, что и мягкую долю
+ * провинций, и не делает отдельных выборок кода биома и палитры. У provinceRG канал A остаётся 255.
+ */
+export const SEA_MAP_ALPHA = { land: 255, sea: 128, lake: 0 } as const;
+
+/** SEA_MAP_ALPHA по коду биома (тот же разбор, что слоты палитры в paletteData, textures.ts). */
+export function waterClassTable(defs: readonly BiomeDef[]): number[] {
+  return defs.map((d) =>
+    hasTag(d, 'lake') ? SEA_MAP_ALPHA.lake : d.kind === 'water' ? SEA_MAP_ALPHA.sea : SEA_MAP_ALPHA.land,
+  );
+}
+
+/** Канал A клетки i по её биому; table — waterClassTable. Неизвестный код биома — ошибка. */
+export function writeWaterClassCell(pixels: Uint8Array, biome: Uint8Array, table: readonly number[], i: number): void {
+  const c = table[biome[i] as number];
+  if (c === undefined) throw new Error(`нет биома с кодом ${biome[i]} (клетка ${i})`);
+  pixels[i * 4 + 3] = c;
+}
+
+/** Записывает SEA_MAP_ALPHA в канал A RGBA-пикселей по биому каждой клетки. */
+export function writeWaterClass(pixels: Uint8Array, biome: Uint8Array, defs: readonly BiomeDef[]): void {
+  const table = waterClassTable(defs);
+  for (let i = 0; i < biome.length; i++) writeWaterClassCell(pixels, biome, table, i);
 }
 
 /** Один пиксель текстуры terrain (RGBA: высота, код биома, влажность, ширина реки · 63). */

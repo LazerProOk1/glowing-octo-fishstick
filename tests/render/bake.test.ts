@@ -1,6 +1,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { resolveBiomes } from '../../src/content/registry';
-import { bakeTextures, decodeProvinceId, encodeProvinceId, provinceIdPixels } from '../../src/render/bake';
+import {
+  SEA_MAP_ALPHA,
+  bakeTextures,
+  decodeProvinceId,
+  encodeProvinceId,
+  provinceIdPixels,
+  writeWaterClass,
+} from '../../src/render/bake';
+import { LAKE_SLOT, WATER_SLOT, paletteData } from '../../src/render/textures';
 import { defaultParams } from '../../src/sim/world/params';
 import type { Province, World } from '../../src/sim/world/types';
 
@@ -77,5 +85,21 @@ describe('bakeTextures', () => {
     expect(Array.from(px.subarray(0, 8))).toEqual([0, 0, 255, 255, 300 & 255, 300 >> 8, 0, 255]);
     expect(provinceIdPixels(world.provinceOf, world.provinces)).toEqual(bakeTextures(world).provinceRG);
     expect(() => provinceIdPixels(new Uint16Array([301]), world.provinces)).toThrow();
+  });
+
+  it('writeWaterClass: канал A по виду воды биома, тот же разбор, что слоты палитры', () => {
+    const defs = world.biomes;
+    const biome = Uint8Array.from(defs.map((_, code) => code));
+    const px = new Uint8Array(biome.length * 4).fill(7);
+    writeWaterClass(px, biome, defs);
+    const slots = paletteData(defs);
+    defs.forEach((_, code) => {
+      const slot = slots[code * 4 + 3]!;
+      const want = slot === LAKE_SLOT ? SEA_MAP_ALPHA.lake : slot === WATER_SLOT ? SEA_MAP_ALPHA.sea : SEA_MAP_ALPHA.land;
+      expect(px[code * 4 + 3]).toBe(want);
+      expect(px[code * 4]).toBe(7);
+    });
+    expect([...new Set(Array.from(px.filter((_, i) => i % 4 === 3)))].sort((a, b) => a - b)).toEqual([0, 128, 255]);
+    expect(() => writeWaterClass(px, new Uint8Array([defs.length]), defs)).toThrow();
   });
 });

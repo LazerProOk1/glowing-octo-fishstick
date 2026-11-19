@@ -218,7 +218,8 @@ export class MapView {
   }
 
   /**
-   * Загружает на GPU строки текстур рельефа, цветов биомов и высоты, которые задевает rect —
+   * Загружает на GPU строки текстур рельефа, цветов биомов, высоты и карты владельцев воды (её канал
+   * A — вид воды по биому), которые задевает rect —
    * после updateDerivedRect над теми же массивами, что были переданы в setWorld (bake).
    * Прямоугольник обрезается по границам карты; целиком за картой или пустой — ничего не делает.
    */
@@ -231,7 +232,7 @@ export class MapView {
     if (y1 <= y0) return;
     const start = y0 * w;
     const end = y1 * w;
-    for (const src of [t.terrain, t.height, t.biomeColor]) {
+    for (const src of [t.terrain, t.height, t.biomeColor, t.provinceSea]) {
       if (src instanceof BufferImageSource) src.update(start, end);
     }
   }

@@ -3,7 +3,7 @@
 import type { BiomeDef } from '../content/biomes/types';
 import { SEA_LEVEL } from '../content/terrainLevels';
 import type { World } from '../sim/world/types';
-import { bakeTextures, provinceIdPixels, type BakedTextures } from './bake';
+import { bakeTextures, provinceIdPixels, writeWaterClass, type BakedTextures } from './bake';
 import { bakeBiomeColors } from './biomeColors';
 import { toHalf, toHalfArray } from './halfFloat';
 import { blur } from '../sim/geom/blur';
@@ -168,14 +168,19 @@ function spreadAcrossCoast(
 
 /** Текстуры провинций по владельцам для показа: сухопутная и морская карты (см. displayProvinceOf). */
 export interface ProvinceBake extends BakedTextures {
-  /** RGBA8 в раскладке provinceRG по displaySeaProvinceOf: карта id там, где на экране вода. */
+  /**
+   * RGBA8 в раскладке provinceRG по displaySeaProvinceOf: карта id там, где на экране вода.
+   * Канал A — вид воды по биому самой клетки (SEA_MAP_ALPHA: суша, море, озеро) для озёрного цвета.
+   */
   provinceSeaRG: Uint8Array;
 }
 
 export function bakeProvinces(world: World): ProvinceBake {
   const coast = coastHeight(world.height, world.w, world.h);
   const baked = bakeTextures(world, displayProvinceOf(world, coast));
-  return { ...baked, provinceSeaRG: provinceIdPixels(displaySeaProvinceOf(world, coast), world.provinces) };
+  const provinceSeaRG = provinceIdPixels(displaySeaProvinceOf(world, coast), world.provinces);
+  writeWaterClass(provinceSeaRG, world.biome, world.biomes);
+  return { ...baked, provinceSeaRG };
 }
 
 export function bakeSurface(
