@@ -30,7 +30,7 @@ Next session, in order (once the author's weekly limits reset):
 - Shell: write commands in rtk form (`rtk git …`, `rtk read F`, `rtk vitest …`), see `~/.claude/RTK.md`.
 
 ## Token economy
-- Language: code, code comments, identifiers, CLAUDE.md, briefs and agent reports — English. Replies to the author, commit descriptions, `src/i18n/ru.ts` — Russian. Translate old Russian comments only when touching that file.
+- Language: code, code comments, identifiers, CLAUDE.md, briefs, agent reports, commit bodies — English. Replies to the author, commit titles, `src/i18n/ru.ts` — Russian. The commit co-author line names the model that made the commit (see `docs/commit-rules.md`). Translate old Russian comments only when touching that file.
 - Models (always set explicitly): `haiku` — file search, reading logs/docs, tiny edits; `sonnet` — mechanical tasks, tests, UI, re-reviews; `opus` — architecture, shaders, hard debugging, final review.
 - Sessions: 1 session = 1 phase (discussion+plan / execution / final review). Prefer a fresh session over a long tail; tell the author when it is time to switch (context long or phase done).
 - Agent reports: terse English — changed files, test result, blockers. No retelling of the work; details go to the report file.
