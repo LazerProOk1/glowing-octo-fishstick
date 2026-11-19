@@ -7,11 +7,11 @@ const coreImports = [
   'error',
   {
     patterns: [
-      { group: ['pixi.js', 'pixi.js/*'], message: 'sim не должен зависеть от pixi.js' },
-      { group: ['**/render', '**/render/**', '**/ui', '**/ui/**'], message: 'sim не должен импортировать render/ui' },
+      { group: ['pixi.js', 'pixi.js/*'], message: 'Детерминированный код не зависит от pixi.js.' },
+      { group: ['**/render', '**/render/**', '**/ui', '**/ui/**'], message: 'Детерминированный код не импортирует render и ui.' },
       {
         group: ['**/worker', '**/worker/**', '**/i18n', '**/i18n/**', '**/main', '**/main.ts'],
-        message: 'sim не должен импортировать worker, i18n и main',
+        message: 'Детерминированный код не импортирует worker, i18n и main.',
       },
     ],
   },
@@ -19,25 +19,31 @@ const coreImports = [
 
 const coreProperties = [
   { object: 'Math', property: 'random', message: 'Используйте детерминированный ГСЧ.' },
-  { object: 'performance', property: 'now', message: 'Время в sim запрещено.' },
+  { object: 'performance', property: 'now', message: 'Реальное время здесь запрещено.' },
 ];
 
 const coreGlobals = [
   'error',
-  { name: 'Date', message: 'Время в sim запрещено.' },
-  { name: 'performance', message: 'Время в sim запрещено.' },
-  { name: 'document', message: 'DOM в sim запрещён.' },
-  { name: 'window', message: 'DOM в sim запрещён.' },
-  { name: 'localStorage', message: 'DOM в sim запрещён.' },
-  { name: 'crypto', message: 'Источник случайности в sim запрещён: используйте детерминированный ГСЧ.' },
-  { name: 'self', message: 'Контекст воркера в sim запрещён.' },
-  { name: 'setTimeout', message: 'Таймеры в sim запрещены.' },
-  { name: 'fetch', message: 'Сеть в sim запрещена.' },
+  { name: 'Date', message: 'Реальное время здесь запрещено.' },
+  { name: 'performance', message: 'Реальное время здесь запрещено.' },
+  { name: 'document', message: 'DOM здесь запрещён.' },
+  { name: 'window', message: 'DOM здесь запрещён.' },
+  { name: 'localStorage', message: 'DOM здесь запрещён.' },
+  { name: 'crypto', message: 'Источник случайности здесь запрещён: используйте детерминированный ГСЧ.' },
+  { name: 'self', message: 'Контекст воркера здесь запрещён.' },
+  { name: 'setTimeout', message: 'Таймеры здесь запрещены.' },
+  { name: 'fetch', message: 'Сеть здесь запрещена.' },
 ];
 
-// Игровая логика: дробная математика движка даёт разные биты в разных браузерах — онлайн разъедется.
+// Игровая логика: функции Math, которые движок считает приближённо, в разных браузерах могут дать
+// разные последние биты — онлайн-партия разъедется. IEEE 754 требует точного округления для + − × ÷
+// и sqrt, поэтому они дают одинаковые биты везде и разрешены (Math.sqrt не в списке намеренно).
 const INT_ONLY = 'в игровой логике только целые/фиксированная точка — см. docs/architecture.md';
-const FLOAT_MATH = ['pow', 'exp', 'log', 'sin', 'cos', 'tan', 'atan2', 'hypot', 'cbrt'];
+const FLOAT_MATH = [
+  'pow', 'exp', 'expm1', 'log', 'log2', 'log10', 'log1p', 'cbrt', 'hypot',
+  'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2',
+  'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
+];
 // `**` разрешён только с целой степенью-литералом (2 ** 3); дробная или переменная степень запрещена.
 const INT_EXPONENT = '[right.type="Literal"][right.raw=/^[0-9]+$/]';
 
@@ -59,7 +65,7 @@ export default tseslint.config(
     },
   },
   {
-    // Игровая логика этапа 2+: всё из src/sim плюс только целая/фиксированная арифметика.
+    // Игровая логика этапа 2+: всё из src/sim плюс запрет приближённых функций Math.
     files: ['src/game/**/*.ts'],
     rules: {
       'no-restricted-imports': coreImports,

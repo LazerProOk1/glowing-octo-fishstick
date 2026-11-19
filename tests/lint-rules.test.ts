@@ -59,10 +59,20 @@ describe('правила ESLint для src/sim', () => {
   });
 
   it('запрещает все функции дробной математики в src/game', async () => {
-    for (const fn of ['pow(2, 3)', 'exp(1)', 'log(2)', 'sin(1)', 'cos(1)', 'tan(1)', 'atan2(1, 2)', 'hypot(3, 4)', 'cbrt(8)']) {
+    const fns = [
+      'pow(2, 3)', 'exp(1)', 'expm1(1)', 'log(2)', 'log2(2)', 'log10(2)', 'log1p(1)', 'cbrt(8)', 'hypot(3, 4)',
+      'sin(1)', 'cos(1)', 'tan(1)', 'asin(1)', 'acos(1)', 'atan(1)', 'atan2(1, 2)',
+      'sinh(1)', 'cosh(1)', 'tanh(1)', 'asinh(1)', 'acosh(1)', 'atanh(0.5)',
+    ];
+    for (const fn of fns) {
       const errors = await lint(`export const x = Math.${fn};\n`, 'src/game/x.ts');
       expect(errors.length, fn).toBeGreaterThan(0);
     }
+  });
+
+  it('разрешает точную арифметику и Math.sqrt в src/game', async () => {
+    const errors = await lint('export const f = (a: number, b: number) => Math.sqrt(a * a + b * b) / 2 - 1;\n', 'src/game/x.ts');
+    expect(errors).toEqual([]);
   });
 
   it('запрещает ** с дробной или нелитеральной степенью в src/game, целая разрешена', async () => {

@@ -37,7 +37,7 @@ export function fnv1a(v: ArrayBufferView): string {
   return hex(fnvBytes(FNV_OFFSET, v));
 }
 
-/** Параметры мира строкой с постоянным порядком полей. */
+/** Параметры мира и включённые биомы (id по порядку кодов) строкой с постоянным порядком полей. */
 function paramsKey(world: World): string {
   const p = world.params;
   return JSON.stringify([
@@ -47,11 +47,15 @@ function paramsKey(world: World): string {
     p.options.fantasy,
     p.options.disabledBiomes,
     p.options.size,
+    world.biomes.map((b) => b.id),
   ]);
 }
 
 /**
- * Хеш мира (8 hex-символов) по параметрам, версии генератора, высоте, биомам, рекам и провинциям.
+ * Хеш мира (8 hex-символов) по параметрам, списку биомов, версии генератора, размеру, высоте,
+ * климату (температура, влажность, аркана), биомам клеток, рекам и провинциям клеток.
+ * Список провинций, рёбра соседства, тип воды, прибрежность и `lakeside` выводятся из этих массивов
+ * точной арифметикой (сравнения и целые счётчики), поэтому отдельно не хешируются.
  * Два мира с одним хешем побитно совпадают в этих массивах (с точностью до коллизий 32-битного хеша).
  * Нужен при входе в онлайн-игру: если хеш у игрока не совпал с хостом, мир присылает хост.
  */
@@ -60,6 +64,9 @@ export function worldHash(world: World): string {
   h = fnvString(h, paramsKey(world));
   h = fnvString(h, `|v${GEN_VERSION}|${world.w}x${world.h}|`);
   h = fnvBytes(h, world.height);
+  h = fnvBytes(h, world.temperature);
+  h = fnvBytes(h, world.moisture);
+  h = fnvBytes(h, world.arcana);
   h = fnvBytes(h, world.biome);
   h = fnvBytes(h, world.riverMask);
   h = fnvBytes(h, world.provinceOf);

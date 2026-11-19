@@ -18,7 +18,7 @@ describe('worldHash', () => {
 
   // Эталон меняется вместе с отпечатком мира (правило GEN_VERSION, tests/sim/world/fingerprint.test.ts).
   it('стабилен для сида "1", small', () => {
-    expect(worldHash(a)).toBe('ccc26dc2');
+    expect(worldHash(a)).toBe('1cbd4496');
   });
 
   it('совпадает у двух генераций с одними параметрами', () => {
