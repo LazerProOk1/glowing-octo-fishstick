@@ -4,6 +4,7 @@ import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../content/terrainLevels'
 import { PROVINCE_FLAGS } from './provinceData';
 import { LAKE_SLOT, PALETTE_SIZE, WATER_SLOT } from './textures';
 import { DEPTH_TONE_K, SEA_DEPTH_MAX, SEA_DEPTH_STEP } from './seaDepth';
+import { WAVE_GLSL } from './seaWaves';
 
 /** Число как литерал GLSL float. */
 const f = (n: number): string => n.toFixed(4);
@@ -121,7 +122,7 @@ float vnoise(vec2 p) {
   float d = hash12(i + vec2(1.0, 1.0));
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
-
+${WAVE_GLSL}
 ivec2 cellAt(vec2 c) {
   return clamp(ivec2(floor(c)), ivec2(0), ivec2(uWorldSize) - 1);
 }
@@ -377,7 +378,7 @@ void main() {
   land *= mix(1.0, shade, 0.8);
   land *= 1.0 + (shade - 1.0) * vec3(0.06, 0.0, -0.06);
 
-  // ---- sea: tone by the real seafloor depth, smoothed at large scale only (sigma 24 cells on a
+  // ---- sea: tone by the real seafloor depth, smoothed at large scale only (sigma 16 cells on a
   // 4x coarser grid, land left out; smoothSeaDepth): wide light water only over really shallow
   // floor (continental shelves), dark even mid-ocean, no halo around islands. Half of the tone
   // change within the first 25% of the depth (depthTone). Near land only a narrow lighter band
@@ -392,6 +393,8 @@ void main() {
   // colour is multiplied by 0 below, so skipping it there leaves the picture identical.
   float lake = landMask < 1.0 ? lakeShare(pc, pw, p) : 0.0;
   if (lake > 0.0) water = mix(water, mix(LAKE_DEEP, LAKE_SHALLOW, smoothstep(0.28, 0.5, near)), lake);
+  // Static ripple (seaWaves.ts), only where water shows; lakes calmer, at half amplitude.
+  if (landMask < 1.0) water *= 1.0 + waveShade(p, zoom, pxPerCell) * (1.0 - 0.5 * lake);
   water = water * (1.0 - uFill * seaFill.a) + uFill * seaFill.rgb;
 
   vec3 col = mix(water, land, landMask);
