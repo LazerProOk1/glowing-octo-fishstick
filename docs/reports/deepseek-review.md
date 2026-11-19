@@ -2,7 +2,9 @@
 
 Base: `stage-1-map`. Head: `arena/88549d63-glowing-octo-fishstick` (`ebfca7e`). Reviewed 2026-11-19.
 
-## Task A — is PR #1 comments/docs only?
+Post-review change: the root MIT `LICENSE` was removed in a separate commit (`d61750c`); the `src/`/`tests/` diff is still comments and test titles only.
+
+## Task A — are the source changes comments/docs only?
 
 ### A1. Non-comment / non-title changes (at review head)
 
@@ -89,6 +91,7 @@ net: ~−366 lines, −0 deps.
 - `docs/reports/docs-audit.md` and `docs/reports/project-status.md`: `docs/visual-checklist.md` moved to the English list; the project-status I3 claim corrected; the suggested CLAUDE.md rule corrected.
 - docs-audit A1/A2 fixed: the modding guide now points to `tests/sim/world/provinces.*.test.ts` / `provincesSuite.ts`; `CLAUDE.md` now has an explicit docs-language rule.
 - `CLAUDE.md`: next-session order is now reports → ponytail-audit → merge to `main` → Stage 2 with graphify.
+- Root MIT `LICENSE` removed in `d61750c`; the source diff is unchanged (comments, test titles and docs).
 
 ## Counts and limits
 

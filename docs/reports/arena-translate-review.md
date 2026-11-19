@@ -13,7 +13,7 @@ Scope: comments and test names in `src/**` and `tests/**`; review notes collecte
 - 273 `describe` / `it` / `test` title lines rewritten in English.
 - Review found one code-token exception: five test callbacks in `tests/worker/genClient.test.ts`
   (lines 167, 192, 203, 221, 230) gained `async`; they contain no `await`, so the change is behaviour-neutral.
-  Those five `async` were removed in a follow-up commit, and the final diff is comments, test titles and docs only.
+  Those five `async` were removed in a follow-up commit, and the source diff is comments, test titles and docs only; the root MIT `LICENSE` was removed separately.
 - No other code, logic, formatting, import, string literal or identifier changes.
 
 ### Deliberately left in Russian (not comments / not titles)

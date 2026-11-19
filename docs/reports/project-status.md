@@ -74,5 +74,5 @@ Details and the two Important findings are in `docs/reports/docs-audit.md`.
 ## Verdict
 
 From the checks: the branch is green and safe to merge — it changes comments, test titles and
-documents, nothing else. From the code: the project carries the five open findings listed above, all
+documents, and removes the root MIT `LICENSE`; the source code is unchanged. From the code: the project carries the five open findings listed above, all
 pre-existing, all cheap to fix in a separate pass, none of them blocking.
