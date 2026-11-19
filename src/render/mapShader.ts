@@ -378,7 +378,7 @@ void main() {
   land *= mix(1.0, shade, 0.8);
   land *= 1.0 + (shade - 1.0) * vec3(0.06, 0.0, -0.06);
 
-  // ---- sea: tone by the real seafloor depth, smoothed at large scale only (sigma 16 cells on a
+  // ---- sea: tone by the real seafloor depth, smoothed at large scale only (sigma 20 cells on a
   // 4x coarser grid, land left out; smoothSeaDepth): wide light water only over really shallow
   // floor (continental shelves), dark even mid-ocean, no halo around islands. Half of the tone
   // change within the first 25% of the depth (depthTone). Near land only a narrow lighter band
