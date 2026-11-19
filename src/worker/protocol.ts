@@ -31,7 +31,7 @@ export interface GenResult {
  * Поднимать при любом изменении формы сообщений. Сообщение другой версии (например, воркер из
  * старой вкладки или кэша) отклоняется с понятной ошибкой, а не разбирается вслепую.
  */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Общая часть всех сообщений. */
 interface Versioned {

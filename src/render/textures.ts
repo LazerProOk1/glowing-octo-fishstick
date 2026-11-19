@@ -4,6 +4,7 @@ import { hasTag } from '../content/registry';
 import type { World } from '../sim/world/types';
 import { ATLAS_URL, DETAIL_SLOT_OF } from './assets';
 import { bakeWorld, type WorldBake } from './bakeWorld';
+import { seaDepthSize } from './seaDepth';
 
 /** GPU-текстуры одного мира. Все без мипмапов: читаются texelFetch или билинейно на нулевом уровне. */
 export interface WorldTextures {
@@ -23,7 +24,7 @@ export interface WorldTextures {
   surface: TextureSource;
   /** RGBA8 LINEAR: размытый цвет биомов (RGB) и покрытие сушей (A), см. bakeBiomeColors. */
   biomeColor: TextureSource;
-  /** R16F LINEAR: гладкая глубина моря 0..SEA_LEVEL (seaDepth.ts): тон воды и изобаты. */
+  /** R16F LINEAR, в SEA_DEPTH_STEP раз меньше карты по каждой оси: крупномасштабная глубина дна (seaDepth.ts). */
   seaDepth: TextureSource;
   /** Палитра биомов этого мира, см. createPaletteTexture. */
   palette: TextureSource;
@@ -75,7 +76,7 @@ export function createWorldTextures(world: World, bake: WorldBake = bakeWorld(wo
     provinceSea: rgba8(bake.provinceSeaRG, w, h, false),
     terrain: rgba8(bake.terrain, w, h, true),
     height: r16f(bake.height, w, h),
-    seaDepth: r16f(bake.seaDepth, w, h),
+    seaDepth: r16f(bake.seaDepth, seaDepthSize(w, h).w, seaDepthSize(w, h).h),
     biomeColor: rgba8(bake.biomeColor, w, h, true),
     palette: createPaletteTexture(world.biomes),
     surface: new BufferImageSource({

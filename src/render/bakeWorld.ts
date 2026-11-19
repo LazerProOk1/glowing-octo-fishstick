@@ -17,7 +17,7 @@ export interface SurfaceBake {
   /** RGBA16F: градиент, береговая высота, близость берега. */
   surface: Uint16Array;
   biomeColor: Uint8Array;
-  /** R16F: гладкая глубина моря для цвета воды и изобат (smoothSeaDepth). */
+  /** R16F, сетка seaDepthSize: крупномасштабная глубина настоящего дна для цвета воды (smoothSeaDepth). */
   seaDepth: Uint16Array;
 }
 

@@ -1,20 +1,10 @@
-// Глубина моря для шейдера карты: тон воды и изобаты. Формула тона здесь и в GLSL (mapShader.ts)
-// одна и та же; TS-копия нужна для тестов. Глубина для цвета — гладкая (smoothSeaDepth), а не
-// сырая высота: шум рельефа дна иначе виден в открытом море пятнами, как облака.
+// Глубина моря для шейдера карты: тон воды. Формула тона здесь и в GLSL (mapShader.ts) одна и та
+// же; TS-копия нужна для тестов. Глубина берётся с настоящего дна (высота − SEA_LEVEL на воде),
+// сглаженного только в крупном масштабе: видны котловины, хребты и шельфы материков, а мелкий шум
+// рельефа дна (он давал «облака») — нет. Суша в сглаживании не участвует вовсе, поэтому вокруг
+// островов нет ореолов: у берега только узкая полоса из шейдера.
 import { SEA_LEVEL } from '../content/terrainLevels';
 import { blur } from '../sim/geom/blur';
-import { borderDistance } from '../sim/geom/edt';
-
-/**
- * Размытие глубины, клеток. Суша входит в размытие с глубиной 0, поэтому у любого берега
- * получается светлая отмель шириной ~σ, повторяющая береговую линию; шум дна сглаживается.
- */
-export const SHELF_SIGMA = 8;
-/**
- * Расстояние от суши (клетки), с которого глубина плавно уходит к наибольшей и где она
- * становится ровной: открытый океан спокойный и однотонный, без пятен вдали от берега.
- */
-export const OPEN_SEA_DIST = [16, 48] as const;
 
 /**
  * Наибольшая глубина: высоты мира лежат в 0..1, поэтому дно не глубже SEA_LEVEL ниже уровня моря.
@@ -23,20 +13,13 @@ export const OPEN_SEA_DIST = [16, 48] as const;
  */
 export const SEA_DEPTH_MAX = SEA_LEVEL;
 
+/** Шаг сетки глубины, клеток: текстура в SEA_DEPTH_STEP² раз меньше карты, GPU интерполирует. */
+export const SEA_DEPTH_STEP = 4;
 /**
- * Изобаты: глубины ниже уровня моря, на которых рисуются бледные линии.
- * 0.06 — край шельфа (около четверти моря мельче), 0.18 — склон к открытому океану
- * (около 60% моря мельче).
+ * Масштаб сглаживания дна, клеток (σ гаусса). Шум дна мельче ~40 клеток пропадает, котловины и
+ * шельфы в сотни клеток остаются.
  */
-export const ISOBATH_DEPTHS = [0.06, 0.18] as const;
-/** Непрозрачность изобат. */
-export const ISOBATH_ALPHA = 0.1;
-/**
- * Изобаты проявляются при зуме в 1.5 раза крупнее общего вида (вся карта на экране) и видны
- * полностью с 3 раз. Отсчёт от общего вида, а не от числа пикселей на клетку: зум общего вида
- * зависит от размера окна (0.3 на узком, ~0.9 на 1920 px).
- */
-export const ISOBATH_FADE_RATIO = [1.5, 3] as const;
+export const SEA_DEPTH_SIGMA = 24;
 
 /**
  * Тон воды по глубине: 0 — мелководье, 1 — глубина. Кривая t·(1 + K)/(t + K), t = глубина / SEA_DEPTH_MAX,
@@ -50,32 +33,48 @@ export function depthTone(depth: number): number {
   return (t * (1 + DEPTH_TONE_K)) / (t + DEPTH_TONE_K);
 }
 
-function smoothstep(a: number, b: number, x: number): number {
-  const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
-  return t * t * (3 - 2 * t);
+/** Размер сетки глубины для карты w×h клеток. */
+export function seaDepthSize(w: number, h: number): { w: number; h: number } {
+  return { w: Math.ceil(w / SEA_DEPTH_STEP), h: Math.ceil(h / SEA_DEPTH_STEP) };
 }
 
 /**
- * Гладкая глубина для цвета моря и изобат, 0..SEA_DEPTH_MAX на клетку: размытая (SHELF_SIGMA)
- * глубина воды (суша — 0), а дальше OPEN_SEA_DIST от суши — плавно к наибольшей.
- * На суше значение тоже есть (малое у берега): нужно для билинейного перехода на береговой линии.
+ * Крупномасштабная глубина настоящего дна на сетке seaDepthSize (узел (bx, by) — центр блока
+ * SEA_DEPTH_STEP² клеток). Средняя глубина воды по блокам, затем нормированное размытие
+ * σ = SEA_DEPTH_SIGMA: размываются отдельно сумма глубин воды и доля воды, ответ — их отношение.
+ * Так суша не тянет глубину ни к нулю, ни куда-либо ещё: в узле — средняя глубина окружающей воды.
+ * Где воды поблизости нет совсем (глубь материка), значение 0; на экран оно не попадает.
  */
 export function smoothSeaDepth(height: Float32Array, w: number, h: number): Float32Array {
-  const n = w * h;
-  const raw = new Float32Array(n);
-  const land = new Uint16Array(n);
-  for (let i = 0; i < n; i++) {
-    const v = SEA_LEVEL - (height[i] as number);
-    raw[i] = v > 0 ? Math.min(v, SEA_DEPTH_MAX) : 0;
-    land[i] = v > 0 ? 0 : 1;
+  const s = SEA_DEPTH_STEP;
+  const size = seaDepthSize(w, h);
+  const sigma = SEA_DEPTH_SIGMA / s;
+  // Поля с нулевой каймой в 3σ: размытие clamp иначе повторяет крайний блок и даёт ему у края
+  // карты половину веса (полосы шума вдоль края). Ноль в обоих полях из отношения выпадает.
+  const pad = Math.ceil(3 * sigma);
+  const pw = size.w + 2 * pad;
+  const ph = size.h + 2 * pad;
+  const sum = new Float32Array(pw * ph);
+  const wet = new Float32Array(pw * ph);
+  for (let y = 0; y < h; y++) {
+    const row = (((y / s) | 0) + pad) * pw + pad;
+    for (let x = 0; x < w; x++) {
+      const v = SEA_LEVEL - (height[y * w + x] as number);
+      if (v <= 0) continue;
+      const b = row + ((x / s) | 0);
+      sum[b] = (sum[b] as number) + Math.min(v, SEA_DEPTH_MAX);
+      wet[b] = (wet[b] as number) + 1;
+    }
   }
-  const out = blur(raw, w, h, SHELF_SIGMA);
-  const dist = borderDistance(land, w, h);
-  const [d0, d1] = OPEN_SEA_DIST;
-  for (let i = 0; i < n; i++) {
-    if (land[i] === 1) continue;
-    const k = smoothstep(d0, d1, dist[i] as number);
-    out[i] = (out[i] as number) * (1 - k) + SEA_DEPTH_MAX * k;
+  const bs = blur(sum, pw, ph, sigma);
+  const bw = blur(wet, pw, ph, sigma);
+  const out = new Float32Array(size.w * size.h);
+  for (let y = 0; y < size.h; y++) {
+    for (let x = 0; x < size.w; x++) {
+      const i = (y + pad) * pw + x + pad;
+      const wgt = bw[i] as number;
+      out[y * size.w + x] = wgt > 1e-4 ? Math.min((bs[i] as number) / wgt, SEA_DEPTH_MAX) : 0;
+    }
   }
   return out;
 }

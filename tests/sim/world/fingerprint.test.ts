@@ -50,6 +50,8 @@ const FINGERPRINT = {
   // вода (displaySeaProvinceOf). Остальные хэши не меняются.
   // Раунд правок 6b: поле расстояний border больше не запекается (шейдер его не читал) — хэш убран.
   // Task 7, раунд правок (рендер): новая текстура seaDepth — гладкая глубина моря. Остальные не меняются.
+  // Task 7, раунд 2: seaDepth — крупномасштабная глубина настоящего дна на сетке в 4 раза меньше
+  // (без ореолов у берега). Меняется только её хэш.
   genVersion: 3,
   world: {
     height: '9f842423',
@@ -65,7 +67,7 @@ const FINGERPRINT = {
     bakeHeight: '8c184fb8',
     surface: 'a378f8da',
     biomeColor: '56c7e2f4',
-    seaDepth: '3fd25dee',
+    seaDepth: '0c4cdb1e',
   },
 };
 

@@ -3,7 +3,7 @@ import { MAP_COLORS, glslVec3 } from './palette';
 import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL } from '../content/terrainLevels';
 import { PROVINCE_FLAGS } from './provinceData';
 import { LAKE_SLOT, PALETTE_SIZE, WATER_SLOT } from './textures';
-import { DEPTH_TONE_K, ISOBATH_ALPHA, ISOBATH_DEPTHS, ISOBATH_FADE_RATIO, SEA_DEPTH_MAX } from './seaDepth';
+import { DEPTH_TONE_K, SEA_DEPTH_MAX, SEA_DEPTH_STEP } from './seaDepth';
 
 /** Число как литерал GLSL float. */
 const f = (n: number): string => n.toFixed(4);
@@ -74,7 +74,6 @@ uniform vec2 uWorldSize;  // cells
 uniform float uHovered;   // hovered province id, -1 = none
 uniform float uFill;      // map mode fill strength over the relief, 0 = no fill (uProvData not read)
 uniform float uProvDataW; // width of uProvData
-uniform float uZoomMin;   // zoom of the whole-map overview (the camera's minimum)
 
 const float HILL_REL = ${f(HILL_LEVEL - SEA_LEVEL)};
 const float MOUNT_REL = ${f(MOUNTAIN_LEVEL - SEA_LEVEL)};
@@ -91,14 +90,11 @@ const int FLAG_FILL = ${PROVINCE_FLAGS.FILL};
 
 const vec3 SEA_SHALLOW = ${glslVec3(MAP_COLORS.seaShallow)};
 const vec3 SEA_DEEP = ${glslVec3(MAP_COLORS.seaDeep)};
-const vec3 SEA_CONTOUR = ${glslVec3(MAP_COLORS.seaContour)};
 const vec3 SEA_COAST = ${glslVec3(MAP_COLORS.seaCoast)};
 const float DEPTH_MAX = ${f(SEA_DEPTH_MAX)};
 const float TONE_K = ${f(DEPTH_TONE_K)};
-const vec2 ISOBATHS = vec2(${ISOBATH_DEPTHS.map(f).join(', ')});
-const float ISOBATH_ALPHA = ${f(ISOBATH_ALPHA)};
+const float DEPTH_STEP = ${f(SEA_DEPTH_STEP)};
 const float WATER_GRAIN = 0.35; // paper grain on water, share of the land grain
-const vec2 ISOBATH_FADE = vec2(${ISOBATH_FADE_RATIO.map(f).join(', ')});
 const vec3 LAKE_DEEP = ${glslVec3(MAP_COLORS.lakeDeep)};
 const vec3 LAKE_SHALLOW = ${glslVec3(MAP_COLORS.lakeShallow)};
 const vec3 COAST_LINE = ${glslVec3(MAP_COLORS.coastLine)};
@@ -381,27 +377,20 @@ void main() {
   land *= mix(1.0, shade, 0.8);
   land *= 1.0 + (shade - 1.0) * vec3(0.06, 0.0, -0.06);
 
-  // ---- sea: tone by the smooth depth (CPU: depth blurred sigma 8 with land as 0, so a shelf
-  // follows every coast; even deep water far from land; smoothSeaDepth), shallow shelf to deep
-  // slate, half of the change within the first 25% of the depth (depthTone). A lighter teal-grey
-  // band hugs the coast and fades within ~3-6 cells (blurred land mask, sigma 3.5). Two very pale
-  // isobaths on the same smooth depth, ~1 px, anti-aliased by its screen gradient; gone at the
-  // overview zoom.
-  // Lakes: own lighter, greener tint, no depth tone and no isobaths, the shore band within ~2
-  // cells (near is ~0.5 on the coastline and ~0.28 two cells out on a straight shore).
+  // ---- sea: tone by the real seafloor depth, smoothed at large scale only (sigma 24 cells on a
+  // 4x coarser grid, land left out; smoothSeaDepth): wide light water only over really shallow
+  // floor (continental shelves), dark even mid-ocean, no halo around islands. Half of the tone
+  // change within the first 25% of the depth (depthTone). Near land only a narrow lighter band
+  // (~2-4 cells: near is ~0.5 on a straight coastline, ~0.28 two cells out, ~0.15 four out).
+  // Lakes: own lighter, greener tint, no depth tone, the shore band within ~2 cells.
   float near = surf.a;
-  float depth = texture(uSeaDepth, uv).r;
-  float depthPerPx = max(length(vec2(dFdx(depth), dFdy(depth))), 1e-7);
+  float depth = texture(uSeaDepth, p / (vec2(textureSize(uSeaDepth, 0)) * DEPTH_STEP)).r;
   float t = clamp(depth / DEPTH_MAX, 0.0, 1.0);
   vec3 water = mix(SEA_SHALLOW, SEA_DEEP, t * (1.0 + TONE_K) / (t + TONE_K));
-  water = mix(water, SEA_COAST, smoothstep(0.004, 0.45, near));
-  vec2 isoPx = abs(depth - ISOBATHS) / depthPerPx;
-  float iso = 1.0 - smoothstep(max(0.5 * uCam.w - 0.5, 0.0), 0.5 * uCam.w + 0.5, min(isoPx.x, isoPx.y));
+  water = mix(water, SEA_COAST, smoothstep(0.12, 0.5, near));
   // Lake lookup (up to 13 texel pairs) only where water shows at all: at landMask 1 the water
   // colour is multiplied by 0 below, so skipping it there leaves the picture identical.
   float lake = landMask < 1.0 ? lakeShare(pc, pw, p) : 0.0;
-  iso *= ISOBATH_ALPHA * smoothstep(ISOBATH_FADE.x, ISOBATH_FADE.y, zoom / uZoomMin) * (1.0 - lake);
-  water = mix(water, SEA_CONTOUR, iso);
   if (lake > 0.0) water = mix(water, mix(LAKE_DEEP, LAKE_SHALLOW, smoothstep(0.28, 0.5, near)), lake);
   water = water * (1.0 - uFill * seaFill.a) + uFill * seaFill.rgb;
 
