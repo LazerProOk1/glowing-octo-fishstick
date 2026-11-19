@@ -20,7 +20,7 @@ import { DEFAULT_FILL, MAP_MODES, mapModeById, type MapMode, type ProvinceRGBA }
 import { MAP_FRAGMENT, MAP_VERTEX } from './mapShader';
 import { PROVINCE_FLAGS, ProvinceData, WEBGL2_MIN_TEXTURE_SIZE } from './provinceData';
 import { RiverLayer } from './riverLayer';
-import { pickProvince, type ProvinceMaps } from './softProvince';
+import { coastAt, pickProvince, type ProvinceMaps } from './softProvince';
 import {
   createAtlasPlaceholder,
   createWorldTextures,
@@ -178,7 +178,8 @@ export class MapView {
     this.owners = { w: world.w, h: world.h, land: bake.provinceRG, sea: bake.provinceSeaRG, surface: bake.surface };
     this.worldU[0] = world.w;
     this.worldU[1] = world.h;
-    this.rivers.setRivers(world.rivers);
+    const owners = this.owners;
+    this.rivers.setRivers(world.rivers, (x, y) => coastAt(owners, x, y));
     this.setProvinceTexture(world);
     this.setHoveredProvince(null);
     this.mesh.visible = true;

@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { chaikin } from '../../src/render/riverLayer';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { coastHeight } from '../../src/render/bakeWorld';
+import { buildRiverPieces, chaikin, riverWidthCells } from '../../src/render/riverLayer';
+import { SEA_LEVEL } from '../../src/content/terrainLevels';
+import { generateWorld } from '../../src/sim/world/generateWorld';
+import { defaultParams } from '../../src/sim/world/params';
+import type { World } from '../../src/sim/world/types';
 
 type P = { x: number; y: number };
 
@@ -53,5 +58,70 @@ describe('chaikin', () => {
     const copy = tri.map((p) => ({ ...p }));
     chaikin(tri, 3);
     expect(tri).toEqual(copy);
+  });
+});
+
+describe('riverWidthCells', () => {
+  it('grows downstream', () => {
+    for (const width of [1, 2, 3, 4]) {
+      const w = 0.3 + 0.22 * width;
+      expect(riverWidthCells(width, 0)).toBeCloseTo(0.35 * w, 10);
+      expect(riverWidthCells(width, 1)).toBeCloseTo(w, 10);
+      let prev = -Infinity;
+      for (let k = 0; k <= 20; k++) {
+        const v = riverWidthCells(width, k / 20);
+        expect(v).toBeGreaterThanOrEqual(prev);
+        prev = v;
+      }
+    }
+  });
+});
+
+/** Билинейная выборка поля как texture() с clamp-to-edge (центры клеток в +0.5), см. coastAt. */
+function sampler(f: Float32Array, w: number, h: number): (x: number, y: number) => number {
+  const at = (ix: number, iy: number): number =>
+    f[Math.min(h - 1, Math.max(0, iy)) * w + Math.min(w - 1, Math.max(0, ix))]!;
+  return (x, y) => {
+    const cx = Math.floor(x - 0.5);
+    const cy = Math.floor(y - 0.5);
+    const tx = x - 0.5 - cx;
+    const ty = y - 0.5 - cy;
+    const top = at(cx, cy) * (1 - tx) + at(cx + 1, cy) * tx;
+    const bottom = at(cx, cy + 1) * (1 - tx) + at(cx + 1, cy + 1) * tx;
+    return top * (1 - ty) + bottom * ty;
+  };
+}
+
+describe.each(['1', 'Бета-7'])('river mouths (seed %j, small)', (seed) => {
+  let world: World;
+  beforeAll(() => {
+    const p = defaultParams(seed);
+    p.options.size = 'small';
+    world = generateWorld(p);
+  }, 60000);
+
+  it('mouth reaches coastline', () => {
+    const { w, h, height, rivers } = world;
+    const coast = sampler(coastHeight(height, w, h), w, h);
+    const pieces = buildRiverPieces(rivers, coast);
+    let mouths = 0;
+    rivers.forEach((r, ri) => {
+      const last = r.points[r.points.length - 1]!;
+      if (height[Math.floor(last.y) * w + Math.floor(last.x)]! >= SEA_LEVEL) return; // приток
+      mouths++;
+      const water = pieces.filter((p) => p.river === ri && p.kind === 'water');
+      const tip = water[water.length - 1]!.points.at(-1)!;
+      // Конец в воде и не ближе 0.5 клетки к береговой линии (нулю размытой высоты): 8 точек вокруг.
+      expect(coast(tip.x, tip.y), `река ${ri}`).toBeLessThan(0);
+      for (let k = 0; k < 8; k++) {
+        const a = (k * Math.PI) / 4;
+        expect(coast(tip.x + 0.5 * Math.cos(a), tip.y + 0.5 * Math.sin(a)), `река ${ri}`).toBeLessThan(0);
+      }
+      // Подложка (тёмная кромка) не заходит в воду: её конец на суше или на самой береговой линии.
+      const bank = pieces.filter((p) => p.river === ri && p.kind === 'bank');
+      const bankEnd = bank[bank.length - 1]!.points.at(-1)!;
+      expect(coast(bankEnd.x, bankEnd.y), `река ${ri}`).toBeGreaterThanOrEqual(0);
+    });
+    expect(mouths).toBeGreaterThan(5);
   });
 });

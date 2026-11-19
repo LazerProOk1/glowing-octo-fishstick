@@ -25,14 +25,27 @@ export function chaikin(points: Point[], iterations: number): Point[] {
 }
 
 const SMOOTH_ITERATIONS = 3;
-/** Толщина в экранных пикселях: растёт с зумом, но остаётся в 0.6..3 px. */
+/** Экранная толщина не тоньше 0.6 px; сверху не ограничена (на большом зуме река в клетках мира). */
 const MIN_PX = 0.6;
-const MAX_PX = 3;
 /** Шаг пересборки геометрии: четверть октавы зума (толщина отличается не более чем на ~9%). */
 const BUCKETS_PER_OCTAVE = 4;
+/** Подложка (тёмная кромка) шире воды на 40%. */
+const BANK_SCALE = 1.4;
+/** Подложка рисуется, только если вода не тоньше 1 px (иначе кромка меньше 0.2 px с каждой стороны). */
+const BANK_MIN_PX = 1;
 
-export function riverPixelWidth(width: number, zoom: number): number {
-  return Math.min(MAX_PX, Math.max(MIN_PX, 0.4 * width * Math.sqrt(zoom)));
+/**
+ * Толщина реки в клетках мира. `width` — класс ширины из симуляции (1..4), `t` — доля пути от
+ * истока (0..1). От 0.35·w у истока до w у устья, w = 0.3 + 0.22·width.
+ */
+export function riverWidthCells(width: number, t: number): number {
+  const w = 0.3 + 0.22 * width;
+  return w * (0.35 + 0.65 * Math.min(1, Math.max(0, t)));
+}
+
+/** Толщина в экранных пикселях для толщины в клетках при зуме (пикселей на клетку). */
+export function riverPixelWidth(cells: number, zoom: number): number {
+  return Math.max(MIN_PX, cells * zoom);
 }
 
 /** Длина волны извилин (клетки), их амплитуда и длина затухания у закреплённых точек. */
@@ -113,54 +126,199 @@ export function meander(points: Point[], seed: number, pinned: Set<string>): Poi
   });
 }
 
-/** Участок реки одной ширины (сглаженные точки в клетках мира). */
-interface Run {
+/**
+ * Уровни толщины: геометрическая шкала с шагом 15%. Участок реки — отрезок, где уровень один,
+ * поэтому соседние участки отличаются по толщине не больше чем на 15%, а одинаковые уровни всех
+ * рек рисуются одной обводкой.
+ */
+const LEVEL_RATIO = 1.15;
+const levelOf = (cells: number): number => Math.round(Math.log(cells) / Math.log(LEVEL_RATIO));
+const levelCells = (level: number): number => LEVEL_RATIO ** level;
+
+/** Устье: последний отрезок продлевается в сторону воды на 1.5 клетки (и дальше, пока не вода). */
+const MOUTH_EXTEND = 1.5;
+const MOUTH_MAX = 4;
+const MOUTH_STEP = 0.25;
+/** Конец устья — не ближе этого (клетки) к береговой линии, проверка по 8 точкам вокруг. */
+const MOUTH_CLEARANCE = 0.5;
+/** Доля поворота к воде на каждом шаге продления (по спуску береговой высоты). */
+const MOUTH_TURN = 0.5;
+/** Вода реки за береговой линией тает к морю: ступени прозрачности и длина каждой (клетки). */
+const FADE_ALPHA = [1, 0.7, 0.45, 0.2] as const;
+const FADE_STEP = 0.5;
+
+/** Береговая высота в точке мира (клетки): > 0 — суша на экране, < 0 — вода. */
+export type CoastSampler = (x: number, y: number) => number;
+
+/** Кусок обводки: подложка или вода одного уровня толщины (и ступени таяния у устья). */
+export interface RiverPiece {
+  river: number;
+  kind: 'bank' | 'water';
+  level: number;
+  /** Индекс в FADE_ALPHA: 0 — обычная вода, больше — тающая за береговой линией. */
+  fade: number;
+  /**
+   * Концы встык, без круглых шапок: у кусков на береговой линии и за ней. Круглая шапка там
+   * легла бы на воду тёмным полукругом кромки, а при прозрачности дала бы пятна на стыках.
+   */
+  butt: boolean;
   points: Point[];
-  width: number;
 }
 
-/** Сглаживает реку целиком и режет её на участки одной ширины (ширина монотонна вдоль реки). */
-function riverRuns(river: RiverPath, seed: number, pinned: Set<string>): Run[] {
+/** Реки, которые кончаются в воде (а не впадают в другую реку): их последняя точка не лежит на другой реке. */
+function mouthFlags(rivers: RiverPath[]): boolean[] {
+  const inner = new Set<string>();
+  for (const r of rivers) for (let i = 0; i < r.points.length - 1; i++) inner.add(pointKey(r.points[i] as Point));
+  return rivers.map((r) => {
+    const last = r.points[r.points.length - 1];
+    return last !== undefined && !inner.has(pointKey(last));
+  });
+}
+
+/** Точка и всё вокруг неё в радиусе MOUTH_CLEARANCE — вода на экране. */
+function deepInWater(coast: CoastSampler, p: Point): boolean {
+  if (coast(p.x, p.y) >= 0) return false;
+  for (let k = 0; k < 8; k++) {
+    const a = (k * Math.PI) / 4;
+    if (coast(p.x + Math.cos(a) * MOUTH_CLEARANCE, p.y + Math.sin(a) * MOUTH_CLEARANCE) >= 0) return false;
+  }
+  return true;
+}
+
+/**
+ * Точки продления устья за последнюю точку `end`, начиная по направлению `dir` (единичный вектор).
+ * Без поля берега — прямой отрезок 1.5 клетки. С полем путь на каждом шаге поворачивает к воде
+ * (вниз по береговой высоте) и идёт не меньше 1.5 клетки и дальше, пока конец не окажется в воде
+ * не ближе 0.5 клетки к берегу (но не дальше 4 клеток).
+ */
+function mouthExtension(end: Point, dir: Point, coast: CoastSampler | undefined): Point[] {
+  const out: Point[] = [];
+  let p = end;
+  let d = dir;
+  for (let len = MOUTH_STEP; len <= MOUTH_MAX + 1e-9; len += MOUTH_STEP) {
+    if (coast) {
+      const e = 0.5;
+      const gx = coast(p.x - e, p.y) - coast(p.x + e, p.y);
+      const gy = coast(p.x, p.y - e) - coast(p.x, p.y + e);
+      const g = Math.hypot(gx, gy);
+      if (g > 1e-9) {
+        const nx = d.x * (1 - MOUTH_TURN) + (gx / g) * MOUTH_TURN;
+        const ny = d.y * (1 - MOUTH_TURN) + (gy / g) * MOUTH_TURN;
+        const nl = Math.hypot(nx, ny);
+        if (nl > 1e-9) d = { x: nx / nl, y: ny / nl };
+      }
+    }
+    p = { x: p.x + d.x * MOUTH_STEP, y: p.y + d.y * MOUTH_STEP };
+    out.push(p);
+    if (len >= MOUTH_EXTEND - 1e-9 && (!coast || deepInWater(coast, p))) break;
+  }
+  return out;
+}
+
+/**
+ * Геометрия одной реки: сглаженный путь режется на участки одного уровня толщины (толщина растёт
+ * от истока к устью); у реки, впадающей в воду, путь продлевается в воду, подложка обрывается на
+ * береговой линии, а вода за ней тает ступенями прозрачности.
+ */
+function riverPieces(
+  river: RiverPath,
+  index: number,
+  pinned: Set<string>,
+  mouth: boolean,
+  coast: CoastSampler | undefined,
+): RiverPiece[] {
   const n = river.points.length;
   if (n < 2) return [];
-  const smooth = chaikin(meander(river.points, seed, pinned), SMOOTH_ITERATIONS);
+  const smooth = chaikin(meander(river.points, index, pinned), SMOOTH_ITERATIONS);
   const m = smooth.length;
-  const widthAt = (k: number): number => {
-    const src = Math.round((k / (m - 1)) * (n - 1));
-    return river.width[src] ?? river.width[river.width.length - 1] ?? 1;
-  };
-  const runs: Run[] = [];
-  let start = 0;
-  let w = widthAt(0);
+  const arc = new Float64Array(m);
   for (let k = 1; k < m; k++) {
-    const wk = widthAt(k);
-    if (wk !== w || k === m - 1) {
-      // Граничная точка входит в оба участка, чтобы линия не рвалась.
-      runs.push({ points: smooth.slice(start, k + 1), width: w });
-      start = k;
-      w = wk;
+    const a = smooth[k - 1] as Point;
+    const b = smooth[k] as Point;
+    arc[k] = (arc[k - 1] as number) + Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  const total = (arc[m - 1] as number) || 1;
+  const levels: number[] = [];
+  for (let k = 0; k < m; k++) {
+    const src = Math.round((k / (m - 1)) * (n - 1));
+    const width = river.width[src] ?? river.width[n - 1] ?? 1;
+    levels.push(levelOf(riverWidthCells(width, (arc[k] as number) / total)));
+  }
+  const path = smooth.slice();
+  // Индекс первой точки, после которой путь за береговой линией (m — подложка до конца пути).
+  let shore = m - 1;
+  if (mouth) {
+    const end = smooth[m - 1] as Point;
+    const prev = smooth[m - 2] as Point;
+    const len = Math.hypot(end.x - prev.x, end.y - prev.y) || 1;
+    const ext = mouthExtension(end, { x: (end.x - prev.x) / len, y: (end.y - prev.y) / len }, coast);
+    const last = levels[m - 1] as number;
+    for (const p of ext) {
+      path.push(p);
+      levels.push(last);
+    }
+    if (coast) {
+      shore = path.length - 1;
+      while (shore > 0 && coast((path[shore] as Point).x, (path[shore] as Point).y) < 0) shore--;
     }
   }
-  return runs.filter((r) => r.points.length >= 2);
+  const pieces: RiverPiece[] = [];
+  const outlet = shore < path.length - 1;
+  const emit = (kind: RiverPiece['kind'], level: number, fade: number, from: number, to: number): void => {
+    const butt = fade > 0 || (outlet && to === shore);
+    if (to > from) pieces.push({ river: index, kind, level, fade, butt, points: path.slice(from, to + 1) });
+  };
+  // Подложка и непрозрачная вода: участки одного уровня до береговой линии.
+  let start = 0;
+  for (let k = 1; k <= shore; k++) {
+    if (levels[k] !== levels[start] || k === shore) {
+      // Граничная точка входит в оба участка, чтобы линия не рвалась.
+      emit('bank', levels[start] as number, 0, start, k);
+      emit('water', levels[start] as number, 0, start, k);
+      start = k;
+    }
+  }
+  // За береговой линией: вода тает ступенями по длине пути от береговой точки.
+  if (outlet) {
+    const level = levels[path.length - 1] as number;
+    const base = path[shore] as Point;
+    let from = shore;
+    let fade = 1;
+    for (let k = shore + 1; k < path.length; k++) {
+      const p = path[k] as Point;
+      const step = Math.min(FADE_ALPHA.length - 1, 1 + Math.floor(Math.hypot(p.x - base.x, p.y - base.y) / FADE_STEP));
+      if (step !== fade || k === path.length - 1) {
+        emit('water', level, fade, from, k);
+        from = k;
+        fade = step;
+      }
+    }
+  }
+  return pieces;
+}
+
+/** Геометрия всех рек (в клетках мира); `coast` — поле береговой линии для устьев. */
+export function buildRiverPieces(rivers: RiverPath[], coast?: CoastSampler): RiverPiece[] {
+  const pinned = pinnedPoints(rivers);
+  const mouths = mouthFlags(rivers);
+  return rivers.flatMap((river, index) => riverPieces(river, index, pinned, mouths[index] === true, coast));
 }
 
 /** Слой рек: Graphics в координатах мира, контейнер выравнивает MapView. */
 export class RiverLayer {
   readonly container = new Container();
   private graphics: Graphics | null = null;
-  /** Участки, сгруппированные по ширине: одна обводка на группу. */
-  private groups = new Map<number, Point[][]>();
+  /** Куски, сгруппированные по (вид, уровень, ступень таяния, концы): одна обводка на группу. */
+  private groups = new Map<string, { piece: RiverPiece; paths: Point[][] }>();
   private bucket = Number.NaN;
 
-  setRivers(rivers: RiverPath[]): void {
+  setRivers(rivers: RiverPath[], coast?: CoastSampler): void {
     this.groups.clear();
-    const pinned = pinnedPoints(rivers);
-    for (const [index, river] of rivers.entries()) {
-      for (const run of riverRuns(river, index, pinned)) {
-        const list = this.groups.get(run.width);
-        if (list) list.push(run.points);
-        else this.groups.set(run.width, [run.points]);
-      }
+    for (const piece of buildRiverPieces(rivers, coast)) {
+      const key = `${piece.kind}:${piece.level}:${piece.fade}:${piece.butt ? 1 : 0}`;
+      const group = this.groups.get(key);
+      if (group) group.paths.push(piece.points);
+      else this.groups.set(key, { piece, paths: [piece.points] });
     }
     this.clearGraphics();
     this.bucket = Number.NaN;
@@ -178,23 +336,32 @@ export class RiverLayer {
     this.clearGraphics();
     if (this.groups.size === 0) return;
     const g = new Graphics();
-    const color = hexColor(MAP_COLORS.river);
-    for (const [width, runs] of this.groups) {
-      for (const pts of runs) {
-        const first = pts[0] as Point;
-        g.moveTo(first.x, first.y);
-        for (let i = 1; i < pts.length; i++) {
-          const p = pts[i] as Point;
-          g.lineTo(p.x, p.y);
+    const water = hexColor(MAP_COLORS.river);
+    const bank = hexColor(MAP_COLORS.riverBank);
+    // Сначала вся подложка, поверх вся вода: кромка притока не режет воду главной реки.
+    for (const kind of ['bank', 'water'] as const) {
+      for (const { piece, paths } of this.groups.values()) {
+        if (piece.kind !== kind) continue;
+        const waterPx = riverPixelWidth(levelCells(piece.level), zoom);
+        // Кромка уже 0.2 px с каждой стороны не видна: такую подложку не строим (вдвое меньше геометрии).
+        if (kind === 'bank' && waterPx < BANK_MIN_PX) continue;
+        for (const pts of paths) {
+          const first = pts[0] as Point;
+          g.moveTo(first.x, first.y);
+          for (let i = 1; i < pts.length; i++) {
+            const p = pts[i] as Point;
+            g.lineTo(p.x, p.y);
+          }
         }
+        const px = waterPx * (kind === 'bank' ? BANK_SCALE : 1);
+        g.stroke({
+          width: px / zoom,
+          color: kind === 'bank' ? bank : water,
+          alpha: FADE_ALPHA[piece.fade] ?? 1,
+          cap: piece.butt ? 'butt' : 'round',
+          join: 'round',
+        });
       }
-      g.stroke({
-        width: riverPixelWidth(width, zoom) / zoom,
-        color,
-        alpha: 0.9,
-        cap: 'round',
-        join: 'round',
-      });
     }
     this.graphics = g;
     this.container.addChild(g);
