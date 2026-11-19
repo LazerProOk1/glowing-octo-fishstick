@@ -8,12 +8,13 @@ import {
 import {
   collectTransferables,
   PROTOCOL_VERSION,
+  surfaceTransferables,
   versionErrorReply,
   type GenRequest,
   type GenResponse,
 } from '../../src/worker/protocol';
 import type { World } from '../../src/sim/world/types';
-import { bakeTransferables, type WorldBake } from '../../src/render/bakeWorld';
+import { bakeTransferables, type SurfaceBake, type WorldBake } from '../../src/render/bakeWorld';
 import { defaultParams, type WorldParams } from '../../src/sim/world/params';
 
 /** Параметры по умолчанию для сида. */
@@ -224,5 +225,14 @@ describe('bakeTransferables', () => {
     expect(list).toContain(b.seaDepth.buffer);
     expect(list).toContain(b.surface.buffer);
     expect(list).toContain(b.provinceSeaRG.buffer);
+  });
+
+  it('surfaceTransferables: все поля текстур рельефа, включая будущие', () => {
+    const { height, surface, biomeColor, seaDepth } = fakeBake();
+    const extra = new Float32Array(4);
+    const s = { height, surface, biomeColor, seaDepth, extra } as SurfaceBake;
+    const list = surfaceTransferables(s);
+    expect(new Set(list)).toEqual(new Set(Object.values(s).map((v: ArrayBufferView) => v.buffer)));
+    expect(list.length).toBe(5);
   });
 });

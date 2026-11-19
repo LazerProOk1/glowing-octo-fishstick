@@ -1,5 +1,5 @@
 import type { BiomeDef } from '../content/biomes/types';
-import { uniqueBuffers, type SurfaceBake, type WorldBake } from '../render/bakeWorld';
+import { bakeTransferables, uniqueBuffers, type SurfaceBake, type WorldBake } from '../render/bakeWorld';
 import { GEN_STAGES } from '../sim/world/generateWorld';
 import type { WorldParams } from '../sim/world/params';
 import type { World } from '../sim/world/types';
@@ -100,6 +100,7 @@ export function collectTransferables(world: World): ArrayBuffer[] {
   ]);
 }
 
+/** Буферы текстур рельефа, каждый один раз: все поля SurfaceBake, новые поля передаются сами. */
 export function surfaceTransferables(bake: SurfaceBake): ArrayBuffer[] {
-  return uniqueBuffers([bake.height, bake.surface, bake.biomeColor, bake.seaDepth]);
+  return bakeTransferables(bake);
 }
