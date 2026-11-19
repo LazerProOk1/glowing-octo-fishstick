@@ -1,4 +1,4 @@
-// Радиусы пуассоновского сэмплирования семян провинций (provinces.ts, provinceSeeds.ts).
+// Poisson sampling radii for province seeds (provinces.ts, provinceSeeds.ts).
 import { borderDistance } from '../geom/edt';
 import { KIND_WATER } from './provinceSeeds';
 

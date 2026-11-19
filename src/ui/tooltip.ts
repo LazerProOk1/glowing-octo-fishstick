@@ -5,7 +5,7 @@ import { el } from './dom';
 
 const OFFSET = 14;
 
-/** Строка подсказки: биом, суша / море / вода (озеро), прибрежная; с заглавной буквы. */
+/** Tooltip line: biome, land / sea / water (lake), coastal; capitalised. */
 export function provinceInfo(p: Province, biomes: readonly BiomeDef[]): string {
   const def = biomes.find((b) => b.id === p.biome);
   const medium = p.water === 'lake' ? t('tip.water') : p.isLand ? t('tip.land') : t('tip.sea');
@@ -15,7 +15,7 @@ export function provinceInfo(p: Province, biomes: readonly BiomeDef[]): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-/** Небольшая подсказка у курсора: номер провинции; биом, суша/море, прибрежная. */
+/** Small tooltip at the cursor: province id; biome, land/sea, coastal. */
 export class ProvinceTooltip {
   private readonly root: HTMLElement;
   private readonly titleEl: HTMLElement;
@@ -66,7 +66,7 @@ export class ProvinceTooltip {
     this.update();
   };
 
-  /** Ставит подсказку у курсора, не давая ей уйти за край окна. */
+  /** Places the tooltip at the cursor without letting it leave the window edge. */
   private update(): void {
     const visible = this.id !== null && !this.pressed && this.world !== null;
     this.root.hidden = !visible;

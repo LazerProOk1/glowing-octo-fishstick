@@ -1,5 +1,5 @@
-// Вложенный воркер: запекает текстуры рельефа (высота, нормали, берег, цвета биомов),
-// пока воркер генерации прокладывает реки и делит карту на провинции.
+// Nested worker: bakes terrain textures (height, normals, shore, biome colours)
+// while the generation worker carves rivers and splits the map into provinces.
 import { bakeSurface } from '../render/bakeWorld';
 import {
   PROTOCOL_VERSION,

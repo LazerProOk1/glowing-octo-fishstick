@@ -6,18 +6,18 @@ import { LAKE_SLOT, PALETTE_SIZE } from './textures';
 import { DEPTH_TONE_K, SEA_DEPTH_MAX, SEA_DEPTH_STEP, WATER_GRAIN } from './seaDepth';
 import { WAVE_GLSL } from './seaWaves';
 
-/** Число как литерал GLSL float. */
+/** A number as a GLSL float literal. */
 const f = (n: number): string => n.toFixed(4);
 
-/** Сторона атласа в пикселях и размах одного тайла в клетках мира. */
+/** Atlas side in pixels and the span of one tile in world cells. */
 export const ATLAS_PX = 2048;
 export const DETAIL_SPAN_CELLS = 32;
 export const PAPER_SPAN_CELLS = 48;
 
 /**
- * Усиление детали по слоту: (яркость − 0.5) · gain даёт ≈ ±10% на 2σ.
- * σ слотов измерены по atlas.png: трава 0.086, лес 0.094, песок 0.062, камень 0.110,
- * снег 0.048, грязь 0.070, бумага 0.039 (бумага — ≈ ±3%).
+ * Detail gain per slot: (luminance − 0.5) · gain gives ≈ ±10% at 2σ.
+ * The slot σ values are measured from atlas.png: grass 0.086, forest 0.094, sand 0.062, stone 0.110,
+ * snow 0.048, dirt 0.070, paper 0.039 (paper — ≈ ±3%).
  */
 const SLOT_GAIN: Record<DetailSlot, number> = {
   [DetailSlot.GRASS]: 0.58,

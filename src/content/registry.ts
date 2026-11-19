@@ -1,4 +1,4 @@
-// Сборка паков в список биомов мира. Паки подключаются статическим импортом.
+// Assembly of packs into the world biome list. Packs are wired up by static import.
 import {
   DETAIL_SLOT_NAMES,
   MAX_BIOMES,
@@ -11,7 +11,7 @@ import {
 import { hsl } from './color';
 import { BASE_PACK } from './packs/base/manifest';
 
-/** Все известные паки. Новый пак: src/content/packs/<id>/manifest.ts и строка здесь. */
+/** All known packs. A new pack: src/content/packs/<id>/manifest.ts plus a line here. */
 export const PACKS: readonly PackManifest[] = [BASE_PACK];
 
 export const DEFAULT_PACKS: readonly string[] = ['base'];
@@ -20,13 +20,13 @@ export function hasTag(def: BiomeDef, tag: BiomeTag): boolean {
   return def.tags?.includes(tag) ?? false;
 }
 
-/** Запасной биом своего вида: без условий, подходит любой клетке (озёрный биом — не запасной). */
+/** Fallback biome of its kind: no conditions, matches any cell (the lake biome is not a fallback). */
 export function isFallback(def: BiomeDef): boolean {
   const w: BiomeConditions = def.when;
   return !hasTag(def, 'lake') && w.height === undefined && w.temperature === undefined && w.moisture === undefined && w.arcana === undefined;
 }
 
-/** Без этих биомов мир не собрать: запасной биом суши, глубокая и мелкая вода, озёра. */
+/** The world cannot be assembled without these: a land fallback, deep and shallow water, lakes. */
 export function isRequired(def: BiomeDef): boolean {
   return (
     (def.kind === 'land' && isFallback(def)) ||
@@ -36,13 +36,13 @@ export function isRequired(def: BiomeDef): boolean {
   );
 }
 
-/** Проверка одного биома; бросает ошибку с id биома. */
+/** Validation of one biome; throws an error with the biome id. */
 export function validateBiome(def: BiomeDef): void {
   const fail = (what: string): never => {
     throw new Error(`биом «${def.id}»: ${what}`);
   };
   if (!/^[a-z][a-z0-9_]*$/.test(def.id)) fail('id — латиница snake_case');
-  // Название — ключ i18n (перевод в src/i18n/ru.ts), не готовый текст.
+  // The name is an i18n key (translation in src/i18n/ru.ts), not ready-made text.
   if (!/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/.test(def.nameKey)) fail(`название — ключ i18n вида biome.${def.id}`);
   if (def.kind !== 'water' && def.kind !== 'land') fail(`неизвестный вид ${String(def.kind)}`);
   if (def.color.length !== 3 || def.color.some((v) => !Number.isInteger(v) || v < 0 || v > 255)) {
@@ -61,9 +61,9 @@ export function validateBiome(def: BiomeDef): void {
 }
 
 /**
- * Включённые биомы мира в порядке кодов: биомы паков по порядку паков и объявления,
- * правки (overrides) применяются по порядку паков; без фэнтези фэнтези-биомы отбрасываются;
- * выключенные убираются (их ниша достаётся следующему подходящему по приоритету).
+ * Enabled world biomes in code order: pack biomes in pack and declaration order,
+ * overrides applied in pack order; without fantasy the fantasy biomes are dropped;
+ * disabled ones are removed (their niche goes to the next biome by priority).
  */
 export function resolveBiomes(options: GenOptions = {}, available: readonly PackManifest[] = PACKS): BiomeDef[] {
   const byId = new Map<string, BiomeDef>();
@@ -80,8 +80,8 @@ export function resolveBiomes(options: GenOptions = {}, available: readonly Pack
       byId.set(id, { ...old, ...patch, id });
     }
   }
-  // Все объявленные биомы (после правок), а не только включённые: ошибка в данных пака
-  // видна сразу, а не когда биом впервые включат.
+  // All declared biomes (after overrides), not only the enabled ones: a mistake in pack data
+  // shows up right away instead of when the biome is first enabled.
   for (const def of byId.values()) validateBiome(def);
   const disabled = new Set(options.disabledBiomes ?? []);
   for (const id of disabled) {

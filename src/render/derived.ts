@@ -1,7 +1,7 @@
-// Производные данные мира (спец §7.4): всё, что строится из исходных данных (высота, биомы,
-// реки, провинции) только для отрисовки. Строятся одной функцией и умеют пересчитываться
-// для прямоугольной области — задел под редактор карты. Загрузка изменённой части текстур на
-// GPU — забота MapView (по прямоугольнику, который возвращает updateDerivedRect).
+// Derived world data (spec §7.4): everything built from the source data (height, biomes,
+// rivers, provinces) for rendering only. It is built by one function and can be recomputed
+// for a rectangle — groundwork for the map editor. Uploading the changed part of the textures to
+// the GPU is MapView's job (over the rectangle returned by updateDerivedRect).
 import { SEA_LEVEL } from '../content/terrainLevels';
 import type { World } from '../sim/world/types';
 import { waterClassTable, writeTerrainCell, writeWaterClassCell } from './bake';
@@ -12,13 +12,13 @@ import { toHalf } from './halfFloat';
 export type { Rect } from './biomeColors';
 
 /**
- * Производные данные: пиксели всех текстур мира (раскладка каналов — WorldTextures в textures.ts):
- * цвета биомов, рельеф, поверхность (градиент, береговые поля), глубина моря, карты владельцев
- * провинций для суши и для воды.
+ * Derived data: pixels of all world textures (channel layout — WorldTextures in textures.ts):
+ * biome colours, terrain, surface (gradient, shore fields), sea depth, owner maps of the
+ * provinces for land and for water.
  */
 export type DerivedWorld = WorldBake;
 
-/** Все производные данные мира с нуля. */
+/** All derived world data built from scratch. */
 export function buildDerived(world: World): DerivedWorld {
   return bakeWorld(world);
 }
@@ -33,15 +33,15 @@ function clip(rect: Rect, w: number, h: number): Rect {
 }
 
 /**
- * Пересчитывает производные данные после правки клеток (биома, влажности, рек) в `rect`:
- * terrain, height и канал A provinceSeaRG (вид воды по биому) — в самом прямоугольнике, цвета
- * биомов — с запасом на радиус размытия. Результат побитно равен buildDerived того же мира, пока
- * высота и провинции не менялись. Возвращает реально записанную область (прямоугольник,
- * расширенный на радиус размытия и обрезанный краями карты) — её и нужно загрузить на GPU.
+ * Recomputes derived data after cell edits (biome, moisture, rivers) in `rect`:
+ * terrain, height and the alpha of provinceSeaRG (water kind by biome) — inside the rectangle itself,
+ * biome colours — with a margin of the blur radius. The result is bit-identical to buildDerived of the
+ * same world as long as height and provinces are unchanged. Returns the area actually written (the
+ * rectangle expanded by the blur radius and clipped to the map edges) — that is what goes to the GPU.
  *
- * По области не пересчитываются (нужна полная пересборка, buildDerived): поверхность (градиент и
- * береговые поля) и глубина моря seaDepth — при правке высоты; карты владельцев provinceRG и
- * provinceSeaRG (id, кроме канала A provinceSeaRG) — при правке провинций или береговой линии.
+ * Not recomputed per area (a full rebuild, buildDerived, is needed): the surface (gradient and
+ * shore fields) and the sea depth seaDepth — when height is edited; the owner maps provinceRG and
+ * provinceSeaRG (ids, except the alpha of provinceSeaRG) — when provinces or the shoreline are edited.
  */
 export function updateDerivedRect(world: World, derived: DerivedWorld, rect: Rect): Rect {
   const { w, h } = world;

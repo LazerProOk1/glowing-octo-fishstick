@@ -11,7 +11,7 @@ import type { World } from '../../../src/sim/world/types';
 const { w: WORLD_W, h: WORLD_H } = SIZE_PRESETS.medium;
 
 describe('assertProvinceCount', () => {
-  it('65536 бросает, 65535 нет', () => {
+  it('65536 throws, 65535 does not', () => {
     expect(() => assertProvinceCount(65536)).toThrow('слишком много провинций');
     expect(() => assertProvinceCount(65535)).not.toThrow();
   });
@@ -36,7 +36,7 @@ describe('generateWorld', () => {
     c = generateWorld(defaultParams('другое-зерно'));
   }, 60000);
 
-  it('размеры и согласованность', () => {
+  it('sizes and consistency', () => {
     expect(a.w).toBe(WORLD_W);
     expect(a.h).toBe(WORLD_H);
     expect(a.params).toEqual(defaultParams('Бета-7'));
@@ -44,7 +44,7 @@ describe('generateWorld', () => {
     expect(a.provinces.length).toBeGreaterThan(0);
   });
 
-  it('детерминирован: массивы побайтно равны', () => {
+  it('deterministic: the arrays are byte-identical', () => {
     const eq = (x: ArrayBufferView, y: ArrayBufferView): boolean =>
       Buffer.compare(
         Buffer.from(x.buffer, x.byteOffset, x.byteLength),
@@ -61,32 +61,32 @@ describe('generateWorld', () => {
     expect(JSON.stringify(a.adjacency)).toBe(JSON.stringify(b.adjacency));
   });
 
-  it('параметры другой версии генератора отклоняются с понятной ошибкой', () => {
+  it('params of another generator version are rejected with a clear error', () => {
     expect(() => generateWorld({ ...defaultParams('x'), genVersion: GEN_VERSION - 1 })).toThrow('версии генератора');
   });
 
-  it('параметры — копия: правка исходных не меняет мир', () => {
+  it('the params are a copy: editing the source does not change the world', () => {
     const p = defaultParams('Бета-7');
     expect(a.params).not.toBe(p);
   });
 
-  it('согласованность provinces и provinceOf', () => {
+  it('consistency of provinces and provinceOf', () => {
     a.provinces.forEach((p, i) => expect(p.id).toBe(i));
     let max = 0;
     for (const v of a.provinceOf) if (v > max) max = v;
     expect(max).toBeLessThan(a.provinces.length);
   });
 
-  it('другое зерно даёт другой мир', () => {
+  it('a different seed gives a different world', () => {
     expect(Buffer.from(c.provinceOf.buffer).equals(Buffer.from(a.provinceOf.buffer))).toBe(false);
   });
 
-  it('onStage вызывается перед каждым из 6 этапов по порядку', () => {
+  it('onStage is called before each of the 6 stages in order', () => {
     expect(GEN_STAGES).toEqual(['height', 'climate', 'biomes', 'shoreline', 'rivers', 'provinces']);
     expect(stages).toEqual([...GEN_STAGES]);
   });
 
-  it('onSurface получает окончательные высоту и биомы сразу после этапа берегов', () => {
+  it('onSurface receives the final height and biomes right after the shores stage', () => {
     expect(surface).not.toBeNull();
     expect(surface!.height).toBe(a.height);
     expect(surface!.biome).toBe(a.biome);
@@ -94,10 +94,10 @@ describe('generateWorld', () => {
     expect(surface!.stagesBefore).toBe(GEN_STAGES.indexOf('shoreline') + 1);
   });
 
-  it('генерация укладывается в грубую границу', () => {
-    // Дымовая граница: в node под нагрузкой (параллельные тесты) время скачет до 12+ с, поэтому
-    // предел 20 с ловит только грубый провал. Настоящий бюджет — ≤ 6 с от запроса до карты
-    // в браузере, в воркере (спецификация: 8 с); проверяется по таймингам в панели отладки (F3).
+  it('generation stays within a rough bound', () => {
+    // Smoke bound: under node load (parallel tests) the time jumps to 12+ s, so the 20 s limit
+    // catches only a gross failure. The real budget is ≤ 6 s from request to map in the browser,
+    // in the worker (spec: 8 s); it is checked via the timings in the debug panel (F3).
     expect(ms).toBeLessThan(20000);
   }, 60000);
 });

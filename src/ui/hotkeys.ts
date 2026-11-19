@@ -1,30 +1,30 @@
-// Реестр горячих клавиш: все клавиши приложения в одном списке, один обработчик keydown на окно.
+// Hotkey registry: all app keys in one list, one keydown handler per window.
 import type { RuKey } from '../i18n/ru';
 
 export interface Hotkey {
   id: string;
-  /** KeyboardEvent.code — физическая клавиша, не зависит от раскладки (M = Ь). */
+  /** KeyboardEvent.code — the physical key, independent of layout (same code on QWERTY and JCUKEN). */
   code: string;
-  /** Ключ перевода: что делает клавиша (список в панели F3). */
+  /** Translation key: what the key does (listed in the F3 panel). */
   nameKey: RuKey;
   action: () => void;
-  /** Срабатывает и при фокусе в поле ввода (F-клавиши: в поле они ничего не печатают). */
+  /** Also fires while an input is focused (F-keys type nothing in an input). */
   allowInInput?: boolean;
 }
 
-/** То, на что вешается обработчик (window; в тестах — подделка). */
+/** What the handler is attached to (window; a fake in tests). */
 export interface KeyTarget {
   addEventListener(type: 'keydown', listener: (e: KeyboardEvent) => void): void;
   removeEventListener(type: 'keydown', listener: (e: KeyboardEvent) => void): void;
 }
 
-/** Действия, к которым привязаны клавиши приложения. */
+/** Actions the app keys are bound to. */
 export interface HotkeyActions {
   toggleDebug(): void;
   nextMapMode(): void;
 }
 
-/** Все клавиши приложения. Новая клавиша — новая запись здесь (и перевод nameKey в ru.ts). */
+/** All app keys. A new key means a new entry here (and a nameKey translation in ru.ts). */
 export function appHotkeys(a: HotkeyActions): Hotkey[] {
   return [
     { id: 'debug', code: 'F3', nameKey: 'key.debug', action: a.toggleDebug, allowInInput: true },
@@ -32,12 +32,12 @@ export function appHotkeys(a: HotkeyActions): Hotkey[] {
   ];
 }
 
-/** Подпись клавиши для списка: KeyM → M, Digit1 → 1, F3 → F3. */
+/** Key label for the list: KeyM → M, Digit1 → 1, F3 → F3. */
 export function keyLabel(code: string): string {
   return code.replace(/^(Key|Digit)/, '');
 }
 
-/** Фокус в поле ввода: клавиши должны печатать текст, а не переключать карту. */
+/** Focus is in an input: keys must type text instead of switching the map. */
 function isEditable(target: unknown): boolean {
   if (typeof target !== 'object' || target === null) return false;
   const t = target as { tagName?: unknown; isContentEditable?: unknown };
@@ -45,10 +45,10 @@ function isEditable(target: unknown): boolean {
 }
 
 /**
- * Вешает один обработчик keydown на target (по умолчанию окно). Нажатия в полях ввода (кроме клавиш с allowInInput) и
- * сочетания с Ctrl/Alt/Meta пропускаются (они остаются браузеру). У своей клавиши отменяется
- * действие браузера (F3 — поиск по странице), автоповтор при удержании действие не вызывает.
- * Возвращает отписку.
+ * Attaches one keydown handler to target (the window by default). Presses in inputs (except keys with
+ * allowInInput) and Ctrl/Alt/Meta combinations are skipped (they stay with the browser). For its own key
+ * the browser action is cancelled (F3 — page search), and auto-repeat while held does not trigger the action.
+ * Returns an unsubscribe function.
  */
 export function registerHotkeys(list: readonly Hotkey[], target: KeyTarget = window): () => void {
   const byCode = new Map<string, Hotkey>();

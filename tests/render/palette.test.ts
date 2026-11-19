@@ -9,7 +9,7 @@ const all: Array<[string, RGB]> = [
 ];
 
 describe('palette', () => {
-  it('цвета — целые байты', () => {
+  it('the colours are integer bytes', () => {
     for (const [name, c] of all) {
       for (const v of c) {
         expect(Number.isInteger(v) && v >= 0 && v <= 255, name).toBe(true);
@@ -17,7 +17,7 @@ describe('palette', () => {
     }
   });
 
-  it.each(all)('%s приглушён: насыщенность ≤ 0.45, светлота 0.2..0.9', (_name, c) => {
+  it.each(all)('%s is muted: saturation ≤ 0.45, lightness 0.2..0.9', (_name, c) => {
     const { s, l } = hsl(c);
     expect(s).toBeLessThanOrEqual(0.45);
     expect(l).toBeGreaterThanOrEqual(0.2);

@@ -1,11 +1,11 @@
-/** Центр камеры в клетках мира; zoom — пикселей на клетку. */
+/** Camera centre in world cells; zoom — pixels per cell. */
 export interface Camera {
   x: number;
   y: number;
   zoom: number;
 }
 
-/** Размер карты в клетках (берётся из World). */
+/** Map size in cells (taken from World). */
 export interface MapSize {
   w: number;
   h: number;
@@ -13,12 +13,12 @@ export interface MapSize {
 
 export const MAX_ZOOM = 16;
 
-/** Размер вьюпорта не меньше 1 пикселя (свёрнутое окно даёт 0 или NaN). */
+/** Viewport size of at least 1 pixel (a collapsed window gives 0 or NaN). */
 function safeView(v: number): number {
   return Number.isFinite(v) ? Math.max(v, 1) : 1;
 }
 
-/** Минимальный зум: вся карта помещается в экран. */
+/** Minimum zoom: the whole map fits the screen. */
 export function minZoom(viewW: number, viewH: number, map: MapSize): number {
   return Math.min(safeView(viewW) / map.w, safeView(viewH) / map.h);
 }
@@ -37,9 +37,9 @@ export function screenToWorld(
 }
 
 /**
- * Ограничивает центр так, чтобы на каждой оси не было больше четверти экрана пустоты:
- * центр в [span/4, size − span/4]. Интервал схлопывается в середину карты только при
- * span ≥ 2·size, поэтому переход непрерывен.
+ * Clamps the centre so that on each axis no more than a quarter of the screen is empty:
+ * the centre stays in [span/4, size − span/4]. The interval collapses to the map centre only when
+ * span ≥ 2·size, so the transition is continuous.
  */
 function clampAxis(center: number, span: number, mapSize: number): number {
   if (span >= 2 * mapSize) return mapSize / 2;
@@ -58,7 +58,7 @@ export function clampCamera(cam: Camera, viewW: number, viewH: number, map: MapS
   };
 }
 
-/** Зум с сохранением мировой точки под курсором (если не мешает ограничение). */
+/** Zoom keeping the world point under the cursor (unless clamping interferes). */
 export function zoomAt(
   cam: Camera,
   sx: number,
@@ -70,7 +70,7 @@ export function zoomAt(
 ): Camera {
   const vw = safeView(viewW);
   const vh = safeView(viewH);
-  // Точка под курсором берётся из уже ограниченной камеры, т.е. той, что видна на экране.
+  // The point under the cursor comes from the already clamped camera, i.e. the one visible on screen.
   const base = clampCamera(cam, vw, vh, map);
   const zoom = Math.min(Math.max(base.zoom * factor, minZoom(vw, vh, map)), MAX_ZOOM);
   const under = screenToWorld(base, sx, sy, vw, vh);

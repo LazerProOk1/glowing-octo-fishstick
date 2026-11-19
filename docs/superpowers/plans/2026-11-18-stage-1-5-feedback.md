@@ -1,176 +1,176 @@
-# Этап 1.5: доработки по отзыву автора — план реализации
+# Stage 1.5: rework from the author's feedback — implementation plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Закрыть всё подтверждённое из `docs/feedback/stage-1.md` и убрать технические риски, которые иначе подорожают на этапах 2+ (поселение, экономика, армии, онлайн).
+**Goal:** Close everything confirmed in `docs/feedback/stage-1.md` and remove the technical risks that would otherwise get more expensive at stages 2+ (settlement, economy, armies, online).
 
-**Architecture:** Работа идёт поверх ветки `stage-1-map` (продолжаем её же). Сначала чистка без изменения результата (дубликаты, инфраструктура). Затем изменения мира: озёра, морские провинции, граница джунглей. Они меняют генерацию, поэтому `GEN_VERSION` поднимается один раз, до 3. Дальше идут правки только отрисовки (берег, море, реки), затем замер FPS, задел под детерминизм этапа 2 и пачка мелочей.
+**Architecture:** The work continues on top of the `stage-1-map` branch (we keep working on it). First cleanup that does not change the result (duplicates, infrastructure). Then world changes: lakes, sea provinces, the jungle border. They change generation, so `GEN_VERSION` is bumped once, to 3. After that come rendering-only fixes (coast, sea, rivers), then the FPS measurement, groundwork for the stage 2 determinism and a batch of small things.
 
 **Tech Stack:** TypeScript strict, PixiJS 8 (WebGL2, GLSL `#version 300 es`), Vite, Vitest, ESLint 9.
 
-**Spec:** `docs/superpowers/specs/2026-11-16-settlement-strategy-design.md` (§5.2, §6, §7, §7.2–7.4). Отзыв автора: `docs/feedback/stage-1.md`. Решения этапа 1: `docs/superpowers/stage-1-decisions.md`.
+**Spec:** `docs/superpowers/specs/2026-11-16-settlement-strategy-design.md` (§5.2, §6, §7, §7.2–7.4). The author's feedback: `docs/feedback/stage-1.md`. Stage 1 decisions: `docs/superpowers/stage-1-decisions.md`.
 
 ## Global Constraints
 
-- TypeScript `strict: true`, `noUncheckedIndexedAccess: true`; `any` запрещён.
-- `src/sim/**` не импортирует `src/render/**`, `src/ui/**`, `src/worker/**`, `src/i18n/**`, `pixi.js`, DOM. Нет `Math.random`, `Date`, `performance.now`, `crypto`, `setTimeout`, `fetch`, `self`.
-- Файл не длиннее ~450 строк.
-- Все тексты интерфейса в `src/i18n/ru.ts`, по-русски.
-- Стиль интерфейса сдержанный: тёмные нейтральные панели, рамка 1px, PT Sans, без орнаментов, неона, градиентных карточек и эмодзи.
-- Карта в духе HoI4, приглушённые «бумажные» цвета. **«На любом зуме нет пикселей»** (spec §6).
-- Производительность: 60 кадров/с на 4000 провинций; генерация medium до 8 с, в воркере.
-- `GEN_VERSION` поднимается **ровно один раз** за этот план, с 2 до 3, в Task 4. Задачи 5 и 6 меняют мир в рамках той же версии 3 и только обновляют отпечатки в `tests/sim/world/fingerprint.test.ts`.
-- Чистые рефакторинги (Task 2) обязаны оставить все отпечатки `fingerprint.test.ts` без изменений.
-- Коммиты на `stage-1-map`, сообщения по-русски, в конце `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. После каждой завершённой задачи: `git push origin stage-1-map`. `main` не трогать, ветки не удалять.
+- TypeScript `strict: true`, `noUncheckedIndexedAccess: true`; `any` is forbidden.
+- `src/sim/**` does not import `src/render/**`, `src/ui/**`, `src/worker/**`, `src/i18n/**`, `pixi.js`, the DOM. No `Math.random`, `Date`, `performance.now`, `crypto`, `setTimeout`, `fetch`, `self`.
+- A file is no longer than ~450 lines.
+- All interface texts are in `src/i18n/ru.ts`, in Russian.
+- The interface style is restrained: dark neutral panels, 1px border, PT Sans, no ornaments, neon, gradient cards or emoji.
+- The map is in the spirit of HoI4, muted "paper" colours. **"No pixels at any zoom"** (spec §6).
+- Performance: 60 frames/s with 4000 provinces; medium generation under 8 s, in the worker.
+- `GEN_VERSION` is bumped **exactly once** in this plan, from 2 to 3, in Task 4. Tasks 5 and 6 change the world within the same version 3 and only update the fingerprints in `tests/sim/world/fingerprint.test.ts`.
+- Pure refactorings (Task 2) must leave every fingerprint in `fingerprint.test.ts` unchanged.
+- Commits on `stage-1-map`, messages in Russian, at the end `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. After every finished task: `git push origin stage-1-map`. Do not touch `main`, do not delete branches.
 
 ## Review Focus
 
-1. **Клик и наведение у берега:** точка, которая на экране суша, должна выбирать сухопутную провинцию, а не морскую. Проверка: тест в Task 3 (`coastAgreesWithCells`).
-2. **Озеро у края карты или огромный внутренний водоём:** вода, касающаяся края карты, никогда не озеро; водоём больше `LAKE_MAX_CELLS` — море. Тест в Task 4.
-3. **Мир, где почти всё вода или почти всё суша** (сиды из Review Focus этапа 1: `""`, `"Бета-7"`, вырожденные): переменная плотность морских провинций не должна давать 0 морских провинций у крошечного моря или больше 65535 id. Тест в Task 5 прогоняет 20 сидов.
-4. **Смена сида туда-обратно** после изменений Task 4–6: мир побайтно тот же (детерминизм), отпечаток медиума обновлён осознанно один раз. Тест в Task 5.
-5. **Замер FPS при скрытой вкладке:** замер не должен зависеть от `requestAnimationFrame`, иначе он врёт (так было в этапе 1). Тест в Task 9.
+1. **Click and hover near the coast:** a point that looks like land on the screen must select a land province, not a sea one. Check: the test in Task 3 (`coastAgreesWithCells`).
+2. **A lake at the map edge or a huge inland water body:** water touching the map edge is never a lake; a water body bigger than `LAKE_MAX_CELLS` is sea. Test in Task 4.
+3. **A world that is almost all water or almost all land** (the seeds from the stage 1 Review Focus: `""`, `"Бета-7"`, the degenerate ones): the variable sea province density must not give 0 sea provinces for a tiny sea or more than 65535 ids. The test in Task 5 runs 20 seeds.
+4. **Switching the seed back and forth** after the Task 4–6 changes: the world is byte-identical (determinism), the medium fingerprint was updated deliberately once. Test in Task 5.
+5. **FPS measurement on a hidden tab:** the measurement must not depend on `requestAnimationFrame`, otherwise it lies (that is how it was in stage 1). Test in Task 9.
 
 ---
 
-### Task 1: Инфраструктура — .gitignore, CLAUDE.md, пуш ветки
+### Task 1: Infrastructure — .gitignore, CLAUDE.md, pushing the branch
 
 **Files:**
 - Modify: `.gitignore`
 - Create: `CLAUDE.md`
-- Commit: `.claude/launch.json` (конфиг дев-сервера проекта)
+- Commit: `.claude/launch.json` (the dev-server config of the project)
 
-- [ ] **Step 1:** Дополнить `.gitignore` строками: `.superpowers/`, `.claude/settings.local.json`, `.claude/worktrees/`, `coverage/`, `.vite/`, `*.local`, `.env`, `.env.*`, `__pycache__/`, `*.pyc`, `.DS_Store`, `Thumbs.db`, `*.tsbuildinfo`. Проверка: `git status --short` после `npm run build && npm test` не показывает новых неотслеживаемых файлов, кроме `.claude/launch.json`.
-- [ ] **Step 2:** Создать `CLAUDE.md` (до ~80 строк, по-русски). Разделы:
-  - что за проект, со ссылками на спек и планы;
-  - команды (`npm run dev`, `npm test`, `npm run lint`, `npx tsc --noEmit`);
-  - жёсткие правила (Global Constraints выше, коротко);
-  - правило `GEN_VERSION` из `docs/architecture.md`;
-  - где лежат журнал SDD (`.superpowers/sdd/<план>/progress.md`) и решения (`docs/superpowers/stage-*-decisions.md`);
-  - политика git: коммиты по-русски, пуш рабочей ветки после каждой задачи, `main` не трогать;
-  - «что делать после сжатия контекста»: прочитать журнал и `git log`, не переделывать сделанное.
-- [ ] **Step 3: Commit** `chore: .gitignore, CLAUDE.md для сессий и сжатия контекста`. Затем `git push -u origin stage-1-map`. Ожидается, что ветка появится на origin.
+- [ ] **Step 1:** Add these lines to `.gitignore`: `.superpowers/`, `.claude/settings.local.json`, `.claude/worktrees/`, `coverage/`, `.vite/`, `*.local`, `.env`, `.env.*`, `__pycache__/`, `*.pyc`, `.DS_Store`, `Thumbs.db`, `*.tsbuildinfo`. Check: `git status --short` after `npm run build && npm test` shows no new untracked files except `.claude/launch.json`.
+- [ ] **Step 2:** Create `CLAUDE.md` (up to ~80 lines, in Russian). Sections:
+  - what the project is, with links to the spec and the plans;
+  - the commands (`npm run dev`, `npm test`, `npm run lint`, `npx tsc --noEmit`);
+  - the hard rules (Global Constraints above, briefly);
+  - the `GEN_VERSION` rule from `docs/architecture.md`;
+  - where the SDD journal (`.superpowers/sdd/<plan>/progress.md`) and the decisions (`docs/superpowers/stage-*-decisions.md`) live;
+  - the git policy: commits in Russian, push the working branch after every task, do not touch `main`;
+  - "what to do after context compaction": read the journal and `git log`, do not redo what is done.
+- [ ] **Step 3: Commit** `chore: .gitignore, CLAUDE.md для сессий и сжатия контекста`. Then `git push -u origin stage-1-map`. The branch is expected to appear on origin.
 
-### Task 2: Убрать дубликаты (чистый рефакторинг, мир не меняется)
+### Task 2: Remove the duplicates (pure refactoring, the world does not change)
 
 **Files:**
 - Create: `src/sim/geom/blur.ts`, `src/sim/geom/edt.ts`, `src/sim/geom/label.ts`, `src/content/color.ts`
-- Modify: `src/render/normals.ts`, `src/render/distanceField.ts`, `src/render/biomeColors.ts` (или где живёт `bakeBiomeColorsRect`), `src/sim/world/climate.ts`, `src/sim/world/provinceSeeds.ts`, `src/sim/world/shoreline.ts`, `src/sim/world/provinces.ts`, `src/sim/world/provinceCleanup.ts`, `src/sim/world/provinceNoise.ts`, `src/render/mapModes.ts`, `src/content/registry.ts`, `src/sim/world/types.ts`, тесты, которые импортируют перенесённое
-- Test: существующие `tests/**`, плюс `tests/sim/geom/*.test.ts`
+- Modify: `src/render/normals.ts`, `src/render/distanceField.ts`, `src/render/biomeColors.ts` (or wherever `bakeBiomeColorsRect` lives), `src/sim/world/climate.ts`, `src/sim/world/provinceSeeds.ts`, `src/sim/world/shoreline.ts`, `src/sim/world/provinces.ts`, `src/sim/world/provinceCleanup.ts`, `src/sim/world/provinceNoise.ts`, `src/render/mapModes.ts`, `src/content/registry.ts`, `src/sim/world/types.ts`, the tests that import what was moved
+- Test: the existing `tests/**`, plus `tests/sim/geom/*.test.ts`
 
 **Interfaces:**
 - Produces:
   - `gaussianKernel(sigma: number): Float32Array`
   - `blur(src: Float32Array, w: number, h: number, sigma: number): Float32Array`
-  - `blurInterleaved(src: Float32Array, w: number, h: number, c: number, sigma: number): Float32Array` в `src/sim/geom/blur.ts`; render импортирует оттуда.
-  - `borderDistance(cells: Uint16Array, w: number, h: number): Float32Array` в `src/sim/geom/edt.ts`; `src/render/distanceField.ts` реэкспортирует или удаляется. Task 3 и Task 5 используют именно эту функцию.
-  - `labelComponents` и `labelByKey` в `src/sim/geom/label.ts` (одна реализация разметки связных областей); `shoreline.ts` использует её же.
-  - `hsl(rgb): { h: number; s: number; l: number }` и `saturation(r, g, b): number` в `src/content/color.ts`; одна реализация вместо двух.
+  - `blurInterleaved(src: Float32Array, w: number, h: number, c: number, sigma: number): Float32Array` in `src/sim/geom/blur.ts`; render imports from there.
+  - `borderDistance(cells: Uint16Array, w: number, h: number): Float32Array` in `src/sim/geom/edt.ts`; `src/render/distanceField.ts` re-exports it or is deleted. Task 3 and Task 5 use exactly this function.
+  - `labelComponents` and `labelByKey` in `src/sim/geom/label.ts` (one implementation of the connected-component labelling); `shoreline.ts` uses it too.
+  - `hsl(rgb): { h: number; s: number; l: number }` and `saturation(r, g, b): number` in `src/content/color.ts`; one implementation instead of two.
 
-- [ ] **Step 1:** Найти все копии: размытие (`normals.blur`/`blurInterleaved`, `climate.blurRows`, гаусс внутри `bakeBiomeColorsRect`), разметку компонент (`provinceSeeds`, `shoreline`), цветовые хелперы (`mapModes.saturation`, `registry.hsl`, копия в `tests/content/registry.test.ts`). Перечислить их в отчёте с file:line.
-- [ ] **Step 2:** Перенести в модули выше. Импорты `KIND_*` сделать прямыми: убрать паттерн `import { KIND_LAND as KIND_LAND_ } ... const KIND_LAND = KIND_LAND_`, если он не нужен для производительности. Если нужен, объяснить комментарием в одном месте. Уровни рельефа импортировать из одного пути (`src/content/terrainLevels`); реэкспорт из `types.ts` убрать.
-- [ ] **Step 3:** Тесты для `src/sim/geom/*`:
-  - `blur` сохраняет сумму с точностью 1e-4 на случайном поле 64×32;
-  - `borderDistance` на шахматке 2×2 даёт 0.5 у центров клеток;
-  - `labelComponents` на маске с двумя островами даёт 2 компоненты с правильными размерами.
-- [ ] **Step 4:** `npm test`: все тесты зелёные, **отпечатки в `fingerprint.test.ts` не менялись** (`git diff tests/sim/world/fingerprint.test.ts` пуст). `npm run lint` и `npx tsc --noEmit` чистые.
-- [ ] **Step 5: Commit** `refactor: общие размытие, EDT, разметка областей и цвета без дублей`, затем push.
+- [ ] **Step 1:** Find all the copies: blur (`normals.blur`/`blurInterleaved`, `climate.blurRows`, the gaussian inside `bakeBiomeColorsRect`), component labelling (`provinceSeeds`, `shoreline`), colour helpers (`mapModes.saturation`, `registry.hsl`, the copy in `tests/content/registry.test.ts`). List them in the report with file:line.
+- [ ] **Step 2:** Move them into the modules above. Make the `KIND_*` imports direct: drop the pattern `import { KIND_LAND as KIND_LAND_ } ... const KIND_LAND = KIND_LAND_` if it is not needed for performance. If it is needed, explain it with a comment in one place. Import the terrain levels from one path (`src/content/terrainLevels`); remove the re-export from `types.ts`.
+- [ ] **Step 3:** Tests for `src/sim/geom/*`:
+  - `blur` preserves the sum to 1e-4 on a random 64×32 field;
+  - `borderDistance` on a 2×2 checkerboard gives 0.5 at the cell centres;
+  - `labelComponents` on a mask with two islands gives 2 components with the correct sizes.
+- [ ] **Step 4:** `npm test`: all tests green, **the fingerprints in `fingerprint.test.ts` have not changed** (`git diff tests/sim/world/fingerprint.test.ts` is empty). `npm run lint` and `npx tsc --noEmit` are clean.
+- [ ] **Step 5: Commit** `refactor: общие размытие, EDT, разметка областей и цвета без дублей`, then push.
 
-### Task 3: Берег совпадает с провинциями (лесенка у подсветки и заливки)
+### Task 3: The coast matches the provinces (staircase in the highlight and the fill)
 
-Причина бага. Берег рисуется по размытой высоте (`bakeWorld.ts:30`, `mapShader.ts:231-235`), а провинции — по клеткам. Между гладким берегом и клеточной границей сухопутной провинции остаётся полоса «суши», которая на деле принадлежит морской провинции. В ней подсветка и заливка режима карты обрываются лесенкой, и клик по видимой суше выбирает морскую провинцию.
+Cause of the bug. The coast is drawn from the blurred height (`bakeWorld.ts:30`, `mapShader.ts:231-235`), while the provinces are drawn from cells. Between the smooth coast and the cell border of a land province there remains a strip of "land" that in fact belongs to a sea province. In it the highlight and the map mode fill break off with a staircase, and a click on visible land selects a sea province.
 
-Решение. Береговую линию строить по знаковому расстоянию до границы «суша/вода» в клетках: `borderDistance` по маске суши (Task 2), знак плюс на суше. Так же, как сейчас строятся гладкие границы провинций. Размытая высота остаётся только для оттенка мелководья.
+The solution. Build the coastline from the signed distance to the "land/water" border in cells: `borderDistance` over the land mask (Task 2), the sign is plus on land. The same way the smooth province borders are built today. The blurred height remains only for the shallow-water tint.
 
 **Files:**
 - Modify: `src/render/bakeWorld.ts`, `src/render/textures.ts`, `src/render/mapShader.ts`, `src/render/MapView.ts`
 - Test: `tests/render/coast.test.ts`
 
 **Interfaces:**
-- Consumes: `borderDistance` из `src/sim/geom/edt.ts`.
-- Produces: `coastSignedDistance(provinces: Province[], provinceOf: Uint16Array, w: number, h: number): Float32Array` в `src/render/bakeWorld.ts`. Значение больше 0 на суше, меньше 0 на воде, в клетках. Запекается в новый R16F канал/текстуру `uCoastSd`.
+- Consumes: `borderDistance` from `src/sim/geom/edt.ts`.
+- Produces: `coastSignedDistance(provinces: Province[], provinceOf: Uint16Array, w: number, h: number): Float32Array` in `src/render/bakeWorld.ts`. The value is greater than 0 on land, less than 0 on water, in cells. Baked into a new R16F channel/texture `uCoastSd`.
 
-- [ ] **Step 1: Тест `coastAgreesWithCells`.** На мире `small` сида `"1"`: для каждой клетки `sign(coastSignedDistance) === (provinces[provinceOf[i]].isLand ? +1 : −1)`. Ещё один тест: на прямом береге (маска «левая половина суша» 32×8) значение в центре клетки у берега равно ±0.5.
-- [ ] **Step 2:** Запустить и убедиться в FAIL (функции нет).
-- [ ] **Step 3:** Реализовать функцию. В шейдере `landMask` и линию берега считать от `uCoastSd` так же, как `zeroDistPx` для границ. `surf.b` (размытая высота) оставить только для полосы мелководья. Подсветка (`mapShader.ts:303-304`) и заливка режимов теперь совпадают с берегом без отдельной маски.
-- [ ] **Step 4:** `npm test`, `npm run lint`, `npx tsc --noEmit` чистые.
-- [ ] **Step 5: Проверка в браузере (контроллер).** Сиды `#1`, `#worldbox`, `#Бета-7?fantasy=1`, максимальный зум у берега:
-  - подсветка сухопутной провинции у моря доходит до линии берега без ступенек;
-  - в режиме «Провинции» (M) заливка тоже доходит до берега без ступенек;
-  - берег на максимальном зуме не стал зубчатее, чем на скриншоте `docs/screenshots/stage-1/seed-1-max.jpg`.
+- [ ] **Step 1: Test `coastAgreesWithCells`.** On a `small` world of the seed `"1"`: for every cell `sign(coastSignedDistance) === (provinces[provinceOf[i]].isLand ? +1 : −1)`. Another test: on a straight coast (a "left half is land" mask 32×8) the value at the centre of the cell next to the coast equals ±0.5.
+- [ ] **Step 2:** Run it and make sure it FAILs (the function does not exist).
+- [ ] **Step 3:** Implement the function. In the shader compute `landMask` and the coastline from `uCoastSd` the same way as `zeroDistPx` for the borders. Leave `surf.b` (the blurred height) only for the shallow-water band. The highlight (`mapShader.ts:303-304`) and the mode fill now match the coast without a separate mask.
+- [ ] **Step 4:** `npm test`, `npm run lint`, `npx tsc --noEmit` clean.
+- [ ] **Step 5: Check in the browser (controller).** Seeds `#1`, `#worldbox`, `#Бета-7?fantasy=1`, maximum zoom at the coast:
+  - the highlight of a land province by the sea reaches the coastline without steps;
+  - in the "Провинции" mode (M) the fill also reaches the coast without steps;
+  - the coast at maximum zoom has not become more jagged than in the screenshot `docs/screenshots/stage-1/seed-1-max.jpg`.
 
-  Если берег стал заметно угловатее, контроллер решает: вернуть `landMask` от размытой высоты, а для подсветки и заливки дотягивать сухопутную провинцию до гладкого берега (ближайшая сухопутная провинция для клеток полосы). Решение записывается в журнал.
-- [ ] **Step 6: Commit** `fix(render): берег по клеткам провинций — подсветка и заливка без лесенки`, затем push.
+  If the coast has become noticeably more angular, the controller decides: go back to `landMask` from the blurred height and, for the highlight and the fill, extend the land province up to the smooth coast (the nearest land province for the cells of the strip). The decision is written into the journal.
+- [ ] **Step 6: Commit** `fix(render): берег по клеткам провинций — подсветка и заливка без лесенки`, then push.
 
-### Task 4: Озёра — отдельный тип воды (GEN_VERSION → 3)
+### Task 4: Lakes — a separate water type (GEN_VERSION → 3)
 
-Сейчас любой замкнутый водоём от 30 клеток становится морской провинцией с биомом «Океан». Для экономики (рыба, пресная вода) и армий (флот не должен «плавать» в озере) это неверно.
+Today any closed water body of 30 cells becomes a sea province with the biome "Океан" (Ocean). For the economy (fish, fresh water) and armies (a fleet must not "swim" in a lake) this is wrong.
 
 **Files:**
-- Modify: `src/sim/world/types.ts`, `src/sim/world/provinces.ts` (или новый `src/sim/world/lakes.ts`), `src/sim/world/params.ts`, `src/content/packs/base/biomes.ts`, `src/i18n/ru.ts`, `src/ui/tooltip.ts`, `src/render/mapShader.ts` (цвет озера), `src/render/palette.ts`, `docs/modding/biomes.md`, `docs/architecture.md`
+- Modify: `src/sim/world/types.ts`, `src/sim/world/provinces.ts` (or a new `src/sim/world/lakes.ts`), `src/sim/world/params.ts`, `src/content/packs/base/biomes.ts`, `src/i18n/ru.ts`, `src/ui/tooltip.ts`, `src/render/mapShader.ts` (lake colour), `src/render/palette.ts`, `docs/modding/biomes.md`, `docs/architecture.md`
 - Test: `tests/sim/world/lakes.test.ts`, `tests/sim/world/fingerprint.test.ts`
 
 **Interfaces:**
 - Produces:
-  - `Province.water: 'sea' | 'lake' | null`, где `null` означает сушу; `isLand` остаётся;
+  - `Province.water: 'sea' | 'lake' | null`, where `null` means land; `isLand` stays;
   - `LAKE_MAX_CELLS = 6000`;
-  - `findLakes(height: Float32Array, w: number, h: number): Uint8Array`, где 1 означает клетку озера;
-  - биом `lake` в базовом паке (`kind: 'water'`), название «Озеро» в `ru.ts`;
-  - подпись в подсказке «Озеро · вода».
+  - `findLakes(height: Float32Array, w: number, h: number): Uint8Array`, where 1 means a lake cell;
+  - the `lake` biome in the base pack (`kind: 'water'`), the name "Озеро" in `ru.ts`;
+  - the tooltip label "Озеро · вода".
 
-- [ ] **Step 1: Тесты.**
-  - `lake is inland water`: синтетическая карта 64×32, вода по краям и замкнутый пруд 10×10 внутри суши. Клетки пруда дают 1, остальная вода 0.
-  - `water touching the map edge is never a lake`: залив, касающийся края, даёт 0.
-  - `huge inland water is sea`: замкнутый водоём больше `LAKE_MAX_CELLS` даёт 0.
-  - `lake provinces`: на `generateWorld` сида `"1"` medium у каждой провинции с `water === 'lake'` все клетки озёрные и биом `lake`. Ни одна провинция не смешивает озеро и море.
-- [ ] **Step 2:** Запустить и убедиться в FAIL.
-- [ ] **Step 3:** Реализовать. Озеро — 4-связная компонента воды, не касающаяся края карты, размером ≤ `LAKE_MAX_CELLS`. Провинции не растут через границу «озеро/море». Озеро меньше минимальной морской провинции — одна провинция. Поднять `GEN_VERSION` до 3. Обновить отпечатки с пометкой в отчёте. В `docs/architecture.md` добавить строку: «v3: озёра, плотность морских провинций, граница джунглей».
-- [ ] **Step 4:** Шейдер: у озера чуть более светлая и зелёная вода, без морской «волны» и полосы мелководья шире 2 клеток.
-- [ ] **Step 5:** `npm test`, lint, tsc чистые.
-- [ ] **Step 6: Commit** `feat(sim): озёра — отдельный тип воды, GEN_VERSION 3`, затем push.
+- [ ] **Step 1: Tests.**
+  - `lake is inland water`: a synthetic 64×32 map, water along the edges and a closed pond 10×10 inside the land. The cells of the pond give 1, the rest of the water gives 0.
+  - `water touching the map edge is never a lake`: a bay touching the edge gives 0.
+  - `huge inland water is sea`: a closed water body bigger than `LAKE_MAX_CELLS` gives 0.
+  - `lake provinces`: on `generateWorld` of the seed `"1"` medium, every province with `water === 'lake'` has all cells lacustrine and the biome `lake`. No province mixes a lake and the sea.
+- [ ] **Step 2:** Run it and make sure it FAILs.
+- [ ] **Step 3:** Implement it. A lake is a 4-connected water component that does not touch the map edge and is at most `LAKE_MAX_CELLS` in size. Provinces do not grow across the "lake/sea" border. A lake smaller than the minimum sea province is one province. Bump `GEN_VERSION` to 3. Update the fingerprints with a note in the report. In `docs/architecture.md` add a line: "v3: lakes, sea province density, the jungle border".
+- [ ] **Step 4:** Shader: a lake has slightly lighter and greener water, without the sea "wave" and without a shallow-water band wider than 2 cells.
+- [ ] **Step 5:** `npm test`, lint, tsc clean.
+- [ ] **Step 6: Commit** `feat(sim): озёра — отдельный тип воды, GEN_VERSION 3`, then push.
 
-### Task 5: Морские провинции крупнее вдали от берега
+### Task 5: Sea provinces are larger away from the coast
 
 **Files:**
 - Modify: `src/sim/world/provinceSeeds.ts` (`poissonSeeds`), `src/sim/world/provinces.ts:19-21`
 - Test: `tests/sim/world/provinces.test.ts`, `tests/sim/world/fingerprint.test.ts`
 
 **Interfaces:**
-- Consumes: `borderDistance` из `src/sim/geom/edt.ts` (расстояние до суши).
-- Produces: константы в `provinces.ts`: `SEA_RADIUS_COAST = LAND_RADIUS * 2.2`, `SEA_RADIUS_OPEN = LAND_RADIUS * 6`, `SEA_RADIUS_FAR = 80` (клеток до суши, на которых радиус достигает `OPEN`). `poissonSeeds` принимает `seaRadiusAt: (cell: number) => number` вместо числа.
+- Consumes: `borderDistance` from `src/sim/geom/edt.ts` (the distance to land).
+- Produces: constants in `provinces.ts`: `SEA_RADIUS_COAST = LAND_RADIUS * 2.2`, `SEA_RADIUS_OPEN = LAND_RADIUS * 6`, `SEA_RADIUS_FAR = 80` (the distance to land in cells at which the radius reaches `OPEN`). `poissonSeeds` takes `seaRadiusAt: (cell: number) => number` instead of a number.
 
-- [ ] **Step 1: Тесты.**
-  - `fewer sea provinces`: medium сид `"1"` даёт от 150 до 300 морских провинций (сейчас около 440).
-  - `coastal sea stays fine`: средняя площадь морских провинций, касающихся суши, не больше 0.6 от средней площади морских провинций без суши рядом.
-  - `20 seeds`: прогон из Review Focus этапа 1, включая `""` и `"Бета-7"`. У каждого сида с морем есть хотя бы одна морская провинция, все id < 65535.
-  - `determinism`: два запуска одного сида побайтно равны.
-- [ ] **Step 2:** Запустить и убедиться в FAIL на `fewer sea provinces`.
-- [ ] **Step 3:** Реализовать. Пуассоновское сэмплирование с переменным радиусом: кандидат принимается, если до каждого принятого морского семени расстояние не меньше `max(r(кандидат), r(семя))`. Сетку взять по `SEA_RADIUS_OPEN`. Сухопутные провинции не меняются. Обновить отпечатки (та же версия 3).
-- [ ] **Step 4:** `npm test`, lint, tsc чистые; генерация medium в node не медленнее +10% от текущей (число в отчёте).
-- [ ] **Step 5: Commit** `feat(sim): морские провинции крупнее в открытом море`, затем push.
+- [ ] **Step 1: Tests.**
+  - `fewer sea provinces`: medium, the seed `"1"` gives 150 to 300 sea provinces (currently around 440).
+  - `coastal sea stays fine`: the average area of the sea provinces that touch land is at most 0.6 of the average area of the sea provinces with no land nearby.
+  - `20 seeds`: the run from the stage 1 Review Focus, including `""` and `"Бета-7"`. Every seed with a sea has at least one sea province, all ids < 65535.
+  - `determinism`: two runs of one seed are byte-identical.
+- [ ] **Step 2:** Run it and make sure it FAILs on `fewer sea provinces`.
+- [ ] **Step 3:** Implement it. Poisson sampling with a variable radius: a candidate is accepted if the distance to every accepted sea seed is at least `max(r(candidate), r(seed))`. Take the grid from `SEA_RADIUS_OPEN`. Land provinces do not change. Update the fingerprints (the same version 3).
+- [ ] **Step 4:** `npm test`, lint, tsc clean; medium generation in node is no slower than +10% of the current one (the number in the report).
+- [ ] **Step 5: Commit** `feat(sim): морские провинции крупнее в открытом море`, then push.
 
-### Task 6: Граница джунглей не идёт ровно по широте
+### Task 6: The jungle border does not run exactly along the latitude
 
-На сиде `#1` граница джунглей — прямая горизонтальная линия длиной в сотни клеток.
+On the seed `#1` the jungle border is a straight horizontal line hundreds of cells long.
 
 **Files:**
-- Modify: `src/sim/world/biomes.ts` (классификация), при необходимости `src/sim/world/climate.ts`
+- Modify: `src/sim/world/biomes.ts` (classification), `src/sim/world/climate.ts` if needed
 - Test: `tests/sim/world/biomes.test.ts`, `tests/sim/world/fingerprint.test.ts`
 
 **Interfaces:**
-- Produces: `classifyTemperatureJitter`: только для выбора биома температура смещается шумом fbm с амплитудой ±1.5 и масштабом 40–120 клеток, из отдельного потока `rng.fork('biomeJitter')`. Сами поля `temperature` в `World` не меняются.
+- Produces: `classifyTemperatureJitter`: only for the biome choice the temperature is shifted by fbm noise with an amplitude of ±1.5 and a scale of 40–120 cells, from a separate stream `rng.fork('biomeJitter')`. The `temperature` fields in `World` themselves do not change.
 
-- [ ] **Step 1: Тест `no straight biome edges`.** Medium сиды `"1"` и `"worldbox"`. Для каждой строки y считаем самую длинную серию подряд идущих x, где граница «джунгли/не джунгли» лежит между строками y и y+1. Максимум по карте не больше 25 клеток.
-- [ ] **Step 2:** Запустить и убедиться в FAIL.
-- [ ] **Step 3:** Реализовать смещение. Проверить, что доли биомов на сиде `"1"` изменились не больше чем на 3 п.п. каждая (числа в отчёте). Обновить отпечатки.
-- [ ] **Step 4:** `npm test`, lint, tsc чистые.
-- [ ] **Step 5: Commit** `fix(sim): извилистая граница джунглей`, затем push.
+- [ ] **Step 1: Test `no straight biome edges`.** Medium seeds `"1"` and `"worldbox"`. For every row y count the longest run of consecutive x where the "jungle/not jungle" border lies between rows y and y+1. The maximum over the map is no more than 25 cells.
+- [ ] **Step 2:** Run it and make sure it FAILs.
+- [ ] **Step 3:** Implement the shift. Check that the biome shares on the seed `"1"` changed by no more than 3 pp each (the numbers in the report). Update the fingerprints.
+- [ ] **Step 4:** `npm test`, lint, tsc clean.
+- [ ] **Step 5: Commit** `fix(sim): извилистая граница джунглей`, then push.
 
-### Task 6b: Гладкая заливка и подсветка у берега и между провинциями
+### Task 6b: Smooth fill and highlight near the coast and between provinces
 
-Добавлено 2026-11-19 по скриншоту автора. Наведение на морскую провинцию у берега. Найдены две проблемы:
-1. Подсветка моря обрывается лесенкой, не доходя до берега. Причина: после Task 3 клетки прибрежной полосы в `displayProvinceOf` принадлежат суше, и морская провинция их теряет.
-2. Граница заливки и подсветки между двумя морскими провинциями (и вообще между провинциями) — ступеньки по клеткам на максимальном зуме. Для цветов стран будет то же самое, а спек §6 требует «на любом зуме нет пикселей».
+Added 2026-11-19 from the author's screenshot. Hovering over a sea province near the coast. Two problems found:
+1. The sea highlight breaks off with a staircase, never reaching the coast. Cause: after Task 3 the cells of the coastal strip belong to land in `displayProvinceOf`, and the sea province loses them.
+2. The border of the fill and the highlight between two sea provinces (and between provinces in general) is a staircase of cells at maximum zoom. The same will happen with country colours, and spec §6 demands "no pixels at any zoom".
 
 **Files:**
 - Modify: `src/render/bakeWorld.ts`, `src/render/bake.ts`, `src/render/textures.ts`, `src/render/mapShader.ts`, `src/render/MapView.ts`
@@ -178,133 +178,133 @@
 
 **Interfaces:**
 - Produces:
-  - `displaySeaProvinceOf(world: World, coast: Float32Array): Uint16Array` — зеркальная к `displayProvinceOf`. Сухопутная клетка, которая может выглядеть водой (у неё или у 8 соседей `coast < 0`), получает ближайшую морскую или озёрную провинцию. Водные клетки сохраняют свою провинцию.
-  - Вторая текстура id (`provinceSeaRG`, тот же формат, что `provinceRG`) или два id в одной текстуре, на выбор исполнителя, с обоснованием.
-  - В шейдере: где на экране суша (`landMask > 0.5`), id берётся из сухопутной карты, где вода — из морской. Подсветка, заливка режима и границы считаются от «своей» карты для каждой стороны берега.
-  - Гладкая граница заливки и подсветки. Вместо зубчатой границы по клеткам — мягкая принадлежность: доля клеток провинции в окрестности пикселя (взвешенная, ядро примерно 2–3 клетки), порог 0.5, сглаживание в экранных пикселях. Тот же приём, что даёт гладкий берег из размытой высоты. Тонкие линии границ остаются как есть, если они уже гладкие.
-  - CPU-выбор провинции (`MapView.hoverAt`) использует ту же логику, что шейдер: суша или вода в точке по размытой высоте, затем соответствующая карта.
+  - `displaySeaProvinceOf(world: World, coast: Float32Array): Uint16Array` — the mirror of `displayProvinceOf`. A land cell that may look like water (it or its 8 neighbours have `coast < 0`) gets the nearest sea or lake province. Water cells keep their province.
+  - A second id texture (`provinceSeaRG`, the same format as `provinceRG`) or two ids in one texture, at the implementer's choice, with a rationale.
+  - In the shader: where the screen shows land (`landMask > 0.5`) the id comes from the land map, where water — from the sea map. The highlight, the mode fill and the borders are computed from the "own" map for each side of the coast.
+  - A smooth border of the fill and the highlight. Instead of a jagged cell border — soft membership: the share of the province's cells in the neighbourhood of the pixel (weighted, a kernel of about 2–3 cells), a threshold of 0.5, smoothing in screen pixels. The same trick that gives the smooth coast from the blurred height. Thin border lines stay as they are if they are already smooth.
+  - The CPU province picking (`MapView.hoverAt`) uses the same logic as the shader: land or water at the point by the blurred height, then the corresponding map.
 
-- [ ] **Step 1: Тесты.**
-  - `visible water picks a water province`: small, сид `"1"`. Каждая клетка с `coast < 0` в `displaySeaProvinceOf` указывает на провинцию с `water !== null`. Все водные клетки сохраняют свой `provinceOf`.
-  - Существующий `visible land picks a land province` остаётся зелёным.
-  - Тест выбора на CPU: точка на воде у берега даёт морскую провинцию, точка на суше у берега — сухопутную.
-- [ ] **Step 2:** Запустить и убедиться в FAIL.
-- [ ] **Step 3:** Реализовать. Отпечатки мира не меняются. Хеши текстур — только новые или изменённые, с объяснением в отчёте.
-- [ ] **Step 4:** `npm test`, lint, tsc чистые. Время запекания на medium не больше +150 мс. Замер кадра (если Task 9 ещё не сделан — оценка в отчёте: сколько выборок текстуры на пиксель добавилось).
-- [ ] **Step 5: Проверка в браузере (контроллер).** Максимальный зум, сиды `#1` и `#worldbox`:
-  - наведение на морскую провинцию у берега — подсветка доходит до берега без ступенек;
-  - наведение на сушу у берега — как после Task 3;
-  - граница подсветки между двумя морскими и между двумя сухопутными провинциями — плавная, без клеток;
-  - режим «Провинции» (M) — заливка с гладкими краями.
-- [ ] **Step 6: Commit** `fix(render): гладкая заливка и подсветка у берега и между провинциями`, затем push.
+- [ ] **Step 1: Tests.**
+  - `visible water picks a water province`: small, the seed `"1"`. Every cell with `coast < 0` in `displaySeaProvinceOf` points to a province with `water !== null`. All water cells keep their `provinceOf`.
+  - The existing `visible land picks a land province` stays green.
+  - A CPU picking test: a point on water near the coast gives a sea province, a point on land near the coast gives a land one.
+- [ ] **Step 2:** Run it and make sure it FAILs.
+- [ ] **Step 3:** Implement it. The world fingerprints do not change. The texture hashes — only new or changed ones, with an explanation in the report.
+- [ ] **Step 4:** `npm test`, lint, tsc clean. Baking time on medium is at most +150 ms. A frame measurement (if Task 9 is not done yet — an estimate in the report: how many texture samples per pixel were added).
+- [ ] **Step 5: Check in the browser (controller).** Maximum zoom, seeds `#1` and `#worldbox`:
+  - hovering over a sea province near the coast — the highlight reaches the coast without steps;
+  - hovering over land near the coast — as after Task 3;
+  - the highlight border between two sea provinces and between two land provinces is smooth, without cells;
+  - the "Провинции" mode (M) — a fill with smooth edges.
+- [ ] **Step 6: Commit** `fix(render): гладкая заливка и подсветка у берега и между провинциями`, then push.
 
-### Task 7: Море — глубина вместо плоской заливки
+### Task 7: The sea — depth instead of a flat fill
 
 **Files:**
-- Modify: `src/render/mapShader.ts` (блок воды, около `:281-289`), `src/render/palette.ts`
+- Modify: `src/render/mapShader.ts` (the water block, around `:281-289`), `src/render/palette.ts`
 
 **Interfaces:**
-- Produces: в `MAP_COLORS` появляются `seaShallow`, `seaDeep`, `seaContour`.
+- Produces: `seaShallow`, `seaDeep`, `seaContour` appear in `MAP_COLORS`.
 
-- [ ] **Step 1:** Цвет воды зависит от глубины `−(height − SEA_LEVEL)`: плавный переход `seaShallow → seaDeep` по кривой, где половина перехода приходится на первые 25% глубины. Добавить две очень бледные изобаты на глубинах 0.06 и 0.18 ниже уровня моря: толщина 1px, непрозрачность 0.10, гаснут на дальнем зуме. Добавить бумажное зерно, как на суше, но слабее. Озёра (Task 4) без изобат.
-- [ ] **Step 2:** `npm test`, lint, tsc чистые.
-- [ ] **Step 3: Проверка в браузере (контроллер).** Скриншоты общего вида и среднего зума трёх сидов. Море читается как глубина, не неоново, без «ИИ-глянца». Цвета приглушённые, в той же гамме, что `seed-1-overview.jpg`.
-- [ ] **Step 4: Commit** `feat(render): глубина моря и изобаты`, затем push.
+- [ ] **Step 1:** The water colour depends on the depth `−(height − SEA_LEVEL)`: a smooth transition `seaShallow → seaDeep` along a curve where half of the transition falls on the first 25% of the depth. Add two very pale isobaths at the depths 0.06 and 0.18 below sea level: 1px thick, opacity 0.10, fading out at the far zoom. Add a paper grain, as on land but weaker. Lakes (Task 4) have no isobaths.
+- [ ] **Step 2:** `npm test`, lint, tsc clean.
+- [ ] **Step 3: Check in the browser (controller).** Screenshots of the overview and the medium zoom of three seeds. The sea reads as depth, not neon, without an "AI gloss". The colours are muted, in the same range as `seed-1-overview.jpg`.
+- [ ] **Step 4: Commit** `feat(render): глубина моря и изобаты`, then push.
 
-### Task 8: Реки — сужение, берега, устья
+### Task 8: Rivers — narrowing, banks, mouths
 
 **Files:**
 - Modify: `src/render/riverLayer.ts`, `src/render/palette.ts`
 - Test: `tests/render/riverLayer.test.ts`, `tests/sim/world/rivers.test.ts`
 
 **Interfaces:**
-- Produces: `riverWidthCells(width: number, t: number): number` — толщина в клетках мира. `t` — доля пути от истока, от 0 до 1. Толщина растёт от 0.35·w у истока до w у устья, где w = 0.3 + 0.22·width. Экранная толщина ограничена снизу 0.6 px, сверху не ограничена: на максимальном зуме река заметно шире. Цвет `MAP_COLORS.riverBank` — тёмная подложка шириной +40%.
+- Produces: `riverWidthCells(width: number, t: number): number` — the thickness in world cells. `t` — the share of the path from the source, from 0 to 1. The thickness grows from 0.35·w at the source to w at the mouth, where w = 0.3 + 0.22·width. The screen thickness is clamped below at 0.6 px, not clamped above: at maximum zoom a river is noticeably wider. The colour `MAP_COLORS.riverBank` — a dark underlay 40% wider.
 
-- [ ] **Step 1: Тесты.**
-  - `rivers end in water or join another river` (sim): для каждой реки medium сида `"1"` последняя точка — водная клетка или клетка другой реки. Сейчас это так по коду (`rivers.ts:142-176`), тест это закрепляет.
-  - `riverWidthCells grows downstream`: монотонна по `t`, на `t=0` и `t=1` значения из Interfaces.
-  - `mouth reaches coastline`: последняя отрисованная точка реки, впадающей в море, лежит не ближе 0.5 клетки к суше, чем береговая линия (по `coastSignedDistance` из Task 3; значение меньше −0.3).
-- [ ] **Step 2:** Запустить и убедиться в FAIL.
-- [ ] **Step 3:** Реализовать:
-  - разбить каждую реку на участки, где ширина отличается не больше чем на 15%;
-  - рисовать две обводки: сначала подложку `riverBank`, поверх воду;
-  - у устья продлить последний отрезок на 1.5 клетки в сторону воды;
-  - пересборку по корзинам зума оставить.
-- [ ] **Step 4:** `npm test`, lint, tsc чистые.
-- [ ] **Step 5: Проверка в браузере (контроллер).** На трёх сидах реки сужаются к истоку, видна тонкая тёмная кромка, ни одна река визуально не обрывается на суше у моря.
-- [ ] **Step 6: Commit** `feat(render): реки с сужением, кромкой и устьями`, затем push.
+- [ ] **Step 1: Tests.**
+  - `rivers end in water or join another river` (sim): for every river of medium seed `"1"` the last point is a water cell or a cell of another river. This already holds in the code (`rivers.ts:142-176`), the test pins it.
+  - `riverWidthCells grows downstream`: monotone in `t`, at `t=0` and `t=1` the values from Interfaces.
+  - `mouth reaches coastline`: the last drawn point of a river flowing into the sea lies no further than 0.5 cells from land, compared with the coastline (by `coastSignedDistance` from Task 3; the value is less than −0.3).
+- [ ] **Step 2:** Run it and make sure it FAILs.
+- [ ] **Step 3:** Implement it:
+  - split every river into segments where the width differs by no more than 15%;
+  - draw two outlines: the `riverBank` underlay first, the water on top;
+  - at the mouth extend the last segment by 1.5 cells towards the water;
+  - keep the rebuild by zoom buckets.
+- [ ] **Step 4:** `npm test`, lint, tsc clean.
+- [ ] **Step 5: Check in the browser (controller).** On three seeds the rivers narrow towards the source, a thin dark edge is visible, no river visually breaks off on land by the sea.
+- [ ] **Step 6: Commit** `feat(render): реки с сужением, кромкой и устьями`, then push.
 
-### Task 9: Честный замер FPS
+### Task 9: An honest FPS measurement
 
 **Files:**
 - Create: `src/render/frameBench.ts`
-- Modify: `src/render/MapView.ts`, `src/ui/debugPanel.ts` (или как называется панель F3), `src/i18n/ru.ts`
+- Modify: `src/render/MapView.ts`, `src/ui/debugPanel.ts` (or whatever the F3 panel is called), `src/i18n/ru.ts`
 - Test: `tests/render/frameBench.test.ts`
 
 **Interfaces:**
 - Produces:
   - `frameStats(samplesMs: number[]): { avg: number; p95: number; fps: number }`;
-  - `MapView.benchmark(frames = 120): { avg: number; p95: number; fps: number }`: синхронно рендерит `frames` кадров через `app.renderer.render(app.stage)` и после каждого делает `gl.finish()`, считая время каждого кадра. От `requestAnimationFrame` не зависит.
-  - кнопка «Замерить кадр» в панели F3 и строка результата «Кадр: N мс (p95 M мс) ≈ K к/с».
+  - `MapView.benchmark(frames = 120): { avg: number; p95: number; fps: number }`: synchronously renders `frames` frames through `app.renderer.render(app.stage)` and calls `gl.finish()` after each, timing every frame. It does not depend on `requestAnimationFrame`.
+  - a "Замерить кадр" button in the F3 panel and a result line "Кадр: N мс (p95 M мс) ≈ K к/с".
 
-- [ ] **Step 1: Тест `frameStats`.** `[10,10,10,20]` даёт avg 12.5, p95 20, fps 80.
-- [ ] **Step 2:** Запустить и убедиться в FAIL.
-- [ ] **Step 3:** Реализовать функции и кнопку.
-- [ ] **Step 4:** `npm test`, lint, tsc чистые.
-- [ ] **Step 5: Проверка в браузере (контроллер).** Нажать кнопку на `#1` на общем виде и на максимальном зуме, записать числа в отчёт. Автору: открыть http://localhost:5173/#1 в своём Chrome, нажать F3, затем «Замерить кадр», и прислать число.
-- [ ] **Step 6: Commit** `feat(ui): замер кадра в панели отладки`, затем push.
+- [ ] **Step 1: Test `frameStats`.** `[10,10,10,20]` gives avg 12.5, p95 20, fps 80.
+- [ ] **Step 2:** Run it and make sure it FAILs.
+- [ ] **Step 3:** Implement the functions and the button.
+- [ ] **Step 4:** `npm test`, lint, tsc clean.
+- [ ] **Step 5: Check in the browser (controller).** Press the button on `#1` in the overview and at maximum zoom, record the numbers in the report. For the author: open http://localhost:5173/#1 in your Chrome, press F3, then "Замерить кадр", and send the number.
+- [ ] **Step 6: Commit** `feat(ui): замер кадра в панели отладки`, then push.
 
-### Task 10: Задел под этап 2 — детерминизм и где живёт симуляция
+### Task 10: Groundwork for stage 2 — determinism and where the simulation lives
 
-Это ответ на главный вопрос отзыва: что существенно усложнит поселение, экономику, армии и онлайн. Код здесь маленький, основное — закрепить правила, пока игровой логики ещё нет.
+This is the answer to the main question of the feedback: what would substantially complicate settlement, economy, armies and online. The code here is small, the main thing is to fix the rules while there is no game logic yet.
 
 **Files:**
 - Create: `src/sim/world/worldHash.ts`, `src/game/README.md`
-- Modify: `eslint.config.js`, `docs/architecture.md`, `docs/superpowers/specs/2026-11-16-settlement-strategy-design.md` (§7, пункт про детерминизм)
+- Modify: `eslint.config.js`, `docs/architecture.md`, `docs/superpowers/specs/2026-11-16-settlement-strategy-design.md` (§7, the item about determinism)
 - Test: `tests/sim/world/worldHash.test.ts`, `tests/lint-rules.test.ts`
 
 **Interfaces:**
 - Produces:
-  - `worldHash(world: World): string`: короткий хеш (как в `fingerprint.test.ts`) по `params`, `GEN_VERSION`, `height`, `biome`, `riverMask`, `provinceOf`. Нужен для проверки при входе в онлайн-игру, что у всех один мир.
-  - Правило ESLint для `src/game/**`: всё из `src/sim/**`, плюс запрет `Math.pow`, `Math.exp`, `Math.log`, `Math.sin`, `Math.cos`, `Math.tan`, `Math.atan2`, `Math.hypot`, `Math.cbrt` и оператора `**` с дробной степенью. Сообщение: «в игровой логике только целые/фиксированная точка — см. docs/architecture.md».
+  - `worldHash(world: World): string`: a short hash (as in `fingerprint.test.ts`) over `params`, `GEN_VERSION`, `height`, `biome`, `riverMask`, `provinceOf`. Needed to check on entering an online game that everyone has the same world.
+  - An ESLint rule for `src/game/**`: everything from `src/sim/**`, plus a ban on `Math.pow`, `Math.exp`, `Math.log`, `Math.sin`, `Math.cos`, `Math.tan`, `Math.atan2`, `Math.hypot`, `Math.cbrt` and the `**` operator with a fractional exponent. The message: "в игровой логике только целые/фиксированная точка — см. docs/architecture.md".
 
-- [ ] **Step 1: Тесты.**
-  - `worldHash` стабилен для сида `"1"` small (зафиксировать значение);
-  - `worldHash` меняется при смене сида;
-  - lint: `Math.sin(1)` в `src/game/x.ts` даёт ошибку, в `src/render/x.ts` нет.
-- [ ] **Step 2:** Запустить и убедиться в FAIL.
-- [ ] **Step 3:** Реализовать. В `docs/architecture.md` добавить раздел «Готовность к этапу 2» с таблицей рисков (риск → что решено → когда делать):
-  - **Детерминизм между браузерами.** Генерация мира использует дробную математику, а на разных движках `Math.sin` и подобные могут давать разные биты. Решение: при входе в онлайн сравнивать `worldHash`; если не совпал, мир присылает хост (снимок около 4–8 МБ сжатый). Игровая логика (`src/game`) с первого дня работает в целых или фиксированной точке, это закреплено линтером. Делать: правило сейчас, синхронизацию на этапе онлайна.
-  - **Где живёт симуляция.** Сейчас воркер генерирует мир и **отдаёт** его главному потоку, а сам ничего не хранит. Решение на этап 2: воркер генерации становится воркером симуляции, хранит `World` и состояние игры и шлёт отрисовке снимки и изменения. Главный поток держит только копию `provinceOf` для наведения. Делать: в начале этапа 2.
-  - **Время.** Фиксированный тик «день». Скорость меняет число тиков в секунду, а не длину тика. Команды игрока ставятся на номер тика.
-  - **Сохранения.** Сохранение хранит `GEN_VERSION`. Если версия не совпадает, берётся сохранённый снимок мира, а не перегенерация.
-  - **Армии и пути.** Граф `adjacency` с `length`, `river` и `strait` уже есть. Нужны расстояния между центрами провинций и тип воды (Task 4), чтобы флот не попадал в озёра.
-  - **Экономика.** Данные провинции (биом, прибрежность, реки) есть. Ресурсы и население — это новые поля состояния игры, а не мира.
+- [ ] **Step 1: Tests.**
+  - `worldHash` is stable for the seed `"1"` small (pin the value);
+  - `worldHash` changes when the seed changes;
+  - lint: `Math.sin(1)` in `src/game/x.ts` gives an error, in `src/render/x.ts` it does not.
+- [ ] **Step 2:** Run it and make sure it FAILs.
+- [ ] **Step 3:** Implement it. In `docs/architecture.md` add the section "Readiness for stage 2" with a risk table (risk → what is decided → when to do it):
+  - **Determinism between browsers.** World generation uses floating-point maths, and on different engines `Math.sin` and the like may produce different bits. The solution: on entering online compare `worldHash`; if it does not match, the host sends the world (a snapshot of about 4–8 MB compressed). The game logic (`src/game`) works in integers or fixed point from day one, enforced by the linter. When to do it: the rule now, the synchronisation at the online stage.
+  - **Where the simulation lives.** Today the worker generates the world and **hands it over** to the main thread, keeping nothing itself. The decision for stage 2: the generation worker becomes the simulation worker, stores the `World` and the game state and sends snapshots and changes to the renderer. The main thread keeps only a copy of `provinceOf` for hovering. When to do it: at the start of stage 2.
+  - **Time.** A fixed tick of one "day". The speed changes the number of ticks per second, not the length of a tick. Player commands are scheduled on a tick number.
+  - **Saves.** A save stores `GEN_VERSION`. If the version does not match, the saved world snapshot is taken instead of regenerating.
+  - **Armies and paths.** The `adjacency` graph with `length`, `river` and `strait` already exists. We need distances between province centres and the water type (Task 4), so that a fleet does not end up in lakes.
+  - **Economy.** The province data (biome, coastalness, rivers) exists. Resources and population are new fields of the game state, not of the world.
 
-  В спеке §7 «Детерминизм» добавить одну фразу про целые числа в игровой логике и сверку `worldHash`.
-- [ ] **Step 4:** `npm test`, lint, tsc чистые.
-- [ ] **Step 5: Commit** `feat: worldHash, правило целочисленной игровой логики, риски этапа 2`, затем push.
+  In spec §7 "Determinism" add one sentence about integers in the game logic and the `worldHash` check.
+- [ ] **Step 4:** `npm test`, lint, tsc clean.
+- [ ] **Step 5: Commit** `feat: worldHash, правило целочисленной игровой логики, риски этапа 2`, then push.
 
-### Task 11: Дешёвые мелочи из отложенных
+### Task 11: Cheap small things from the deferred list
 
-**Files:** указаны в каждом пункте.
+**Files:** given in each item.
 
-- [ ] **Step 1:** Каждый пункт сделать с тестом там, где он применим:
-  1. `src/render/provinceData.ts`: `set` бросает `RangeError`, если канал не целое число от 0 до 255. Тест.
-  2. `src/render/MapView.ts`: `updateRegion` обрезает прямоугольник по границам карты. `setProvinceData` сам ставит бит FILL, если RGB не нулевой. Обновить JSDoc.
-  3. `src/worker/genWorker.ts`: если `generateWorld` бросил исключение после старта запекания поверхности, задача запекания отменяется и вложенный воркер завершается.
-  4. URL-параметры: значения `off=` декодируются через `decodeURIComponent`; `packs=` с пустым списком переживает цикл `build → parse`. Тесты в существующем тесте URL.
-  5. `src/sim/rng.ts`: `int(min, maxExcl)` бросает ошибку, если аргументы не целые или `maxExcl <= min`. Тест.
-  6. `package.json`: `pixi.js` перенести из `devDependencies` в `dependencies`.
-  7. Тесты: убрать `console.log` из тестов (EDT и прочие), вывод `npm test` без лишних строк.
-  8. `tests/lint-rules.test.ts`: тесты на запрет DOM-глобалов и подпутей `pixi.js/*` в `src/sim`.
-  9. Сообщение об ошибке очистки провинций (`provinceCleanup.ts:154`) по-русски через ключ `ru.ts` в слое ui. В sim остаётся код ошибки.
-- [ ] **Step 2:** `npm test`, lint, tsc чистые.
-- [ ] **Step 3: Commit** `chore: мелкие доработки по итогам этапа 1`, затем push.
+- [ ] **Step 1:** Do every item with a test where it applies:
+  1. `src/render/provinceData.ts`: `set` throws a `RangeError` if a channel is not an integer from 0 to 255. Test.
+  2. `src/render/MapView.ts`: `updateRegion` clamps the rectangle to the map bounds. `setProvinceData` sets the FILL bit itself if RGB is non-zero. Update the JSDoc.
+  3. `src/worker/genWorker.ts`: if `generateWorld` threw an exception after the surface baking started, the baking task is cancelled and the nested worker terminates.
+  4. URL parameters: `off=` values are decoded with `decodeURIComponent`; `packs=` with an empty list survives the `build → parse` cycle. Tests in the existing URL test.
+  5. `src/sim/rng.ts`: `int(min, maxExcl)` throws an error if the arguments are not integers or `maxExcl <= min`. Test.
+  6. `package.json`: move `pixi.js` from `devDependencies` to `dependencies`.
+  7. Tests: remove `console.log` from the tests (EDT and others), the `npm test` output without extra lines.
+  8. `tests/lint-rules.test.ts`: tests for the ban on DOM globals and `pixi.js/*` subpaths in `src/sim`.
+  9. The province cleanup error message (`provinceCleanup.ts:154`) in Russian through a `ru.ts` key in the ui layer. In sim the error code stays.
+- [ ] **Step 2:** `npm test`, lint, tsc clean.
+- [ ] **Step 3: Commit** `chore: мелкие доработки по итогам этапа 1`, then push.
 
-### Task 12: Итоговая проверка в браузере и отчёт
+### Task 12: The final check in the browser and the report
 
-- [ ] **Step 1:** Контроллер: сиды `#1`, `#worldbox`, `#Бета-7?fantasy=1`, `#1?size=small`, `#1?size=large`. Общий вид, средний зум, максимальный зум у берега, режим «Провинции», F3 с замером кадра. Ошибок в консоли нет.
-- [ ] **Step 2:** Скриншоты в `docs/screenshots/stage-1-5/`, рядом `docs/screenshots/stage-1-5/README.md` с подписями «было/стало» для берега, озёр, моря и рек.
-- [ ] **Step 3:** Дописать в `docs/superpowers/stage-1-decisions.md` решения этого плана.
-- [ ] **Step 4: Commit** `docs: скриншоты и решения этапа 1.5`, затем push.
+- [ ] **Step 1:** Controller: seeds `#1`, `#worldbox`, `#Бета-7?fantasy=1`, `#1?size=small`, `#1?size=large`. Overview, medium zoom, maximum zoom at the coast, the "Провинции" mode, F3 with the frame measurement. No errors in the console.
+- [ ] **Step 2:** Screenshots in `docs/screenshots/stage-1-5/`, next to them `docs/screenshots/stage-1-5/README.md` with "before/after" captions for the coast, lakes, sea and rivers.
+- [ ] **Step 3:** Append the decisions of this plan to `docs/superpowers/stage-1-decisions.md`.
+- [ ] **Step 4: Commit** `docs: скриншоты и решения этапа 1.5`, then push.

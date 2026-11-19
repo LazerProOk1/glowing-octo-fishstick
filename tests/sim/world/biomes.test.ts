@@ -17,7 +17,7 @@ import { SEA_LEVEL } from '../../../src/content/terrainLevels';
 
 const { w: WORLD_W, h: WORLD_H } = SIZE_PRESETS.medium;
 
-/** Эталонная копия classifyBiome до задачи 12 (решающий список по именам). */
+/** Reference copy of classifyBiome from before task 12 (the decision list by name). */
 function oldClassify(height: number, temperature: number, moisture: number): string {
   if (height <= SEA_LEVEL) return height < SEA_LEVEL - 0.05 ? 'ocean' : 'coast';
   if (height > 0.85) return 'mountains';
@@ -32,7 +32,7 @@ function oldClassify(height: number, temperature: number, moisture: number): str
   if (moisture > 0.5) return 'forest';
   return 'plains';
 }
-/** Старый порядок кодов. */
+/** The old code order. */
 const OLD_BIOMES = [
   'ocean', 'coast', 'plains', 'forest', 'taiga', 'tundra', 'glacier',
   'desert', 'steppe', 'swamp', 'hills', 'mountains', 'jungle',
@@ -56,7 +56,7 @@ describe('classifyBiome', () => {
     expect(id(0.6, 26, 0.8)).toBe('jungle');
     expect(id(0.6, 25, 0.1)).toBe('desert');
   });
-  it('границы строгих сравнений старого кода совпадают', () => {
+  it('the boundaries of the old code strict comparisons match', () => {
     const cases: Array<[number, number, number]> = [
       [0.85, 10, 0.5], [0.72, 10, 0.5], [0.6, -10, 0.5], [0.6, -2, 0.5], [0.6, 24, 0.71], [0.6, 25, 0.7],
       [0.6, 20, 0.1], [0.6, 21, 0.2], [0.6, 4.9, 0.3], [0.6, 5, 0.34], [0.6, 5, 0.35], [0.59, 9, 0.72],
@@ -64,13 +64,13 @@ describe('classifyBiome', () => {
     ];
     for (const [h, t, m] of cases) expect(id(h, t, m), `${h} ${t} ${m}`).toBe(oldClassify(h, t, m));
   });
-  it('выключенный биом: его ниша достаётся следующему по приоритету', () => {
+  it('a disabled biome: its niche goes to the next one by priority', () => {
     const noMountains = resolveBiomes({ disabledBiomes: ['mountains'] });
     expect(noMountains[classifyBiome(noMountains, 0.9, 10, 0.5, 0.5)]!.id).toBe('hills');
     const noSwamp = resolveBiomes({ disabledBiomes: ['swamp'] });
     expect(noSwamp[classifyBiome(noSwamp, 0.55, 10, 0.8, 0.5)]!.id).toBe('forest');
   });
-  it('classifyBiome и computeBiomes согласованы на случайной выборке (и с фэнтези)', () => {
+  it('classifyBiome and computeBiomes agree on a random sample (and with fantasy)', () => {
     const rng = createRng('sample');
     for (const list of [defs, resolveBiomes({ fantasy: true }), resolveBiomes({ disabledBiomes: ['swamp', 'mountains'] })]) {
       const n = 4000;
@@ -90,7 +90,7 @@ describe('classifyBiome', () => {
       expect(diff).toBe(0);
     }
   });
-  it('компиляция: приоритеты по убыванию, вода и суша раздельно, запасной последним', () => {
+  it('compilation: priorities descending, water and land separately, the fallback last', () => {
     const c = compileBiomes(defs);
     const land = [...c.code.slice(c.landStart)].map((k) => defs[k]!.id);
     const water = [...c.code.slice(0, c.landStart)].map((k) => defs[k]!.id);
@@ -101,8 +101,8 @@ describe('classifyBiome', () => {
 });
 
 /**
- * Самая длинная прямая горизонтальная граница «джунгли / не джунгли»: для каждой строки y
- * самая длинная серия подряд идущих x, где граница лежит между строками y и y + 1.
+ * The longest straight horizontal "jungle / not jungle" border: for every row y, the longest run of
+ * consecutive x where the border lies between rows y and y + 1.
  */
 function longestStraightJungleEdge(biome: Uint8Array, list: readonly { id: string }[], w: number, h: number): number {
   const jungle = list.findIndex((d) => d.id === 'jungle');
@@ -119,34 +119,35 @@ function longestStraightJungleEdge(biome: Uint8Array, list: readonly { id: strin
   return best;
 }
 
-describe('смещение климата для выбора биома', () => {
+describe('climate jitter for biome selection', () => {
   const w = WORLD_W;
-  const h = 256; // градиенты на строку как у medium; масштаб смещения задан в клетках
+  const h = 256; // per-row gradients like medium; the jitter scale is given in cells
   const n = w * h;
   const height = new Float32Array(n).fill(0.65);
   const arcana = new Float32Array(n).fill(0.5);
-  /** Поле, зависящее только от строки: как широтный градиент без шума по x. */
+  /** A field that depends only on the row: like a latitudinal gradient without noise along x. */
   const rows = (f: (y: number) => number): Float32Array => {
     const out = new Float32Array(n);
     for (let y = 0; y < h; y++) out.fill(f(y), y * w, (y + 1) * w);
     return out;
   };
-  // Градиенты как у реального мира у порогов джунглей: ~0.055 °C и ~0.005 влажности на строку.
+  // Gradients like the real world at the jungle thresholds: ~0.055 °C and ~0.005 moisture per row.
   const temperature = rows((y) => 24 + 0.055 * (y - h / 2));
   const moisture = rows((y) => 0.7 + 0.005 * (y - h / 2));
   const wet = new Float32Array(n).fill(0.9);
   const hot = new Float32Array(n).fill(27);
-  // На гладком поле без шума у гребня волны шириной 40–120 клеток край на 30–45 клеток идёт ровно,
-  // и это не дефект: проверяется, что прямой отрезок стал во много раз короче ширины карты.
-  // В настоящем мире климат сам шумит; там предел 25 клеток и проверка выравнивания по широте.
+  // On a smooth field without noise, at a wave crest 40–120 cells wide the edge runs straight for
+  // 30–45 cells, and that is not a defect: the check is that the straight run became many times
+  // shorter than the map width. In the real world the climate is noisy itself; there the limit is
+  // 25 cells plus the latitude-alignment check.
   const SMOOTH_MAX_RUN = 64;
 
-  it('без смещения граница — прямая во всю ширину (воспроизводит дефект)', () => {
+  it('without jitter the border is a straight line across the full width (reproduces the defect)', () => {
     expect(longestStraightJungleEdge(computeBiomes(defs, height, temperature, wet, arcana), defs, w, h)).toBe(w);
     expect(longestStraightJungleEdge(computeBiomes(defs, height, hot, moisture, arcana), defs, w, h)).toBe(w);
   });
 
-  it('граница по температуре извилиста; поле температуры не меняется', () => {
+  it('the temperature border is winding; the temperature field does not change', () => {
     const before = temperature.slice();
     const t = classifyTemperatureJitter(createRng('j').fork('biomeJitter'), temperature, w, h);
     expect(temperature).toEqual(before);
@@ -157,29 +158,29 @@ describe('смещение климата для выбора биома', () =>
     expect(longestStraightJungleEdge(computeBiomes(defs, height, t, wet, arcana), defs, w, h)).toBeLessThanOrEqual(SMOOTH_MAX_RUN);
   });
 
-  it('граница по влажности извилиста', () => {
+  it('the moisture border is winding', () => {
     const m = classifyMoistureJitter(createRng('j').fork('biomeJitter').fork('moisture'), moisture, w, h);
     expect(longestStraightJungleEdge(computeBiomes(defs, height, hot, m, arcana), defs, w, h)).toBeLessThanOrEqual(SMOOTH_MAX_RUN);
   });
 
-  it('детерминизм', () => {
+  it('determinism', () => {
     const a = classifyTemperatureJitter(createRng('j'), temperature, w, h);
     const b = classifyTemperatureJitter(createRng('j'), temperature, w, h);
     expect(a).toEqual(b);
   });
 });
 
-/** Полоса строк для проверки выравнивания края по широте: разброс в ней ≤ 3 строк. */
+/** Band of rows for the latitude alignment check of the edge: the spread inside is ≤ 3 rows. */
 const ALIGN_BAND = 4;
-/** Предел доли клеток края джунглей в одной полосе; без смещения климата на medium 13–16%. */
+/** Limit on the share of jungle edge cells in one band; without climate jitter on medium it is 13–16%. */
 const ALIGN_MAX_SHARE = 0.11;
 
 /**
- * Насколько край джунглей выстроен по одной широте. Отдельно для южного края (джунгли в строке y,
- * под ними в y + 1 суша без джунглей) и северного (наоборот): клетки края считаются по строкам,
- * и берётся наибольшая доля клеток, попавших в одну полосу из ALIGN_BAND соседних строк.
- * Возвращает больший из двух краёв. Ровная широтная граница у многих пятен даёт большую долю,
- * даже если сплошной длинной прямой нигде нет.
+ * How strongly the jungle edge is aligned to a single latitude. Separately for the southern edge
+ * (jungle in row y, plain land below in y + 1) and the northern one (the reverse): edge cells are
+ * counted per row, and the largest share falling into one band of ALIGN_BAND adjacent rows is taken.
+ * Returns the larger of the two edges. A straight latitudinal border in many patches gives a large
+ * share even if there is no long continuous straight line anywhere.
  */
 function jungleEdgeAlignment(biome: Uint8Array, list: readonly { id: string; kind: string }[], w: number, h: number): number {
   const jungle = list.findIndex((d) => d.id === 'jungle');
@@ -216,12 +217,12 @@ describe.each(['1', 'worldbox'])('no straight biome edges (medium, seed %j)', (s
     world = generateWorld(defaultParams(seed));
   }, 60000);
 
-  it('граница джунглей не идёт прямой линией длиннее 25 клеток', () => {
+  it('the jungle border has no straight line longer than 25 cells', () => {
     const len = longestStraightJungleEdge(world.biome, world.biomes, world.w, world.h);
     expect(len).toBeLessThanOrEqual(25);
   });
 
-  it('без смещения край джунглей выстроен по широте (воспроизводит дефект)', () => {
+  it('without jitter the jungle edge is aligned by latitude (reproduces the defect)', () => {
     const { w, h } = world;
     const rng = createRng(seed);
     const height = generateHeight(rng.fork('height'), w, h);
@@ -230,7 +231,7 @@ describe.each(['1', 'worldbox'])('no straight biome edges (medium, seed %j)', (s
     expect(jungleEdgeAlignment(raw, world.biomes, w, h)).toBeGreaterThan(ALIGN_MAX_SHARE);
   }, 60000);
 
-  it(`край джунглей не выстраивается по одной широте: ≤ ${ALIGN_MAX_SHARE * 100}% клеток края в полосе из ${ALIGN_BAND} строк`, () => {
+  it(`the jungle edge does not align to a single latitude: ≤ ${ALIGN_MAX_SHARE * 100}% of edge cells in a band of ${ALIGN_BAND} rows`, () => {
     expect(jungleEdgeAlignment(world.biome, world.biomes, world.w, world.h)).toBeLessThanOrEqual(ALIGN_MAX_SHARE);
   });
 });
@@ -244,7 +245,7 @@ describe.each(['1', 'Бета-7'])('world biomes (seed %j)', (seed) => {
   const biomes = computeBiomes(defs, height, temperature, moisture, arcana);
   const name = (i: number): string => defs[biomes[i] ?? 0]?.id ?? '';
 
-  it('совместимость: коды поэлементно равны старому classifyBiome', () => {
+  it('compatibility: the codes equal the old classifyBiome element by element', () => {
     let diff = 0;
     for (let i = 0; i < biomes.length; i++) {
       const old = OLD_BIOMES.indexOf(oldClassify(height[i]!, temperature[i]!, moisture[i]!));

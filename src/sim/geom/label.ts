@@ -1,7 +1,7 @@
 /**
- * Разметка 4-связных областей клеток: одна реализация (labelByKey), labelComponents — её вариант
- * для маски. Обход (стек, порядок соседей) задаёт номера областей; от них зависят дальнейшие шаги
- * генерации, поэтому порядок закреплён отпечатками мира.
+ * Labeling of 4-connected cell regions: one implementation (labelByKey), labelComponents is its
+ * mask variant. The traversal (stack, neighbour order) determines the region numbers; later
+ * generation steps depend on them, so the order is pinned by the world fingerprints.
  */
 
 /** 4-connected components of equal `key` values. Returns per-cell component id and per-component sizes. */

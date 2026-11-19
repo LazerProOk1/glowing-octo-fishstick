@@ -4,7 +4,7 @@ import { LOAD_STEPS, type GenTimings, type LoadStep } from '../worker/protocol';
 import { el, formatMs } from './dom';
 import { keyLabel, type Hotkey } from './hotkeys';
 
-/** Итоги замера кадра (мс и к/с); null вместо них — замер недоступен. Форму задаёт панель, рендер её лишь выдаёт. */
+/** Frame benchmark results (ms and fps); null instead means the benchmark is unavailable. The shape is defined by the panel, the renderer only produces it. */
 export interface BenchResult {
   avg: number;
   p95: number;
@@ -22,8 +22,8 @@ function row(label: string): { row: HTMLElement; value: HTMLElement } {
 }
 
 /**
- * Панель отладки (F3): зерно, время этапов, FPS, провинции, режим карты, список клавиш,
- * ввод нового зерна. Сама клавиш не слушает — открывается из реестра (hotkeys.ts).
+ * Debug panel (F3): seed, stage times, FPS, provinces, map mode, key list,
+ * new-seed input. It does not listen for keys itself — it is opened from the registry (hotkeys.ts).
  */
 export class DebugPanel {
   private readonly root: HTMLElement;
@@ -104,7 +104,7 @@ export class DebugPanel {
     this.root.append(head, seed.row, fps.row, benchBtn, bench.row, prov.row, land.row, sea.row, mode.row, timings, this.keys, field);
     parent.append(this.root);
 
-    // Enter в поле зерна — поведение самого поля, не горячая клавиша.
+    // Enter in the seed field is the field's own behaviour, not a hotkey.
     this.input.addEventListener('keydown', this.onInputKey);
   }
 
@@ -122,12 +122,12 @@ export class DebugPanel {
     }
   }
 
-  /** Название текущего режима карты (ключ перевода). */
+  /** Name of the current map mode (translation key). */
   setMapMode(nameKey: string): void {
     this.modeValue.textContent = translate(nameKey);
   }
 
-  /** Список горячих клавиш: клавиша — действие. */
+  /** Hotkey list: key — action. */
   setHotkeys(list: readonly Hotkey[]): void {
     this.keys.replaceChildren(el('div', 'debug__section', t('debug.keys')));
     for (const h of list) {
@@ -141,7 +141,7 @@ export class DebugPanel {
     this.seedValue.textContent = seed;
   }
 
-  /** Сведения о готовом мире; timings — замеры воркера (может не быть). */
+  /** Details of the finished world; timings are the worker measurements (may be absent). */
   setWorld(world: World, timings: GenTimings | null): void {
     this.setSeed(world.params.seed);
     let land = 0;
@@ -170,7 +170,7 @@ export class DebugPanel {
     if (this.benchBtn.disabled) return;
     this.benchBtn.disabled = true;
     this.benchValue.textContent = t('debug.benchRunning');
-    // Даём браузеру показать надпись, затем считаем (замер блокирует поток на время кадров).
+    // Let the browser paint the label, then measure (the benchmark blocks the thread for the frames).
     window.setTimeout(() => {
       try {
         const r = this.onBench();

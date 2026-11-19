@@ -21,18 +21,18 @@ export function assertProvinceCount(n: number): void {
   }
 }
 
-/** Этапы генерации в порядке выполнения. */
+/** Generation stages in execution order. */
 export const GEN_STAGES = ['height', 'climate', 'biomes', 'shoreline', 'rivers', 'provinces'] as const;
 export type GenStage = (typeof GEN_STAGES)[number];
 
 /**
- * @param params сид, паки, фэнтези, выключенные биомы и размер; записываются в мир как есть.
- *   genVersion должен совпадать с GEN_VERSION: старый мир этой версией не воспроизвести — ошибка.
- * @param onStage вызывается перед каждым этапом (для экрана загрузки и замеров в воркере;
- *   само ядро время не измеряет).
- * @param onSurface вызывается, как только высота и биомы окончательны (после этапа берегов):
- *   воркер отдаёт их на параллельное запекание текстур (вместе со списком биомов мира и размером).
- *   Массивы дальше не меняются.
+ * @param params seed, packs, fantasy, disabled biomes and size; stored in the world as is.
+ *   genVersion must match GEN_VERSION: an old world cannot be reproduced by this version — error.
+ * @param onStage called before each stage (for the loading screen and worker timings;
+ *   the core itself does not measure time).
+ * @param onSurface called as soon as height and biomes are final (after the shores stage):
+ *   the worker hands them to parallel texture baking (together with the world biome list and size).
+ *   The arrays do not change afterwards.
  */
 export function generateWorld(
   params: WorldParams,
@@ -52,10 +52,10 @@ export function generateWorld(
   const rawHeight = generateHeight(rng.fork('height'), w, h);
   onStage?.('climate');
   const { temperature, moisture } = computeClimate(rng.fork('climate'), rawHeight, w, h);
-  // Отдельный поток ГСЧ: включение фэнтези не меняет остальные поля мира.
+  // Separate RNG stream: enabling fantasy does not change the other world fields.
   const arcana = computeArcana(seed, w, h);
   onStage?.('biomes');
-  // Смещённая температура — только для выбора биома, чтобы границы не шли ровно по широте.
+  // Jittered temperature for biome selection only, so borders do not run exactly along latitude.
   const jitterRng = rng.fork('biomeJitter');
   const biomeTemperature = classifyTemperatureJitter(jitterRng, temperature, w, h);
   const biomeMoisture = classifyMoistureJitter(jitterRng.fork('moisture'), moisture, w, h);
@@ -63,7 +63,7 @@ export function generateWorld(
   onStage?.('shoreline');
   const shore = normalizeShoreline(rawHeight, rawBiomes, w, h, defs);
   const { height } = shore;
-  // Озёра — часть этапа берегов: биом озёр должен попасть в запекание поверхности.
+  // Lakes are part of the shores stage: the lake biome must be included in the surface bake.
   const lake = findLakes(height, w, h);
   const biomes = applyLakeBiome(shore.biomes, lake, defs);
   onSurface?.(height, biomes, defs, w, h);
@@ -81,7 +81,7 @@ export function generateWorld(
     lake,
   );
   assertProvinceCount(provinces.length);
-  // Соседство — часть этапа провинций (десятки мс).
+  // Adjacency is part of the provinces stage (tens of ms).
   const { adjacency, edgesOf } = computeAdjacency(provinceOf, provinces, height, riverMask, w, h);
   return {
     params: structuredClone(params),

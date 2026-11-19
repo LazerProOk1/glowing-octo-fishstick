@@ -3,10 +3,10 @@ import { ERR_CLEANUP_NO_CONVERGE } from '../sim/world/errors';
 import { el } from './dom';
 
 /**
- * Показывает сообщение об ошибке поверх всего. message — уже переведённая строка,
- * detail — техническая подробность (текст исключения).
- * retryHash — адрес, на который переходит «Перезагрузить» (мир по умолчанию для того же сида,
- * если ошибку дали неверные параметры в адресе). Возвращает функцию, убирающую сообщение.
+ * Shows an error message above everything. message is an already translated string,
+ * detail is a technical detail (the exception text).
+ * retryHash is the address "Reload" goes to (the default world for the same seed,
+ * if the error came from wrong options in the address). Returns a function that removes the message.
  */
 export function showError(parent: HTMLElement, message: string, detail?: string, retryHash?: string): () => void {
   const root = el('div', 'error-screen ui-panel');
@@ -16,7 +16,7 @@ export function showError(parent: HTMLElement, message: string, detail?: string,
   const retry = el('button', 'ui-button', t('error.retry'));
   retry.type = 'button';
   retry.addEventListener('click', () => {
-    // Без смены адреса перезагрузка снова упёрлась бы в те же неверные параметры.
+    // Without changing the address, a reload would hit the same wrong options again.
     if (retryHash !== undefined) history.replaceState(null, '', retryHash);
     location.reload();
   });
@@ -25,7 +25,7 @@ export function showError(parent: HTMLElement, message: string, detail?: string,
   return () => root.remove();
 }
 
-/** Подробность ошибки: известные коды из sim — по-русски, остальное — текст исключения как есть. */
+/** Error detail: known sim codes — in Russian, anything else — the exception text as is. */
 export function errorDetail(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
   return raw === ERR_CLEANUP_NO_CONVERGE ? t('error.cleanupNoConverge') : raw;

@@ -5,8 +5,8 @@ import { MAP_COLORS, hexColor } from './palette';
 type Point = { x: number; y: number };
 
 /**
- * Сглаживание Чайкина для открытой ломаной: каждый отрезок заменяется точками на 1/4 и 3/4,
- * концы сохраняются (n точек → 2(n−1)). Результат лежит в выпуклой оболочке исходных точек.
+ * Chaikin smoothing for an open polyline: each segment is replaced by points at 1/4 and 3/4,
+ * the ends are kept (n points → 2(n−1)). The result lies within the convex hull of the source points.
  */
 export function chaikin(points: Point[], iterations: number): Point[] {
   let cur = points.map((p) => ({ x: p.x, y: p.y }));
@@ -25,37 +25,37 @@ export function chaikin(points: Point[], iterations: number): Point[] {
 }
 
 const SMOOTH_ITERATIONS = 3;
-/** Экранная толщина не тоньше 0.6 px; сверху не ограничена (на большом зуме река в клетках мира). */
+/** Screen thickness is at least 0.6 px; there is no upper bound (at high zoom a river is sized in world cells). */
 const MIN_PX = 0.6;
-/** Шаг пересборки геометрии: четверть октавы зума (толщина отличается не более чем на ~9%). */
+/** Geometry rebuild step: a quarter of a zoom octave (thickness differs by no more than ~9%). */
 const BUCKETS_PER_OCTAVE = 4;
-/** Подложка (тёмная кромка) шире воды на 40%. */
+/** The underlay (dark edge) is 40% wider than the water. */
 const BANK_SCALE = 1.4;
-/** Подложка рисуется, только если вода не тоньше 1 px (иначе кромка меньше 0.2 px с каждой стороны). */
+/** The underlay is drawn only if the water is at least 1 px thick (otherwise the edge is under 0.2 px per side). */
 const BANK_MIN_PX = 1;
 
 /**
- * Толщина реки в клетках мира. `width` — класс ширины из симуляции (1..4), `t` — доля пути от
- * истока (0..1). От 0.35·w у истока до w у устья, w = 0.3 + 0.22·width.
+ * River thickness in world cells. `width` is the width class from the simulation (1..4), `t` is the
+ * fraction of the path from the source (0..1). From 0.35·w at the source to w at the mouth, w = 0.3 + 0.22·width.
  */
 export function riverWidthCells(width: number, t: number): number {
   const w = 0.3 + 0.22 * width;
   return w * (0.35 + 0.65 * Math.min(1, Math.max(0, t)));
 }
 
-/** Толщина в экранных пикселях для толщины в клетках при зуме (пикселей на клетку). */
+/** Screen-pixel thickness for a thickness in cells at the given zoom (pixels per cell). */
 export function riverPixelWidth(cells: number, zoom: number): number {
   return Math.max(MIN_PX, cells * zoom);
 }
 
-/** Длина волны извилин (клетки), их амплитуда и длина затухания у закреплённых точек. */
+/** Meander wavelength (cells), its amplitude and the falloff length near the anchored points. */
 const MEANDER_WAVELENGTH = 7;
 const MEANDER_AMPLITUDE = 0.34;
 const MEANDER_TAPER = 3;
 
 const pointKey = (p: Point): string => `${p.x},${p.y}`;
 
-/** Точки, которые нельзя сдвигать: истоки, устья и концы притоков (точки слияния). */
+/** Points that must not move: sources, mouths and the ends of tributaries (confluence points). */
 export function pinnedPoints(rivers: RiverPath[]): Set<string> {
   const set = new Set<string>();
   for (const r of rivers) {
@@ -67,7 +67,7 @@ export function pinnedPoints(rivers: RiverPath[]): Set<string> {
   return set;
 }
 
-/** Детерминированный хеш (целое, сид) → [−1, 1]. */
+/** Deterministic hash (integer, seed) → [−1, 1]. */
 function hashSigned(i: number, seed: number): number {
   let h = Math.imul(i, 0x27d4eb2d) ^ Math.imul(seed + 0x9e3779b9, 0x165667b1);
   h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
@@ -76,7 +76,7 @@ function hashSigned(i: number, seed: number): number {
   return ((h >>> 0) / 0xffffffff) * 2 - 1;
 }
 
-/** Гладкий 1D value noise по длине дуги, [−1, 1]. */
+/** Smooth 1D value noise along the arc length, [−1, 1]. */
 function noise1(s: number, seed: number): number {
   const i = Math.floor(s);
   const f = s - i;
@@ -86,9 +86,9 @@ function noise1(s: number, seed: number): number {
 }
 
 /**
- * Извилистость для D8-путей: каждая вершина (шаг 1–√2 клетки) сдвигается перпендикулярно пути
- * на низкочастотный шум (λ ≈ 7 клеток, ≤ 0.34 клетки), затухающий к закреплённым точкам.
- * Детерминирован по `seed` (номер реки).
+ * Meandering for D8 paths: every vertex (step 1–√2 cells) is displaced perpendicular to the path
+ * by low-frequency noise (λ ≈ 7 cells, ≤ 0.34 cells) that fades towards the anchored points.
+ * Deterministic in `seed` (the river number).
  */
 export function meander(points: Point[], seed: number, pinned: Set<string>): Point[] {
   const n = points.length;
@@ -99,7 +99,7 @@ export function meander(points: Point[], seed: number, pinned: Set<string>): Poi
     const b = points[i] as Point;
     arc[i] = (arc[i - 1] as number) + Math.hypot(b.x - a.x, b.y - a.y);
   }
-  // Расстояние по дуге до ближайшей закреплённой вершины (два прохода).
+  // Arc distance to the nearest anchored vertex (two passes).
   const dPin = new Float64Array(n).fill(Infinity);
   for (let i = 0; i < n; i++) {
     if (i === 0 || i === n - 1 || pinned.has(pointKey(points[i] as Point))) dPin[i] = 0;
@@ -127,45 +127,45 @@ export function meander(points: Point[], seed: number, pinned: Set<string>): Poi
 }
 
 /**
- * Уровни толщины: геометрическая шкала с шагом 15%. Участок реки — отрезок, где уровень один,
- * поэтому соседние участки отличаются по толщине не больше чем на 15%, а одинаковые уровни всех
- * рек рисуются одной обводкой.
+ * Thickness levels: a geometric scale with a 15% step. A river section is a span where the level is
+ * constant, so neighbouring sections differ in thickness by no more than 15%, and equal levels of all
+ * rivers are drawn with a single stroke.
  */
 const LEVEL_RATIO = 1.15;
 const levelOf = (cells: number): number => Math.round(Math.log(cells) / Math.log(LEVEL_RATIO));
 const levelCells = (level: number): number => LEVEL_RATIO ** level;
 
-/** Устье: последний отрезок продлевается в сторону воды на 1.5 клетки (и дальше, пока не вода). */
+/** Mouth: the last segment is extended towards the water by 1.5 cells (and further until it is water). */
 const MOUTH_EXTEND = 1.5;
 const MOUTH_MAX = 4;
 const MOUTH_STEP = 0.25;
-/** Конец устья — не ближе этого (клетки) к береговой линии, проверка по 8 точкам вокруг. */
+/** The end of the mouth is no closer than this (cells) to the shoreline, checked at 8 points around. */
 const MOUTH_CLEARANCE = 0.5;
-/** Доля поворота к воде на каждом шаге продления (по спуску береговой высоты). */
+/** Share of the turn towards the water at each extension step (down the shore-height gradient). */
 const MOUTH_TURN = 0.5;
-/** Вода реки за береговой линией тает к морю: ступени прозрачности и длина каждой (клетки). */
+/** River water beyond the shoreline fades towards the sea: opacity steps and the length of each (cells). */
 const FADE_ALPHA = [1, 0.7, 0.45, 0.2] as const;
 const FADE_STEP = 0.5;
 
-/** Береговая высота в точке мира (клетки): > 0 — суша на экране, < 0 — вода. */
+/** Shore height at a world point (cells): > 0 — land on screen, < 0 — water. */
 export type CoastSampler = (x: number, y: number) => number;
 
-/** Кусок обводки: подложка или вода одного уровня толщины (и ступени таяния у устья). */
+/** Stroke piece: the underlay or water of one thickness level (and fade steps at the mouth). */
 export interface RiverPiece {
   river: number;
   kind: 'bank' | 'water';
   level: number;
-  /** Индекс в FADE_ALPHA: 0 — обычная вода, больше — тающая за береговой линией. */
+  /** Index into FADE_ALPHA: 0 — ordinary water, higher — fading beyond the shoreline. */
   fade: number;
   /**
-   * Концы встык, без круглых шапок: у кусков на береговой линии и за ней. Круглая шапка там
-   * легла бы на воду тёмным полукругом кромки, а при прозрачности дала бы пятна на стыках.
+   * Butt ends, no round caps: for pieces on and beyond the shoreline. A round cap there
+   * would lay a dark half-circle of the edge over the water, and with opacity it would spot the joints.
    */
   butt: boolean;
   points: Point[];
 }
 
-/** Реки, которые кончаются в воде (а не впадают в другую реку): их последняя точка не лежит на другой реке. */
+/** Rivers that end in water (and do not flow into another river): their last point is not on another river. */
 function mouthFlags(rivers: RiverPath[]): boolean[] {
   const inner = new Set<string>();
   for (const r of rivers) for (let i = 0; i < r.points.length - 1; i++) inner.add(pointKey(r.points[i] as Point));
@@ -175,7 +175,7 @@ function mouthFlags(rivers: RiverPath[]): boolean[] {
   });
 }
 
-/** Точка и всё вокруг неё в радиусе MOUTH_CLEARANCE — вода на экране. */
+/** The point and everything around it within MOUTH_CLEARANCE is water on screen. */
 function deepInWater(coast: CoastSampler, p: Point): boolean {
   if (coast(p.x, p.y) >= 0) return false;
   for (let k = 0; k < 8; k++) {
@@ -186,10 +186,10 @@ function deepInWater(coast: CoastSampler, p: Point): boolean {
 }
 
 /**
- * Точки продления устья за последнюю точку `end`, начиная по направлению `dir` (единичный вектор).
- * Без поля берега — прямой отрезок 1.5 клетки. С полем путь на каждом шаге поворачивает к воде
- * (вниз по береговой высоте) и идёт не меньше 1.5 клетки и дальше, пока конец не окажется в воде
- * не ближе 0.5 клетки к берегу (но не дальше 4 клеток).
+ * Extension points of the mouth past the last point `end`, starting along direction `dir` (unit vector).
+ * Without a shore field — a straight segment of 1.5 cells. With the field, the path turns towards the water
+ * at every step (down the shore height) and runs at least 1.5 cells and further until the end is in water
+ * no closer than 0.5 cells to the shore (but no further than 4 cells).
  */
 function mouthExtension(end: Point, dir: Point, coast: CoastSampler | undefined): Point[] {
   const out: Point[] = [];
@@ -216,9 +216,9 @@ function mouthExtension(end: Point, dir: Point, coast: CoastSampler | undefined)
 }
 
 /**
- * Геометрия одной реки: сглаженный путь режется на участки одного уровня толщины (толщина растёт
- * от истока к устью); у реки, впадающей в воду, путь продлевается в воду, подложка обрывается на
- * береговой линии, а вода за ней тает ступенями прозрачности.
+ * Geometry of one river: the smoothed path is cut into sections of a single thickness level (thickness
+ * grows from the source to the mouth); for a river that ends in water the path is extended into the
+ * water, the underlay stops at the shoreline, and the water beyond it fades in opacity steps.
  */
 function riverPieces(
   river: RiverPath,
@@ -245,7 +245,7 @@ function riverPieces(
     levels.push(levelOf(riverWidthCells(width, (arc[k] as number) / total)));
   }
   const path = smooth.slice();
-  // Индекс первой точки, после которой путь за береговой линией (m — подложка до конца пути).
+  // Index of the first point after which the path lies beyond the shoreline (m — underlay to the path end).
   let shore = m - 1;
   if (mouth) {
     const end = smooth[m - 1] as Point;
@@ -268,17 +268,17 @@ function riverPieces(
     const butt = fade > 0 || (outlet && to === shore);
     if (to > from) pieces.push({ river: index, kind, level, fade, butt, points: path.slice(from, to + 1) });
   };
-  // Подложка и непрозрачная вода: участки одного уровня до береговой линии.
+  // Underlay and opaque water: sections of a single level up to the shoreline.
   let start = 0;
   for (let k = 1; k <= shore; k++) {
     if (levels[k] !== levels[start] || k === shore) {
-      // Граничная точка входит в оба участка, чтобы линия не рвалась.
+      // The boundary point belongs to both sections so the line does not break.
       emit('bank', levels[start] as number, 0, start, k);
       emit('water', levels[start] as number, 0, start, k);
       start = k;
     }
   }
-  // За береговой линией: вода тает ступенями по длине пути от береговой точки.
+  // Beyond the shoreline: the water fades in steps along the path from the shoreline point.
   if (outlet) {
     const level = levels[path.length - 1] as number;
     const base = path[shore] as Point;
@@ -297,18 +297,18 @@ function riverPieces(
   return pieces;
 }
 
-/** Геометрия всех рек (в клетках мира); `coast` — поле береговой линии для устьев. */
+/** Geometry of all rivers (in world cells); `coast` is the shoreline field for the mouths. */
 export function buildRiverPieces(rivers: RiverPath[], coast?: CoastSampler): RiverPiece[] {
   const pinned = pinnedPoints(rivers);
   const mouths = mouthFlags(rivers);
   return rivers.flatMap((river, index) => riverPieces(river, index, pinned, mouths[index] === true, coast));
 }
 
-/** Слой рек: Graphics в координатах мира, контейнер выравнивает MapView. */
+/** River layer: Graphics in world coordinates, MapView aligns the container. */
 export class RiverLayer {
   readonly container = new Container();
   private graphics: Graphics | null = null;
-  /** Куски, сгруппированные по (вид, уровень, ступень таяния, концы): одна обводка на группу. */
+  /** Pieces grouped by (kind, level, fade step, ends): one stroke per group. */
   private groups = new Map<string, { piece: RiverPiece; paths: Point[][] }>();
   private bucket = Number.NaN;
 
@@ -324,7 +324,7 @@ export class RiverLayer {
     this.bucket = Number.NaN;
   }
 
-  /** Пересобирает геометрию, только если зум ушёл в другую корзину. */
+  /** Rebuilds the geometry only if the zoom moved into another bucket. */
   update(zoom: number): void {
     const bucket = Math.round(Math.log2(zoom) * BUCKETS_PER_OCTAVE);
     if (bucket === this.bucket) return;
@@ -338,12 +338,12 @@ export class RiverLayer {
     const g = new Graphics();
     const water = hexColor(MAP_COLORS.river);
     const bank = hexColor(MAP_COLORS.riverBank);
-    // Сначала вся подложка, поверх вся вода: кромка притока не режет воду главной реки.
+    // All underlay first, then all water: a tributary's edge does not cut the main river's water.
     for (const kind of ['bank', 'water'] as const) {
       for (const { piece, paths } of this.groups.values()) {
         if (piece.kind !== kind) continue;
         const waterPx = riverPixelWidth(levelCells(piece.level), zoom);
-        // Кромка уже 0.2 px с каждой стороны не видна: такую подложку не строим (вдвое меньше геометрии).
+        // An edge under 0.2 px per side is invisible: such an underlay is not built (half the geometry).
         if (kind === 'bank' && waterPx < BANK_MIN_PX) continue;
         for (const pts of paths) {
           const first = pts[0] as Point;

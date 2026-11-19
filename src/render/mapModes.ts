@@ -1,23 +1,23 @@
-// Режимы карты (спец §7.3): режим — это функция «провинция → цвет заливки». Цвета пишутся в
-// текстуру данных провинций (provinceData.ts), шейдер смешивает их с рельефом. Новый режим —
-// новая запись в MAP_MODES, шейдер не меняется. Будущие режимы (владелец, ресурсы, религия)
-// устроены так же.
+// Map modes (spec §7.3): a mode is a function "province → fill colour". The colours go into the
+// province data texture (provinceData.ts), the shader blends them with the terrain. A new mode is
+// a new entry in MAP_MODES, the shader does not change. Future modes (owner, resources, religion)
+// work the same way.
 import type { Province, World } from '../sim/world/types';
 
-/** RGBA8: RGB — цвет заливки, A — флаги режима (биты 3–7, см. PROVINCE_FLAGS); обычно 0. */
+/** RGBA8: RGB — fill colour, A — mode flags (bits 3–7, see PROVINCE_FLAGS); usually 0. */
 export type ProvinceRGBA = readonly [number, number, number, number];
 
 export interface MapMode {
   id: string;
-  /** Ключ перевода названия (i18n). */
+  /** Translation key of the name (i18n). */
   nameKey: string;
-  /** Цвет заливки провинции; null — без заливки (виден чистый рельеф). */
+  /** Fill colour of a province; null — no fill (bare terrain is visible). */
   color(p: Province, world: World): ProvinceRGBA | null;
-  /** Сила заливки поверх рельефа, 0..1; по умолчанию DEFAULT_FILL. */
+  /** Fill strength over the terrain, 0..1; DEFAULT_FILL by default. */
   fill?: number;
 }
 
-/** Сила заливки по умолчанию: цвет режима заметен, а отмывка рельефа и детали остаются видны. */
+/** Default fill strength: the mode colour is noticeable while terrain shading and details stay visible. */
 export const DEFAULT_FILL = 0.55;
 
 function hslToRgb(h: number, s: number, l: number): ProvinceRGBA {
@@ -30,9 +30,9 @@ function hslToRgb(h: number, s: number, l: number): ProvinceRGBA {
 }
 
 /**
- * Палитра раскраски провинций: приглушённые тона (насыщенность 0.34, ниже предела 0.45 для
- * цветов карты) с чередованием светлоты, чтобы соседние по кругу тона тоже различались.
- * Индексы за пределами базовых тонов — дополнительные тона по золотому углу (нужны редко).
+ * Province colouring palette: muted hues (saturation 0.34, below the 0.45 limit for map colours)
+ * with alternating lightness, so neighbouring hues on the wheel differ too.
+ * Indices beyond the base hues are extra hues at the golden angle (rarely needed).
  */
 const BASE_HUES = [8, 38, 62, 98, 150, 188, 222, 268, 318];
 const PROVINCE_SAT = 0.34;
@@ -47,10 +47,10 @@ const NO_COLOR = 0xffff;
 const coloringCache = new WeakMap<World, Uint16Array>();
 
 /**
- * Жадная раскраска сухопутных провинций по графу соседства (общая граница и проливы): каждая
- * получает цвет, которого нет у уже раскрашенных соседей; из свободных — самый редкий
- * на текущий момент, чтобы тона распределялись ровно. Детерминирована (порядок — по id).
- * Морские провинции не раскрашиваются (NO_COLOR).
+ * Greedy colouring of land provinces over the adjacency graph (shared border and straits): each one
+ * gets a colour not used by already coloured neighbours; among the free ones, the rarest at the
+ * moment, so hues are spread evenly. Deterministic (order by id).
+ * Sea provinces are not coloured (NO_COLOR).
  */
 export function colorProvinces(world: World): Uint16Array {
   const cached = coloringCache.get(world);
@@ -102,7 +102,7 @@ export function mapModeById(id: string): MapMode | undefined {
   return MAP_MODES.find((m) => m.id === id);
 }
 
-/** Следующий режим по кругу; неизвестный id — первый режим. */
+/** Next mode in a cycle; an unknown id gives the first mode. */
 export function nextMapMode(id: string): MapMode {
   const i = MAP_MODES.findIndex((m) => m.id === id);
   const next = MAP_MODES[(i + 1) % MAP_MODES.length];

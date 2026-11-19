@@ -1,7 +1,7 @@
 const f32 = new Float32Array(1);
 const u32 = new Uint32Array(f32.buffer);
 
-/** float32 → IEEE 754 binary16 (округление к ближайшему, переполнение → ±∞, NaN не ожидается). */
+/** float32 → IEEE 754 binary16 (round to nearest, overflow → ±∞, NaN is not expected). */
 export function toHalf(v: number): number {
   f32[0] = v;
   const x = u32[0] as number;
@@ -14,11 +14,11 @@ export function toHalf(v: number): number {
     return sign | ((m + 0x1000) >>> 13);
   }
   if (exp >= 31) return sign | 0x7c00;
-  // Перенос при округлении корректно переходит в экспоненту (и в ∞ на краю диапазона).
+  // The rounding carry propagates into the exponent correctly (and into ∞ at the edge of the range).
   return (sign | (exp << 10) | (mant >>> 13)) + ((mant >>> 12) & 1);
 }
 
-/** IEEE 754 binary16 → число (обратное к toHalf). */
+/** IEEE 754 binary16 → number (the inverse of toHalf). */
 export function fromHalf(h: number): number {
   const sign = h & 0x8000 ? -1 : 1;
   const exp = (h >> 10) & 0x1f;
@@ -28,7 +28,7 @@ export function fromHalf(h: number): number {
   return sign * (1 + mant / 1024) * 2 ** (exp - 15);
 }
 
-/** Массив float32 → Uint16Array половинной точности со сдвигом `offset`. */
+/** float32 array → half-precision Uint16Array with `offset`. */
 export function toHalfArray(src: Float32Array, offset = 0): Uint16Array {
   const out = new Uint16Array(src.length);
   for (let i = 0; i < src.length; i++) out[i] = toHalf((src[i] as number) - offset);

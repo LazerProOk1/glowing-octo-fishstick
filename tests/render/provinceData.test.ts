@@ -11,21 +11,21 @@ function fakeWorld(n: number): World {
   return { provinces: Array.from({ length: n }, (_, i) => province(i, i % 2 === 0)) } as unknown as World;
 }
 
-describe('раскладка текстуры данных провинций', () => {
-  it('одна строка, пока помещается; иначе строки по maxSize', () => {
+describe('province data texture layout', () => {
+  it('one row while it fits; otherwise rows of maxSize', () => {
     expect(provinceDataLayout(10, 2048)).toEqual({ width: 10, height: 1 });
     expect(provinceDataLayout(2048, 2048)).toEqual({ width: 2048, height: 1 });
     expect(provinceDataLayout(2049, 2048)).toEqual({ width: 2048, height: 2 });
     expect(provinceDataLayout(0, 2048)).toEqual({ width: 1, height: 1 });
   });
 
-  it('слишком много провинций — ошибка', () => {
+  it('too many provinces is an error', () => {
     expect(() => provinceDataLayout(5, 2)).toThrow();
   });
 });
 
 describe('ProvinceData', () => {
-  it('set пишет тексель и копит один грязный диапазон', () => {
+  it('set writes the texel and accumulates a single dirty range', () => {
     const d = new ProvinceData(10, 4);
     expect(d.takeDirty()).toBeNull();
     d.set(7, [1, 2, 3, 4]);
@@ -36,13 +36,13 @@ describe('ProvinceData', () => {
     expect(d.takeDirty()).toBeNull();
   });
 
-  it('set вне диапазона id — ошибка', () => {
+  it('set outside the id range is an error', () => {
     const d = new ProvinceData(3, 4);
     expect(() => d.set(3, [0, 0, 0, 0])).toThrow();
     expect(() => d.set(-1, [0, 0, 0, 0])).toThrow();
   });
 
-  it('set: канал не целое 0..255 — RangeError', () => {
+  it('set: a channel that is not an integer 0..255 is a RangeError', () => {
     const d = new ProvinceData(3, 4);
     expect(() => d.set(0, [256, 0, 0, 0])).toThrow(RangeError);
     expect(() => d.set(0, [0, -1, 0, 0])).toThrow(RangeError);
@@ -52,7 +52,7 @@ describe('ProvinceData', () => {
     expect(d.takeDirty()).toEqual({ start: 0, end: 1 });
   });
 
-  it('applyMode: цвет и флаг FILL, null — без заливки; флаги состояния сохраняются; грязное сброшено', () => {
+  it('applyMode: colour and the FILL flag, null — no fill; state flags are kept; dirty range reset', () => {
     const world = fakeWorld(4);
     const d = new ProvinceData(4, 4);
     d.set(1, [9, 9, 9, PROVINCE_FLAGS.UNEXPLORED | PROVINCE_FLAGS.TARGET]);

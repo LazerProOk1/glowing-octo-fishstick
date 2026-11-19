@@ -10,7 +10,7 @@ const UI_DIR = join(process.cwd(), 'src', 'ui');
 const uiFiles = readdirSync(UI_DIR)
   .filter((f) => f.endsWith('.ts'))
   .map((f) => join(UI_DIR, f));
-/** Файлы, где вызывается t(): весь UI и точка входа. */
+/** Files that call t(): the whole UI and the entry point. */
 const callerFiles = [...uiFiles, join(process.cwd(), 'src', 'main.ts')];
 
 function parse(file: string): ts.SourceFile {
@@ -22,7 +22,7 @@ function walk(node: ts.Node, visit: (n: ts.Node) => void): void {
   node.forEachChild((child) => walk(child, visit));
 }
 
-/** Все строковые литералы файла (включая куски шаблонных строк); комментарии не входят. */
+/** All string literals of a file (including template string parts); comments are excluded. */
 function stringLiterals(file: string): string[] {
   const out: string[] = [];
   walk(parse(file), (n) => {
@@ -39,7 +39,7 @@ function stringLiterals(file: string): string[] {
   return out;
 }
 
-/** Ключи из вызовов t('ключ') с литеральным аргументом. */
+/** Keys from t('key') calls with a literal argument. */
 function literalKeys(file: string): string[] {
   const out: string[] = [];
   walk(parse(file), (n) => {
@@ -51,11 +51,11 @@ function literalKeys(file: string): string[] {
 }
 
 describe('i18n', () => {
-  it('в src/ui есть файлы для проверки', () => {
+  it('src/ui has files to check', () => {
     expect(uiFiles.length).toBeGreaterThan(0);
   });
 
-  it('в строковых литералах src/ui/*.ts нет кириллицы', () => {
+  it('string literals in src/ui/*.ts contain no cyrillic', () => {
     const offenders: string[] = [];
     for (const file of uiFiles) {
       for (const s of stringLiterals(file)) if (CYRILLIC.test(s)) offenders.push(`${file}: ${s}`);
@@ -63,14 +63,14 @@ describe('i18n', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('каждый ключ, используемый интерфейсом, есть в ru', () => {
+  it('every key used by the interface exists in ru', () => {
     const keys = callerFiles.flatMap(literalKeys);
     expect(keys.length).toBeGreaterThan(0);
     const missing = keys.filter((k) => !(k in ru));
     expect(missing).toEqual([]);
   });
 
-  it('есть названия всех этапов генерации', () => {
+  it('there are names for all generation stages', () => {
     for (const s of LOAD_STEPS) {
       expect(ru).toHaveProperty([`stage.${s}`]);
       expect(ru).toHaveProperty([`stageShort.${s}`]);
@@ -78,7 +78,7 @@ describe('i18n', () => {
     expect(t('stage.biomes')).toBe('Биомы…');
   });
 
-  it('строки непустые', () => {
+  it('the strings are non-empty', () => {
     for (const [k, v] of Object.entries(ru)) expect(v.trim(), k).not.toBe('');
   });
 });

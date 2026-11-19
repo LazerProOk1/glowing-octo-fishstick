@@ -1,5 +1,5 @@
-// Точка входа (этап 1): мир генерируется в воркере, интерфейс — экран загрузки,
-// подсказка у курсора, панель отладки (F3) и режимы карты (M). Клавиши — в ui/hotkeys.ts.
+// Entry point (stage 1): the world is generated in the worker, the interface is the loading screen,
+// the tooltip at the cursor, the debug panel (F3) and the map modes (M). Keys live in ui/hotkeys.ts.
 import { Application, RendererType, type WebGLRenderer } from 'pixi.js';
 import { t, translate } from './i18n/ru';
 import { nextMapMode } from './render/mapModes';
@@ -15,12 +15,12 @@ import { isSuperseded, requestWorld, type GenResult } from './worker/genClient';
 import { buildWorldUrl, parseWorldUrl } from './worldUrl';
 import './ui/styles.css';
 
-/** Ключ запроса: два запроса с одинаковым ключом дают один и тот же мир. */
+/** Request key: two requests with the same key produce the same world. */
 const requestKey = (r: WorldParams): string => buildWorldUrl(r);
 
 /**
- * Параметры мира из адреса; без сида — случайный сид (опции из адреса сохраняются), записывается
- * в адрес без новой записи в истории.
+ * World params from the address; without a seed — a random seed (options from the address are kept),
+ * written to the address without a new history entry.
  */
 function initialRequest(): WorldParams {
   const fromHash = parseWorldUrl(location.hash);
@@ -32,7 +32,7 @@ function initialRequest(): WorldParams {
   return req;
 }
 
-/** Шейдер карты написан на GLSL ES 3.00 — без WebGL 2 он не соберётся. */
+/** The map shader is written in GLSL ES 3.00 — without WebGL 2 it will not compile. */
 function browserHasWebGL2(): boolean {
   const gl = document.createElement('canvas').getContext('webgl2');
   if (!gl) return false;
@@ -45,7 +45,7 @@ function rendererIsWebGL2(app: Application): boolean {
   return (app.renderer as WebGLRenderer).context.webGLVersion === 2;
 }
 
-/** Следит за devicePixelRatio (окно перенесли на другой монитор, сменили масштаб). */
+/** Watches devicePixelRatio (window moved to another monitor, zoom changed). */
 function followDevicePixelRatio(app: Application): void {
   const listen = (): void => {
     const mq = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
@@ -54,7 +54,7 @@ function followDevicePixelRatio(app: Application): void {
   const onChange = (): void => {
     const dpr = window.devicePixelRatio || 1;
     if (app.renderer.resolution !== dpr) {
-      // resize с новым разрешением шлёт событие 'resize' — MapView пересчитывает uniform-ы.
+      // A resize with a new resolution fires 'resize' — MapView recomputes the uniforms.
       app.renderer.resize(app.screen.width, app.screen.height, dpr);
     }
     listen();
@@ -86,8 +86,8 @@ async function start(root: HTMLElement): Promise<void> {
     return;
   }
 
-  // Генерация стартует сразу и идёт в воркере параллельно с запуском графики.
-  // Смена адреса, пока графика запускается, сразу перезапрашивает мир (старый запрос вытесняется).
+  // Generation starts immediately and runs in the worker in parallel with graphics startup.
+  // An address change while the graphics start re-requests the world right away (the old request is superseded).
   const load = (r: WorldParams): Promise<GenResult> => requestWorld(r, (s) => loading.setStage(s));
   let first = { req: initial, world: load(initial) };
   const onEarlyHash = (): void => {
@@ -126,14 +126,14 @@ async function start(root: HTMLElement): Promise<void> {
   const tooltip = new ProvinceTooltip(root);
   view.onHover((id) => tooltip.setProvince(id));
   let clearError: (() => void) | null = null;
-  /** Последний запрошенный мир: новый сид из панели отладки сохраняет его паки и опции. */
+  /** Last requested world: a new seed from the debug panel keeps its packs and options. */
   let current = first.req;
   const debug = new DebugPanel(
     root,
     () => app.ticker.FPS,
     (seed) => {
       const next: WorldParams = { ...current, seed };
-      // Тот же адрес не даёт hashchange — перестраиваем напрямую.
+      // The same address does not fire hashchange — rebuild directly.
       if (requestKey(next) === requestKey(parseWorldUrl(location.hash))) regenerate(next);
       else location.hash = requestKey(next);
     },
@@ -159,15 +159,15 @@ async function start(root: HTMLElement): Promise<void> {
     try {
       const { world, bake, timings } = await pending;
       view.setWorld(world, bake);
-      loading.hide(); // карта уже на месте — блок загрузки убирается сразу
+      loading.hide(); // the map is already there — the loading block is removed immediately
       tooltip.setWorld(world);
       debug.setWorld(world, timings);
     } catch (err) {
       if (isSuperseded(err)) return;
       console.error(err);
       loading.hide();
-      // Параметры из адреса могли быть неверными: и «Перезагрузить», и смена сида (F3) идут от
-      // мира по умолчанию для того же сида, а не от сломанных опций.
+      // The params in the address may have been wrong: both "Reload" and a seed change (F3) start
+      // from the default world for the same seed, not from the broken options.
       current = defaultParams(current.seed);
       clearError = showError(root, t('error.generation'), errorDetail(err), requestKey(current));
     }
@@ -189,7 +189,7 @@ async function start(root: HTMLElement): Promise<void> {
     if (next.seed) regenerate(next);
   });
 
-  // Для ручной проверки в браузере (счётчик текстур и т.п.).
+  // For manual checks in the browser (texture counter and the like).
   if (import.meta.env.DEV) Object.assign(window, { __app: app, __mapView: view });
 
   await show(first.world);

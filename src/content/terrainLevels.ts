@@ -1,7 +1,7 @@
-// Уровни рельефа, общие для генератора (src/sim) и данных паков (src/content): условия биомов
-// записываются через них, а sim импортирует content — поэтому они живут здесь, а не в sim.
+// Terrain levels shared by the generator (src/sim) and pack data (src/content): biome conditions
+// are written in terms of them, and sim imports content — so they live here, not in sim.
 
-/** Уровень моря: суша — клетки выше него. */
+/** Sea level: land is any cell above it. */
 export const SEA_LEVEL = 0.5;
 /** Heights above this are mountains (top ~3% of land). */
 export const MOUNTAIN_LEVEL = 0.85;

@@ -1,4 +1,4 @@
-// Коды ошибок генерации: sim бросает код, текст для игрока подбирает ui (errorDetail).
+// Generation error codes: sim throws a code, the ui picks the player-facing text (errorDetail).
 
-/** Очистка обломков провинций не сошлась; текст — ключ error.cleanupNoConverge в ru.ts. */
+/** Province debris cleanup did not converge; the text is the error.cleanupNoConverge key in ru.ts. */
 export const ERR_CLEANUP_NO_CONVERGE = 'province_cleanup_no_converge';

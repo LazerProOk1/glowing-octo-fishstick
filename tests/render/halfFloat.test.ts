@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { toHalf } from '../../src/render/halfFloat';
 
 describe('toHalf', () => {
-  it('кодирует точные значения', () => {
+  it('encodes exact values', () => {
     expect(toHalf(0)).toBe(0);
     expect(toHalf(1)).toBe(0x3c00);
     expect(toHalf(0.5)).toBe(0x3800);
@@ -12,12 +12,12 @@ describe('toHalf', () => {
     expect(toHalf(2 ** -14)).toBe(0x0400);
   });
 
-  it('округляет к ближайшему и насыщается в бесконечность', () => {
+  it('rounds to nearest and saturates to infinity', () => {
     expect(toHalf(1 + 2 ** -11 + 2 ** -13)).toBe(0x3c01);
     expect(toHalf(1e6)).toBe(0x7c00);
   });
 
-  it('малые относительные высоты сохраняют точность', () => {
+  it('small relative heights keep their precision', () => {
     const decode = (h: number): number => {
       const e = (h >> 10) & 31;
       const m = h & 1023;

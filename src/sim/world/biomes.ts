@@ -5,22 +5,22 @@ import { createNoise2D, fbm } from '../noise';
 import type { Rng } from '../rng';
 import { sampleCoarse } from './climate';
 
-/** Измерения условий в порядке хранения: высота, температура, влажность, магичность. */
+/** Condition dimensions in storage order: height, temperature, moisture, arcana. */
 const DIMS = 4;
 
 /**
- * Список биомов, скомпилированный для классификации 2 млн клеток: плоские границы диапазонов
- * в порядке проверки. Сначала водные биомы, потом сухопутные; внутри — по убыванию приоритета
- * (при равенстве — по коду); запасной биом каждого вида — последним. Озёрный биом (тег lake)
- * в перебор не входит: его ставит findLakes/applyLakeBiome по форме водоёма.
+ * Biome list compiled for classifying 2M cells: flat range bounds in check order.
+ * Water biomes first, then land; within each group by descending priority (ties by code);
+ * the fallback biome of each kind comes last. The lake biome (tag lake) is not part of the scan:
+ * findLakes/applyLakeBiome sets it by the shape of the water body.
  */
 export interface CompiledBiomes {
-  /** Код биома (индекс в списке мира) по позиции проверки. */
+  /** Biome code (index in the world list) per check position. */
   code: Uint8Array;
-  /** Нижние (включительно) и верхние (не включительно) границы: позиция × DIMS + измерение. */
+  /** Lower (inclusive) and upper (exclusive) bounds: position × DIMS + dimension. */
   lo: Float64Array;
   hi: Float64Array;
-  /** Позиция первого сухопутного биома; водные — [0, landStart). */
+  /** Position of the first land biome; water biomes occupy [0, landStart). */
   landStart: number;
 }
 
@@ -53,7 +53,7 @@ export function compileBiomes(biomes: readonly BiomeDef[]): CompiledBiomes {
   return { code, lo, hi, landStart };
 }
 
-/** Позиция первого подходящего биома в [from, to); если ни один не подошёл — последняя (запасной). */
+/** Position of the first matching biome in [from, to); if none matches, the last one (fallback). */
 function pick(c: CompiledBiomes, from: number, to: number, h: number, t: number, m: number, a: number): number {
   const { lo, hi } = c;
   for (let k = from; k < to; k++) {
@@ -71,8 +71,8 @@ function pick(c: CompiledBiomes, from: number, to: number, h: number, t: number,
 }
 
 /**
- * Индекс биома в `biomes` для одной клетки. Вода (высота ≤ SEA_LEVEL) выбирается только среди
- * водных биомов, суша — среди сухопутных; первым подходит биом с большим приоритетом.
+ * Biome index in `biomes` for one cell. Water (height ≤ SEA_LEVEL) is chosen only among water
+ * biomes, land only among land biomes; the first match is the highest-priority biome.
  */
 export function classifyBiome(
   biomes: readonly BiomeDef[],
@@ -86,32 +86,33 @@ export function classifyBiome(
   return c.code[pick(c, water ? 0 : c.landStart, water ? c.landStart : c.code.length, height, temperature, moisture, arcana)]!;
 }
 
-/** Наибольшее смещение температуры (°C) при выборе биома. */
+/** Largest temperature offset (°C) when choosing a biome. */
 export const BIOME_JITTER_AMPLITUDE = 1.5;
 /**
- * Наибольшее смещение влажности при выборе биома. Край джунглей почти везде задаёт влажность
- * (порог 0.7), а у экватора она меняется на ~0.005–0.009 за строку: ±0.15 сдвигает край на
- * ±15–30 строк, и пятна джунглей перестают обрываться на одной широте. Доли биомов — в пределах 1 п.п.
+ * Largest moisture offset when choosing a biome. The jungle edge is almost everywhere set by
+ * moisture (threshold 0.7), and near the equator it changes by ~0.005–0.009 per row: ±0.15 shifts
+ * the edge by ±15–30 rows, and jungle patches stop breaking off at a single latitude. Biome shares
+ * stay within 1 pp.
  */
 export const BIOME_MOISTURE_JITTER_AMPLITUDE = 0.15;
 /**
- * Длины волн октав смещения, клеток: 120, ~69, 40 — на любом размере карты. Если масштабировать их
- * по высоте карты, на small пятна становятся вдвое мельче и дробят провинции: суши-провинций на
- * small "1" было 1020 при пределе 999.
+ * Octave wavelengths of the offset, in cells: 120, ~69, 40 — at any map size. If they were scaled
+ * by map height, on small the patches become twice as fine and split provinces: land provinces on
+ * small "1" were 1020 against a limit of 999.
  */
 const JITTER_WAVELENGTH = 120;
 const JITTER_OCTAVES = 3;
 const JITTER_LACUNARITY = Math.sqrt(3);
 /**
- * Растяжка fbm перед обрезкой до [-1, 1]: у нормированного fbm стандартное отклонение ~0.3,
- * и без растяжки смещение было бы втрое меньше заявленной амплитуды (граница почти не изгибалась).
- * После растяжки ~20% клеток упираются в ±амплитуду. Проверено на medium "1" и "worldbox":
- * растяжка 1–2 и мягкое насыщение s/√(1+s²) выравнивают край джунглей по широте сильнее (11–17%
- * клеток края в одной полосе из 4 строк против 9–11% здесь).
+ * fbm stretch before clamping to [-1, 1]: a normalized fbm has a standard deviation of ~0.3, and
+ * without the stretch the offset would be three times smaller than the stated amplitude (the border
+ * barely bent). After the stretch ~20% of cells hit ±amplitude. Checked on medium "1" and
+ * "worldbox": stretch 1–2 and soft saturation s/√(1+s²) align the jungle edge by latitude more
+ * strongly (11–17% of edge cells in one band of 4 rows versus 9–11% here).
  */
 const JITTER_GAIN = 2.5;
 
-/** Копия `field` плюс amp × fbm (масштаб 40–120 клеток). */
+/** Copy of `field` plus amp × fbm (scale 40–120 cells). */
 function jitter(rng: Rng, field: Float32Array, amp: number, w: number, h: number): Float32Array {
   const noise = createNoise2D(rng);
   const cells = JITTER_WAVELENGTH;
@@ -130,19 +131,20 @@ function jitter(rng: Rng, field: Float32Array, amp: number, w: number, h: number
 }
 
 /**
- * Температура только для выбора биома: поле `temperature`, смещённое fbm-шумом с амплитудой
- * ±BIOME_JITTER_AMPLITUDE и масштабом 40–120 клеток. Без смещения широтный градиент у порога
- * (например, 24 °C у джунглей) почти одинаков по x, и граница биомов тянется прямой линией.
- * Само поле `World.temperature` не меняется. `rng` — отдельный поток (`rng.fork('biomeJitter')`).
+ * Temperature for biome selection only: the `temperature` field offset by fbm noise with amplitude
+ * ±BIOME_JITTER_AMPLITUDE and scale 40–120 cells. Without the offset the latitudinal gradient at a
+ * threshold (e.g. 24 °C at the jungles) is nearly the same along x, and the biome border runs as a
+ * straight line. The `World.temperature` field itself is unchanged. `rng` is a separate stream
+ * (`rng.fork('biomeJitter')`).
  */
 export function classifyTemperatureJitter(rng: Rng, temperature: Float32Array, w: number, h: number): Float32Array {
   return jitter(rng, temperature, BIOME_JITTER_AMPLITUDE, w, h);
 }
 
 /**
- * Влажность только для выбора биома — то же смещение, что у температуры, со своим шумом
- * (±BIOME_MOISTURE_JITTER_AMPLITUDE). Зональная влажность тоже зависит от широты, и порог
- * влажности джунглей (0.7) давал прямую границу у экватора. `World.moisture` не меняется.
+ * Moisture for biome selection only — the same offset as for temperature, with its own noise
+ * (±BIOME_MOISTURE_JITTER_AMPLITUDE). Zonal moisture also depends on latitude, and the jungle
+ * moisture threshold (0.7) produced a straight border at the equator. `World.moisture` is unchanged.
  */
 export function classifyMoistureJitter(rng: Rng, moisture: Float32Array, w: number, h: number): Float32Array {
   return jitter(rng, moisture, BIOME_MOISTURE_JITTER_AMPLITUDE, w, h);
@@ -159,7 +161,7 @@ export function computeBiomes(
   const { code, lo, hi, landStart } = c;
   const n = code.length;
   const out = new Uint8Array(height.length);
-  // Тот же перебор, что в pick, развёрнутый в цикл без вызовов и выделений памяти.
+  // The same scan as in pick, unrolled into a loop without calls or allocations.
   for (let i = 0; i < out.length; i++) {
     const h = height[i]!;
     const t = temperature[i]!;

@@ -10,7 +10,7 @@ import type { World } from '../../../src/sim/world/types';
 const LAND = SEA_LEVEL + 0.1;
 const WATER = SEA_LEVEL - 0.1;
 
-/** Суша w×h с водной рамкой толщиной `rim` клеток. */
+/** Land w×h with a water rim `rim` cells thick. */
 function island(w: number, h: number, rim: number): Float32Array {
   const height = new Float32Array(w * h).fill(LAND);
   for (let y = 0; y < h; y++) {
@@ -44,9 +44,9 @@ describe('findLakes', () => {
     const w = 64;
     const h = 32;
     const height = new Float32Array(w * h).fill(LAND);
-    // Залив от верхнего края вглубь суши.
+    // A bay reaching from the top edge into the land.
     fillRect(height, w, 20, 0, 12, 20, WATER);
-    // Тот же водоём, но касается края одной клеткой: тоже не озеро.
+    // The same water body, but it touches the edge with one cell: also not a lake.
     fillRect(height, w, 45, 10, 8, 8, WATER);
     fillRect(height, w, 63, 13, 1, 1, WATER);
     fillRect(height, w, 53, 13, 10, 1, WATER);
@@ -57,7 +57,7 @@ describe('findLakes', () => {
     const w = 100;
     const h = 100;
     const height = island(w, h, 1);
-    // 81×81 = 6561 > LAKE_MAX_CELLS, а рядом пруд в пределах порога.
+    // 81×81 = 6561 > LAKE_MAX_CELLS, with a pond within the threshold next to it.
     fillRect(height, w, 3, 3, 81, 81, WATER);
     fillRect(height, w, 87, 3, 10, 10, WATER);
     expect(81 * 81).toBeGreaterThan(LAKE_MAX_CELLS);
@@ -79,7 +79,7 @@ describe('findLakes', () => {
   });
 });
 
-describe('lake provinces (сид "1", medium)', () => {
+describe('lake provinces (seed "1", medium)', () => {
   let world: World;
   let lake: Uint8Array;
   beforeAll(() => {
@@ -87,12 +87,12 @@ describe('lake provinces (сид "1", medium)', () => {
     lake = findLakes(world.height, world.w, world.h);
   }, 60000);
 
-  it('у озёрной провинции все клетки озёрные и биом lake; озеро и море не смешиваются', () => {
+  it('a lake province has only lake cells and the lake biome; lake and sea do not mix', () => {
     const lakeCode = world.biomes.findIndex((b) => b.id === 'lake');
     expect(lakeCode).toBeGreaterThanOrEqual(0);
     const n = world.w * world.h;
     const lakeCells = new Int32Array(world.provinces.length);
-    // Клетки озёр и только они несут биом lake.
+    // Lake cells, and only they, carry the lake biome.
     let wrongBiome = 0;
     for (let i = 0; i < n; i++) {
       if (lake[i]) lakeCells[world.provinceOf[i]!]!++;
@@ -116,7 +116,7 @@ describe('lake provinces (сид "1", medium)', () => {
     expect(lakes).toBeGreaterThan(0);
   });
 
-  it('coastal — только у моря, lakeside — у озера', () => {
+  it('coastal only for the sea, lakeside only for a lake', () => {
     const ps = world.provinces;
     let lakeOnly = 0;
     for (const p of ps) {
@@ -133,7 +133,7 @@ describe('lake provinces (сид "1", medium)', () => {
     expect(lakeOnly).toBeGreaterThan(0);
   });
 
-  it('озеро меньше минимальной морской провинции — одна провинция', () => {
+  it('a lake smaller than the minimum sea province is one province', () => {
     const { w, h } = world;
     const { comp, sizes } = labelComponents(lake, w, h);
     const owner = new Map<number, Set<number>>();

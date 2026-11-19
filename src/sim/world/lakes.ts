@@ -1,15 +1,15 @@
-// Озёра: замкнутые внутренние водоёмы, отдельный от моря тип воды.
+// Lakes: closed inland water bodies, a water type separate from the sea.
 import type { BiomeDef } from '../../content/biomes/types';
 import { hasTag } from '../../content/registry';
 import { SEA_LEVEL } from '../../content/terrainLevels';
 import { labelComponents } from '../geom/label';
 
-/** Внутренний водоём больше этого (в клетках) — море, а не озеро. */
+/** An inland water body larger than this (in cells) is a sea, not a lake. */
 export const LAKE_MAX_CELLS = 6000;
 
 /**
- * Маска озёр: 1 — клетка озера. Озеро — 4-связная компонента воды (высота ≤ SEA_LEVEL), которая не
- * касается края карты и занимает не больше LAKE_MAX_CELLS клеток. Остальная вода — море.
+ * Lake mask: 1 — lake cell. A lake is a 4-connected water component (height ≤ SEA_LEVEL) that does
+ * not touch the map edge and occupies at most LAKE_MAX_CELLS cells. The rest of the water is sea.
  */
 export function findLakes(height: Float32Array, w: number, h: number): Uint8Array {
   const n = w * h;
@@ -32,8 +32,8 @@ export function findLakes(height: Float32Array, w: number, h: number): Uint8Arra
 }
 
 /**
- * Биомы с озёрами: клетки маски `lake` получают биом с тегом `lake` (озёрный биом не выбирается по
- * условиям, его ставит только этот шаг). Возвращает новый массив.
+ * Biomes with lakes: cells of the `lake` mask get the biome tagged `lake` (the lake biome is never
+ * chosen by conditions, only this step sets it). Returns a new array.
  */
 export function applyLakeBiome(biomes: Uint8Array, lake: Uint8Array, defs: readonly BiomeDef[]): Uint8Array {
   const code = defs.findIndex((d) => hasTag(d, 'lake'));

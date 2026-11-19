@@ -16,7 +16,7 @@ const { w: W, h: H } = SIZE_PRESETS.medium;
 const FANTASY = ['mushroom_forest', 'magic_forest', 'ash_wastes', 'crystal_mountains'];
 const SEEDS = ['1', '2', 'Бета-7', 'worldbox'];
 
-/** Биомы на карте после берегов (как в generateWorld, без рек и провинций). */
+/** Biomes on the map after the shores (as in generateWorld, without rivers and provinces). */
 function surfaceBiomes(seed: string, options: GenOptions): { defs: BiomeDef[]; height: Float32Array; biomes: Uint8Array } {
   const defs = resolveBiomes(options);
   const rng = createRng(seed);
@@ -34,7 +34,7 @@ function countById(defs: BiomeDef[], biomes: Uint8Array): Map<string, number> {
   return new Map(defs.map((d, k) => [d.id, n[k]!]));
 }
 
-describe('фэнтези-биомы', () => {
+describe('fantasy biomes', () => {
   const counts = new Map<string, Map<string, number>>();
   const land = new Map<string, number>();
   beforeAll(() => {
@@ -47,7 +47,7 @@ describe('фэнтези-биомы', () => {
     }
   }, 120000);
 
-  it('фэнтези выключено: в списке и на карте нет фэнтези-биомов', () => {
+  it('fantasy off: no fantasy biomes in the list or on the map', () => {
     const { defs, biomes } = surfaceBiomes('1', {});
     expect(defs.some((d) => d.fantasy)).toBe(false);
     const fantasyIds = new Set(FANTASY);
@@ -57,14 +57,14 @@ describe('фэнтези-биомы', () => {
     expect([...onMap].filter((id) => fantasyIds.has(id))).toEqual([]);
   });
 
-  it('каждый фэнтези-биом занимает ≥ 200 клеток хотя бы на одном сиде', () => {
+  it('every fantasy biome covers ≥ 200 cells on at least one seed', () => {
     for (const id of FANTASY) {
       const best = Math.max(...SEEDS.map((s) => counts.get(s)!.get(id)!));
       expect(best, id).toBeGreaterThanOrEqual(200);
     }
   });
 
-  it('фэнтези заметно, но не преобладает: 3..12 % суши на каждом сиде', () => {
+  it('fantasy is noticeable but not dominant: 3..12% of land on every seed', () => {
     for (const seed of SEEDS) {
       const c = counts.get(seed)!;
       const f = FANTASY.reduce((s, id) => s + c.get(id)!, 0);
@@ -75,7 +75,7 @@ describe('фэнтези-биомы', () => {
   });
 });
 
-describe.each([['swamp'], ['desert']])('выключенный биом %s', (off) => {
+describe.each([['swamp'], ['desert']])('disabled biome %s', (off) => {
   let base: World;
   let world: World;
   beforeAll(() => {
@@ -84,7 +84,7 @@ describe.each([['swamp'], ['desert']])('выключенный биом %s', (of
     world = generateWorld({ ...p, options: { ...p.options, disabledBiomes: [off] } });
   }, 120000);
 
-  it('биома нет ни в списке, ни на карте, его клетки достались другим биомам суши', () => {
+  it('the biome is neither in the list nor on the map, its cells went to other land biomes', () => {
     expect(world.biomes.map((b) => b.id)).not.toContain(off);
     const was = base.biomes.findIndex((b) => b.id === off);
     let moved = 0;
@@ -94,11 +94,11 @@ describe.each([['swamp'], ['desert']])('выключенный биом %s', (of
       expect(world.biomes[world.biome[i]!]!.kind).toBe('land');
     }
     expect(moved).toBeGreaterThan(0);
-    // Рельеф не зависит от набора биомов.
+    // The terrain does not depend on the biome set.
     expect(Buffer.from(world.height.buffer).equals(Buffer.from(base.height.buffer))).toBe(true);
   });
 
-  it('провинции: каждая клетка в провинции, биом провинции существует, суша однородна', () => {
+  it('provinces: every cell belongs to a province, the province biome exists, land is uniform', () => {
     const ids = new Set(world.biomes.map((b) => b.id));
     for (const p of world.provinces) expect(ids.has(p.biome)).toBe(true);
     const pur = purity(world.biome, world.provinceOf, world.provinces.length);

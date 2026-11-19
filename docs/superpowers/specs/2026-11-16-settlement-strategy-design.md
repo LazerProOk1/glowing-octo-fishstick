@@ -1,222 +1,222 @@
-# Стратегия поселения: дизайн-документ
+# Settlement strategy: design document
 
-Дата: 2026-11-16. Рабочее название игры пока не выбрано.
+Date: 2026-11-16. The game's working title has not been chosen yet.
 
-Пометка **[моё решение]** значит, что пункт предложил Claude, а не автор. Его можно оспорить.
+The mark **[my decision]** means that Claude suggested the item, not the author. It can be challenged.
 
 ---
 
-## 1. Что это за игра и зачем
+## 1. What this game is and why
 
-Стратегия в реальном времени с паузой на живой карте мира. Игрок начинает с одного маленького поселения в случайном месте, вокруг туман. Он развивает его до страны: добывает ресурсы, строит, исследует технологии, торгует, воюет и договаривается с соседями. Соседние страны живут по той же симуляции, что и страна игрока, только ими управляет компьютер.
+A real-time strategy with pause on a living world map. The player starts with one small settlement in a random place, fog all around. They grow it into a country: extract resources, build, research technologies, trade, fight and negotiate with neighbours. The neighbouring countries live by the same simulation as the player's country, only a computer runs them.
 
-Это смесь двух идей:
-- **От WorldBox:** мир живёт сам, в нём случаются события, народы растут и гибнут без участия игрока.
-- **От Hearts of Iron / Europa Universalis:** мелкие провинции, ровные границы, технологии, армии и дипломатия.
+It is a blend of two ideas:
+- **From WorldBox:** the world lives on its own, events happen in it, peoples grow and die without the player's involvement.
+- **From Hearts of Iron / Europa Universalis:** small provinces, crisp borders, technologies, armies and diplomacy.
 
-Позже поверх того же мира добавится **режим бога**: смотреть на всю карту, рисовать её и вмешиваться силами. В этой версии его нет, но архитектура должна позволить добавить его без переписывания (см. раздел 9).
+Later, on top of the same world, a **god mode** will be added: look at the whole map, draw it and intervene with powers. This version does not have it, but the architecture must allow adding it without a rewrite (see section 9).
 
-**Почему так.** Прошлые попытки (letopis-mirov, glowing-octo-fishstick) вышли «не очень»: много механик сразу и ни одна не доведена, картинка выглядит самодельно. Этот проект делается от одного играбельного режима, поэтапно, и выглядеть должен как настоящая стратегия.
+**Why this way.** Previous attempts (letopis-mirov, glowing-octo-fishstick) came out "so-so": many mechanics at once and none finished, the picture looks homemade. This project is built from one playable mode, stage by stage, and it must look like a real strategy game.
 
-## 2. Цели, не-цели, анти-цели
+## 2. Goals, non-goals, anti-goals
 
-**Цели**
-- Играбельный режим поселения: от одной провинции до победы.
-- Карта уровня HoI4: красивый рельеф, ровные границы, без пикселей.
-- Мир, который живёт сам: соседи растут, воюют, торгуют, переживают события.
-- Две цели победы на выбор и уровни сложности.
-- Фэнтези как опция при создании мира.
+**Goals**
+- A playable settlement mode: from one province to victory.
+- A map on the HoI4 level: beautiful terrain, crisp borders, no pixels.
+- A world that lives on its own: neighbours grow, fight, trade, survive events.
+- Two victory goals to choose from and difficulty levels.
+- Fantasy as an option when creating the world.
 
-**Не-цели этой версии (могут появиться позже)**
-- Режим бога.
-- Онлайн (но код должен его допускать).
-- Приближение к городу с расстановкой отдельных домов (вариант «C»).
-- Ручное управление каждым отрядом и линии фронта как в HoI.
-- Мобильные устройства. Только ПК с мышью и клавиатурой.
+**Non-goals of this version (may appear later)**
+- God mode.
+- Online (but the code must allow it).
+- Zooming into a city with individual houses placed (option "C").
+- Manual control of every unit and front lines as in HoI.
+- Mobile devices. Only a PC with a mouse and a keyboard.
 
-**Анти-цели: даже если всё работает, это провал**
-- Механик много, но ни одна не интересна. Новая механика добавляется, только когда предыдущая уже играется.
-- Картинка выглядит как «сделано ИИ»: неон, киберпанк, градиентные карточки, шрифт Inter, процедурные кружочки вместо спрайтов, пиксельные границы.
-- После того как всё построено, делать нечего (нет цели и давления).
-- Код превращается в несколько огромных файлов, которые ИИ уже не может править без поломок.
+**Anti-goals: even if everything works, this is a failure**
+- Many mechanics, but none interesting. A new mechanic is added only when the previous one is already playable.
+- The picture looks "AI-made": neon, cyberpunk, gradient cards, the Inter font, procedural circles instead of sprites, pixelated borders.
+- Once everything is built, there is nothing to do (no goal and no pressure).
+- The code turns into a few huge files that AI can no longer edit without breaking things.
 
-## 3. Ограничения
+## 3. Constraints
 
-- Разработка в основном с помощью ИИ. Отсюда стек, лимит на размер файлов (примерно до 400–500 строк) и обязательные отладочные инструменты.
-- Графика, иконки и шрифты — только готовые ассеты с подходящей лицензией (CC0, CC-BY или купленные). Код рисует карту шейдерами, но не «рисует» юнитов и иконки сам.
-- Язык интерфейса — русский. **[моё решение]** Тексты сразу выносим в отдельные файлы, чтобы потом можно было добавить английский.
-- Начинаем с нуля. Код из старых репозиториев не переносится, можно брать только идеи. Старый репозиторий glowing-octo-fishstick будет очищен или заменён новым, решаем на этапе плана, с отдельным подтверждением.
+- Development is mostly by AI. Hence the stack, the file size limit (roughly up to 400–500 lines) and mandatory debugging tools.
+- Graphics, icons and fonts — ready-made assets only, with a suitable licence (CC0, CC-BY or purchased). The code draws the map with shaders, but does not "draw" units and icons itself.
+- The interface language is Russian. **[my decision]** We move the texts into separate files right away, so English can be added later.
+- We start from scratch. Code from the old repositories is not carried over, only ideas may be taken. The old glowing-octo-fishstick repository will be emptied or replaced by a new one, decided at the planning stage, with separate confirmation.
 
-## 4. Как строим: рассмотренные подходы
+## 4. How we build it: the approaches considered
 
-| Подход | Плюсы | Минусы |
+| Approach | Pros | Cons |
 |---|---|---|
-| **TypeScript + PixiJS (WebGL) в браузере** — выбран | ИИ лучше всего пишет TS и может сам проверить игру в браузере; запуск по ссылке; онлайн через WebSocket | Нет редактора, интерфейс и обвязку пишем сами |
-| Godot 4 | Редактор, темы интерфейса, сеть из коробки | ИИ чаще ошибается в API Godot и файлах сцен, проверка только через скриншоты |
-| Unity и подобные | Мощно | Слишком тяжело для такой игры, ещё хуже для разработки с ИИ |
+| **TypeScript + PixiJS (WebGL) in the browser** — chosen | AI writes TS best and can check the game in the browser itself; runs from a link; online through WebSocket | No editor, we write the interface and the plumbing ourselves |
+| Godot 4 | An editor, interface themes, networking out of the box | AI makes more mistakes in the Godot API and scene files, checking only through screenshots |
+| Unity and the like | Powerful | Too heavy for such a game, even worse for AI development |
 
-Выбран первый вариант, потому что главный риск проекта — качество кода от ИИ, а красивая карта получается за счёт шейдера и ассетов, а не движка.
+The first option was chosen because the main risk of the project is the quality of AI-written code, and a beautiful map comes from the shader and the assets, not from the engine.
 
-## 5. Игровой дизайн (то, что решено)
+## 5. Game design (what is decided)
 
-### 5.1 Начало партии
-Экран создания мира:
-- seed (мир по одному и тому же seed всегда одинаковый);
-- размер мира;
-- фэнтези: вкл/выкл;
-- раса игрока (только если фэнтези включено);
-- цель: Завоевание или Улёт;
-- сложность.
+### 5.1 Starting a match
+The world creation screen:
+- seed (a world from the same seed is always the same);
+- world size;
+- fantasy: on/off;
+- the player's race (only if fantasy is on);
+- the goal: Conquest or Departure;
+- difficulty.
 
-Игрок появляется в случайной подходящей провинции (суша, не пустыня и не ледник, есть еда). Вся карта под туманом, кроме стартовой провинции и соседних.
+The player appears in a random suitable province (land, not a desert and not a glacier, there is food). The whole map is under fog except the starting province and its neighbours.
 
-**[моё решение]** Мир генерируется процедурно из seed каждый раз, а не рисуется вручную. Это нужно для случайного старта и пригодится в режиме бога.
+**[my decision]** The world is generated procedurally from the seed every time instead of being drawn by hand. This is needed for the random start and will be useful in god mode.
 
-### 5.2 Карта и провинции
-- Мелкие провинции, как в HoI: **2–4 тысячи** на мир. Страна среднего размера — несколько десятков провинций, стартовое поселение — одна.
-- У провинции есть биом, рельеф, ресурсы, население, владелец, постройки, культура и религия.
-- Биомы: океан, побережье, равнины, лес, тайга, тундра, пустыня, степь, болото, горы, холмы, джунгли. С фэнтези добавляются, например, магический лес, пепельные пустоши, кристальные горы (окончательный список — задача контента).
-- Реки идут по рельефу и влияют на плодородие и торговлю.
-- **Провинции режутся по местности** (решено 2026-11-17, нужно для бонусов и штрафов):
-  - крупные реки (ширина ≥ 2) — всегда граница между провинциями, провинция никогда их не пересекает; это основа для штрафа «атака через реку»; мелкие ручьи могут течь внутри провинции;
-  - горы — отдельные горные провинции, край массива и хребты — границы; основа для бонуса обороны и медленного прохода;
-  - у провинции один тип местности: не меньше 80% её клеток одного биома; бонусы и штрафы считаются по типу провинции; мелкие вкрапления другого биома допускаются внутри;
-  - границы извилистые, без прямых отрезков под 0/45/90°.
-- Туман войны: неразведанное скрыто, разведанное, но не видимое сейчас, показывается без актуальных армий.
+### 5.2 Map and provinces
+- Small provinces, as in HoI: **2–4 thousand** per world. A medium-sized country — a few dozen provinces, the starting settlement — one.
+- A province has a biome, terrain, resources, population, owner, buildings, culture and religion.
+- Biomes: ocean, coast, plains, forest, taiga, tundra, desert, steppe, swamp, mountains, hills, jungle. With fantasy, for example, a magic forest, ash wastes, crystal mountains are added (the final list is a content task).
+- Rivers follow the terrain and affect fertility and trade.
+- **Provinces are cut along the terrain** (decided 2026-11-17, needed for bonuses and penalties):
+  - major rivers (width ≥ 2) are always a border between provinces, a province never crosses them; this is the basis for the "attack across a river" penalty; small streams may flow inside a province;
+  - mountains — separate mountain provinces, the edge of the massif and the ridges are borders; the basis for a defence bonus and slow passage;
+  - a province has one terrain type: at least 80% of its cells are of one biome; bonuses and penalties are counted by the province type; small inclusions of another biome are allowed inside;
+  - borders are winding, without straight segments at 0/45/90°.
+- Fog of war: the unexplored is hidden, what is explored but not currently visible is shown without the current armies.
 
-### 5.3 Экономика и население
-- Ресурсы провинции зависят от биома: зерно, рыба, лес, камень, железо, золото; позже уголь, нефть; в фэнтези — магические ресурсы (например, мана-кристаллы).
-- В провинции есть **слоты под постройки** (количество зависит от размера и развития): ферма, лесопилка, шахта, жильё, храм, казармы, рынок, библиотека и т. д. Список открывается технологиями.
-- Население растёт, если хватает еды и жилья. Люди работают в постройках. Нехватка еды ведёт к голоду, перенаселение — к болезням и недовольству.
-- Деньги приходят от налогов и торговли.
-- Религия и культура у провинций: влияют на довольство, мятежи и отношения с соседями.
+### 5.3 Economy and population
+- The resources of a province depend on the biome: grain, fish, timber, stone, iron, gold; later coal, oil; in fantasy — magic resources (for example, mana crystals).
+- A province has **slots for buildings** (the number depends on the size and the development): farm, sawmill, mine, housing, temple, barracks, market, library and so on. The list opens up with technologies.
+- Population grows if there is enough food and housing. People work in the buildings. A lack of food leads to famine, overpopulation — to disease and discontent.
+- Money comes from taxes and trade.
+- Religion and culture of the provinces: they affect contentment, revolts and relations with neighbours.
 
-### 5.4 Расширение
-- Разведчики открывают карту.
-- Свободные земли занимаются поселенцами (стоят ресурсов и людей).
-- Чужие земли берутся войной или договорами (например, вассалитет).
+### 5.4 Expansion
+- Scouts open up the map.
+- Free lands are taken by settlers (they cost resources and people).
+- Foreign lands are taken by war or by agreements (for example, vassalage).
 
-### 5.5 Технологии
-- Дерево по эпохам: каменный век → бронза → железо → средневековье → промышленность → космос.
-- Очки исследований дают население и постройки (библиотеки, храмы, университеты).
-- Несколько исследований идут параллельно, каждое занимает время (идея из HoI). Сама структура дерева ближе к Civilization.
-- Технологии открывают постройки, оружие, юнитов, бонусы, средства против бедствий (например, медицина против эпидемий).
-- Открытия постепенно расходятся к соседям через торговлю и контакты. Отставание опасно.
-- Последняя эпоха открывает проект ракеты, это путь к победе «Улёт».
-- С фэнтези есть отдельная ветка магии.
+### 5.5 Technologies
+- A tree by eras: stone age → bronze → iron → middle ages → industry → space.
+- Research points are given by population and buildings (libraries, temples, universities).
+- Several researches run in parallel, each takes time (an idea from HoI). The structure of the tree itself is closer to Civilization.
+- Technologies unlock buildings, weapons, units, bonuses, means against disasters (for example, medicine against epidemics).
+- Discoveries gradually spread to neighbours through trade and contacts. Falling behind is dangerous.
+- The last era unlocks the rocket project, this is the path to the "Departure" victory.
+- With fantasy there is a separate magic branch.
 
-### 5.6 Армия и война
-- Армии — фигурки на карте, которые ходят по провинциям.
-- Управление **полуавтоматическое**: игрок назначает армии задачу («защищать восточную границу», «наступать на столицу соседа»), армия сама стягивается, двигается и сражается.
-- Битвы считаются автоматически: численность, технологии, местность, генерал, снабжение.
-- Влияние игрока на войну идёт через прокачку: генеральный штаб, генералы с навыками, доктрины, технологии оружия.
-- Захваченные провинции переходят к захватчику по итогам войны или сразу после оккупации **[моё решение: сразу после оккупации, упрощённо, для первой версии]**.
+### 5.6 Army and war
+- Armies are figures on the map that move through provinces.
+- Control is **semi-automatic**: the player gives an army a task ("defend the eastern border", "advance on the neighbour's capital"), the army gathers, moves and fights on its own.
+- Battles are calculated automatically: numbers, technologies, terrain, general, supply.
+- The player's influence on the war comes through upgrades: the general staff, generals with skills, doctrines, weapon technologies.
+- Captured provinces pass to the conqueror by the outcome of the war or right after occupation **[my decision: right after occupation, simplified, for the first version]**.
 
-### 5.7 Дипломатия и торговля
-- Отношения с каждой страной: мир, торговый договор, союз, война, вассал.
-- Торговые пути видны на карте: караваны и корабли между городами. Путь можно перерезать войной или грабежом.
-- Компьютерные страны делают то же самое между собой.
+### 5.7 Diplomacy and trade
+- Relations with every country: peace, a trade agreement, an alliance, war, vassal.
+- Trade routes are visible on the map: caravans and ships between cities. A route can be cut by war or plunder.
+- Computer countries do the same among themselves.
 
-### 5.8 События
-Эпидемии, голод, мятежи, метеориты, золотой век, появление чудовищ (в фэнтези). Частота зависит от сложности. Часть событий предотвращается или смягчается технологиями и постройками.
+### 5.8 Events
+Epidemics, famine, revolts, meteorites, a golden age, the appearance of monsters (in fantasy). The frequency depends on the difficulty. Some events are prevented or mitigated by technologies and buildings.
 
-### 5.9 Фэнтези
-- Галочка при создании мира.
-- Выключено: только люди, разные культуры, реалистичные биомы, без магии и чудовищ.
-- Включено: выбор расы игрока (люди, гномы, дворфы и другие, список дописывается), фэнтезийные биомы, ветка магии, магические ресурсы, чудовища.
-- У каждой расы свои бонусы и предпочтения. Пример: дворфы сильны в горах и шахтах, но медленно растут.
+### 5.9 Fantasy
+- A checkbox when creating the world.
+- Off: only humans, different cultures, realistic biomes, no magic and no monsters.
+- On: a choice of the player's race (humans, gnomes, dwarves and others, the list is being written), fantasy biomes, a magic branch, magic resources, monsters.
+- Every race has its own bonuses and preferences. Example: dwarves are strong in the mountains and mines but grow slowly.
 
-### 5.10 Победа и поражение
-- **Завоевание:** захватить весь мир или заданную долю (зависит от сложности) **[моё решение: доля задаётся при создании мира]**.
-- **Улёт:** построить ракету и улететь народом. Это гонка: соседи тоже могут дойти до космоса, и тогда игрок проигрывает.
-- **Поражение:** потеряна последняя провинция, или соседи выполнили цель раньше.
-- Сложность влияет на силу соседей, частоту бедствий и количество ресурсов.
+### 5.10 Victory and defeat
+- **Conquest:** capture the whole world or a given share (depends on the difficulty) **[my decision: the share is set when creating the world]**.
+- **Departure:** build a rocket and fly away with the people. This is a race: the neighbours may also reach space, and then the player loses.
+- **Defeat:** the last province is lost, or the neighbours fulfilled the goal earlier.
+- The difficulty affects the strength of the neighbours, the frequency of disasters and the amount of resources.
 
-### 5.11 Время
-Реальное время с паузой и несколькими скоростями, как в HoI/EU. Пауза на пробел. **[моё решение]** Базовая единица времени — день, на карте показывается дата.
+### 5.11 Time
+Real time with pause and several speeds, as in HoI/EU. Pause on the space bar. **[my decision]** The base unit of time is a day, the date is shown on the map.
 
-## 6. Внешний вид
+## 6. Appearance
 
-- **Карта в духе HoI4.** Рельеф выглядит нарисованным: горы с тенями, леса, реки, мягкие переходы между биомами, приглушённые «бумажные» цвета. Границы стран — плавные цветные заливки с ровными линиями. На любом зуме нет пикселей.
-- **Живая карта.** Городки растут вместе с населением, человечки ходят, караваны и корабли идут по торговым путям, армии маршируют.
-- **Ассеты.** Спрайты, иконки, юниты и шрифты берутся из готовых паков с подходящей лицензией. Claude подбирает варианты, автор выбирает. Все ассеты и их лицензии записываются в `assets/CREDITS.md`.
-- **Интерфейс.** **[уточнено автором 2026-11-17]** Сдержанно, как сделал бы дизайнер со вкусом, без подражания конкретной игре: спокойные тёмные нейтральные панели, рамка 1px, хорошие отступы и выравнивание, иерархия размером и жирностью, один сдержанный акцентный цвет, простые функциональные подписи. Шрифт PT Sans (ParaType, OFL). Запрещено всё, что выдаёт «ИИ-вид»: орнаменты и разделители с ромбиками, центрированные заголовки с разрядкой, «дерево» из градиентов, золото на всём, светящиеся сегментированные полоски, поэтичные подписи, стеклянные и скруглённые градиентные карточки, неон, Inter и system-ui, эмодзи.
+- **A map in the spirit of HoI4.** The terrain looks painted: mountains with shadows, forests, rivers, soft transitions between biomes, muted "paper" colours. Country borders are smooth coloured fills with crisp lines. No pixels at any zoom.
+- **A living map.** Towns grow with the population, little people walk around, caravans and ships travel the trade routes, armies march.
+- **Assets.** Sprites, icons, units and fonts come from ready-made packs with a suitable licence. Claude picks the options, the author chooses. All assets and their licences are written into `assets/CREDITS.md`.
+- **Interface.** **[refined by the author 2026-11-17]** Restrained, the way a designer with taste would do it, without imitating a specific game: calm dark neutral panels, a 1px border, good padding and alignment, hierarchy through size and weight, one restrained accent colour, simple functional labels. Font PT Sans (ParaType, OFL). Everything that betrays the "AI look" is forbidden: ornaments and dividers with diamonds, centred headings with letter spacing, a "tree" of gradients, gold on everything, glowing segmented strips, poetic labels, glassy and rounded gradient cards, neon, Inter and system-ui, emoji.
 
-## 7. Техническая архитектура
+## 7. Technical architecture
 
-- **Стек:** TypeScript (strict), Vite, PixiJS (WebGL). **[моё решение]** Интерфейс на обычном HTML/CSS поверх canvas, без готовых UI-библиотек с узнаваемым «ИИ-видом».
-- **Симуляция отдельно от отрисовки.** Симуляция не знает про PixiJS и DOM. **[моё решение]** Она работает в Web Worker и шлёт отрисовке снимки состояния.
-- **Детерминизм.** Одинаковый seed и одинаковый список команд игрока всегда дают одинаковый мир. Все случайности идут через свой генератор случайных чисел с seed, никаких `Math.random()` и зависимости от реального времени в симуляции. Игрок меняет мир только командами (`build`, `research`, `setArmyTask`, …). Это основа будущего онлайна и повторов. **[решение 2026-11-19]** Игровая логика (`src/game`) не вызывает функции `Math`, которые браузеры считают приближённо (закреплено линтером), а количества в экономике по договорённости хранит в целых числах или фиксированной точке; при входе в онлайн-партию игроки сверяют версию сборки и контента и хеш мира `worldHash`: если он не совпал, мир присылает хост (подробнее — `docs/architecture.md`, «Готовность к этапу 2»).
-- **Карта рисуется шейдером.** Генератор строит провинции и запекает текстуру с номерами провинций. Шейдер по ней рисует ровные границы любой толщины, заливку стран и туман. Рельеф — смешивание текстур биомов плюс тени от карты высот.
-- **ИИ соседей** использует те же команды, что и игрок.
-- **Сохранение:** двоичный снимок массивов мира плюс состояние партии в JSON, или seed + `GEN_VERSION` + версия контента + список команд (подробнее — `docs/architecture.md`, «Готовность к этапу 2»).
-- **Отладка с первого этапа:** панель статистики (население, еда, войны, годы), ускорение, открытие всей карты, вызов события вручную.
-- **Размер файлов:** примерно до 400–500 строк. Больше — делим.
+- **Stack:** TypeScript (strict), Vite, PixiJS (WebGL). **[my decision]** The interface is plain HTML/CSS on top of the canvas, without ready-made UI libraries with a recognizable "AI look".
+- **Simulation separate from rendering.** The simulation does not know about PixiJS and the DOM. **[my decision]** It runs in a Web Worker and sends state snapshots to the renderer.
+- **Determinism.** The same seed and the same list of player commands always give the same world. All randomness goes through our own seeded random number generator, no `Math.random()` and no dependence on real time in the simulation. The player changes the world only with commands (`build`, `research`, `setArmyTask`, …). This is the basis of future online play and replays. **[decision 2026-11-19]** The game logic (`src/game`) does not call the `Math` functions that browsers compute approximately (enforced by the linter), and by agreement keeps the quantities in the economy in integers or fixed point; when entering an online match the players compare the build and content version and the world hash `worldHash`: if it does not match, the host sends the world (in more detail — `docs/architecture.md`, "Readiness for stage 2").
+- **The map is drawn by a shader.** The generator builds the provinces and bakes a texture with the province numbers. From it the shader draws crisp borders of any thickness, country fills and fog. The terrain is a blend of biome textures plus shadows from the height map.
+- **The neighbours' AI** uses the same commands as the player.
+- **Saving:** a binary snapshot of the world arrays plus the match state in JSON, or seed + `GEN_VERSION` + content version + the list of commands (in more detail — `docs/architecture.md`, "Readiness for stage 2").
+- **Debugging from the first stage:** a statistics panel (population, food, wars, years), speed-up, revealing the whole map, triggering an event by hand.
+- **File size:** roughly up to 400–500 lines. Longer — we split.
 
-### 7.1 Контент как данные и паки
+### 7.1 Content as data and packs
 
-**[решение автора 2026-11-17]** Игровой контент описывается данными, а не разбросан по коду. Генератор, симуляция и шейдер работают с тем, что лежит в реестре, и не знают конкретных названий.
+**[author's decision 2026-11-17]** Game content is described by data, not scattered across the code. The generator, the simulation and the shader work with what is in the registry and do not know specific names.
 
-- **Пак** — папка `src/content/packs/<id>/` с манифестом: id, название, версия, списки контента и переопределения полей контента из других паков. Пак может добавить новые записи и изменить поля существующих (цвет, название, условия появления). Примеры будущих паков: «Вторая мировая», «Современность».
-- **Что входит в пак сейчас:** биомы — id, название, флаг фэнтези, цвет палитры, слот текстуры деталей, климатическая ниша (диапазоны высоты, температуры, влажности, «магического» поля) с приоритетом, теги ролей (горы, холмы, глубокая/мелкая вода), задел под модификаторы (защита, стоимость движения).
-- **Что войдёт позже:** ресурсы, постройки, технологии, юниты, расы, события — по тем же правилам.
-- **Включение.** Список паков и включённых биомов (в т. ч. галочка «фэнтези») задаётся при создании мира и хранится в мире. Пока — через адрес страницы (`#seed?fantasy=1`), экран создания мира появится на этапе 8. Выключенный биом уступает свою нишу следующему по приоритету.
-- **Загрузка** статическая: паки импортируются в коде, без файловой системы и сети. Внешние (пользовательские) паки — когда-нибудь потом.
-- Код биома в данных мира — номер в списке включённых биомов этого мира, поэтому добавление биома не ломает старые миры при том же наборе паков.
-- Инструкция для авторов контента — `docs/modding/biomes.md`.
+- **A pack** is a `src/content/packs/<id>/` folder with a manifest: id, name, version, lists of content and overrides of content fields from other packs. A pack may add new entries and change the fields of existing ones (colour, name, appearance conditions). Examples of future packs: "World War II", "Modern age".
+- **What the pack contains now:** biomes — id, name, fantasy flag, palette colour, detail texture slot, climate niche (ranges of height, temperature, moisture, the "magic" field) with a priority, role tags (mountains, hills, deep/shallow water), groundwork for modifiers (defence, movement cost).
+- **What will come later:** resources, buildings, technologies, units, races, events — by the same rules.
+- **Enabling.** The list of packs and enabled biomes (including the "fantasy" checkbox) is set when creating the world and stored in the world. For now — through the page address (`#seed?fantasy=1`), the world creation screen will appear at stage 8. A disabled biome yields its niche to the next one by priority.
+- **Loading** is static: packs are imported in code, without a file system or network. External (user) packs — some time later.
+- The biome code in the world data is the number in the list of biomes enabled in this world, so adding a biome does not break old worlds with the same set of packs.
+- Instructions for content authors — `docs/modding/biomes.md`.
 
-### 7.2 Описание мира и версия генерации
+### 7.2 The world description and the generation version
 
-**[решение автора 2026-11-17]** Мир полностью задаётся `WorldParams = { genVersion, seed, packs, options: { fantasy, disabledBiomes, size } }`; параметры хранятся в мире и кодируются в адресе страницы (`#Бета-7?fantasy=1&size=medium`). `genVersion` — константа в коде, её **обязательно** поднимают при любом изменении генерации, меняющем результат; тест-«отпечаток» (хеш массивов мира для фиксированных параметров) напоминает об этом. Сохранения будущих этапов хранят `WorldParams`; при несовпадении версии игра честно сообщает, что мир построен другой версией генератора.
+**[author's decision 2026-11-17]** The world is fully defined by `WorldParams = { genVersion, seed, packs, options: { fantasy, disabledBiomes, size } }`; the parameters are stored in the world and encoded in the page address (`#Бета-7?fantasy=1&size=medium`). `genVersion` is a constant in the code, it is **mandatory** to bump it on any generation change that alters the result; a "fingerprint" test (a hash of the world arrays for fixed parameters) reminds about it. Saves of future stages store `WorldParams`; if the version does not match, the game honestly reports that the world was built by a different generator version.
 
-Размер мира — параметр: small 1024×512, medium 2048×1024 (по умолчанию), large 3072×1536; число провинций растёт с площадью суши.
+The world size is a parameter: small 1024×512, medium 2048×1024 (default), large 3072×1536; the number of provinces grows with the land area.
 
-### 7.3 Соседство провинций и режимы карты
+### 7.3 Province adjacency and map modes
 
-- Граф соседства хранит рёбра с типом границы: длина, «по крупной реке», «через узкий пролив» (≤ 3 клеток воды). Это основа будущих бонусов и штрафов (атака через реку, высадка через пролив, горный проход).
-- Карта получает маленькую текстуру «провинция → цвет + флаги», которую можно менять на лету без перезапекания мира. Шейдер смешивает её с рельефом в зависимости от режима карты. Режимы — данные (id, название, функция цвета провинции): сейчас «рельеф» и «провинции», потом владелец, туман войны, ресурсы, религия, подсветка целей.
-- Все горячие клавиши — в одном реестре (действие, клавиша, название для подсказки).
+- The adjacency graph stores edges with a border type: length, "along a major river", "across a narrow strait" (≤ 3 cells of water). This is the basis of future bonuses and penalties (attack across a river, landing across a strait, a mountain pass).
+- The map gets a small "province → colour + flags" texture that can be changed on the fly without rebaking the world. The shader blends it with the terrain depending on the map mode. Modes are data (id, name, a province colour function): now "terrain" and "provinces", later owner, fog of war, resources, religion, target highlights.
+- All hotkeys are in one registry (action, key, name for the tooltip).
 
-### 7.4 Редактор карты и режим бога: как будут устроены
+### 7.4 The map editor and god mode: how they will be built
 
-Сам редактор не делаем, но данные разделены так, чтобы он был возможен:
+We are not making the editor itself, but the data is separated so that it is possible:
 
-- **Исходные данные мира:** высота, температура, влажность, «магическое» поле, биомы, реки, провинции и граф соседства. Только их редактирует пользователь и только их нужно сохранять.
-- **Производные данные:** текстуры рельефа и цветов биомов, нормали, поля расстояний до границ и берега, сглаженная высота. Строятся одной функцией из исходных и умеют пересчитываться для прямоугольной области с частичной загрузкой текстуры.
-- **Изменили клетку** (высоту или биом): пересчитываются производные в прямоугольнике вокруг неё с запасом на радиус размытия, затем обновляется эта часть текстур. Если клетка стала водой/сушей — пересчитываются береговые поля в той же области.
-- **Изменили провинции** (перекрасили клетки, слили или разделили): пересчитываются `provinceOf` в области, поле расстояний до границ в области, список провинций (центр, биом, прибрежность) и рёбра графа соседства затронутых провинций; текстура данных провинций обновляется по затронутым id.
-- **Режим бога** работает поверх той же симуляции: полный обзор (режим карты без тумана), рисование биомов и провинций через эти функции, «силы» — команды симуляции, как у игрока.
+- **Source world data:** height, temperature, moisture, the "magic" field, biomes, rivers, provinces and the adjacency graph. The user edits only these and only these need to be saved.
+- **Derived data:** the terrain and biome colour textures, normals, distance fields to the borders and the coast, the smoothed height. They are built by one function from the sources and can be recomputed for a rectangular region with a partial texture upload.
+- **Changed a cell** (height or biome): the derived data are recomputed in a rectangle around it with a margin for the blur radius, then that part of the textures is updated. If the cell became water/land — the coastal fields are recomputed in the same region.
+- **Changed the provinces** (repainted cells, merged or split): `provinceOf` is recomputed in the region, the distance field to the borders in the region, the province list (centre, biome, coastalness) and the adjacency graph edges of the affected provinces; the province data texture is updated for the affected ids.
+- **God mode** works on top of the same simulation: a full overview (a map mode without fog), drawing biomes and provinces through these functions, "powers" — simulation commands, like the player's.
 
-## 8. Порядок разработки (крупно)
+## 8. Development order (roughly)
 
-Подробный план пишется отдельно. Каждый этап должен давать играбельный результат, после него автор играет 15 минут и записывает замечания.
+The detailed plan is written separately. Every stage must give a playable result, after it the author plays for 15 minutes and writes down the remarks.
 
-1. **Карта.** Генерация мира по seed: рельеф, биомы, реки, 2–4 тысячи провинций. Шейдерная отрисовка в духе HoI4, зум и перемещение. Проверка: карта выглядит хорошо на скриншотах при разных seed.
-2. **Одно поселение.** Старт, туман, провинция с ресурсами и населением, постройки, время с паузой. Самый маленький играбельный цикл.
-3. **Расширение и экономика.** Разведка, поселенцы, несколько провинций, деньги, голод.
-4. **Соседи.** Компьютерные страны по той же симуляции, расширение, граница.
-5. **Технологии.** Дерево эпох, параллельные исследования, распространение открытий.
-6. **Война.** Армии, задачи, автоматические битвы, захват провинций.
-7. **Дипломатия, торговля, события.**
-8. **Цели победы, сложность, экран создания мира.**
-9. **Фэнтези.** Расы, магия, биомы, чудовища.
+1. **The map.** World generation from a seed: terrain, biomes, rivers, 2–4 thousand provinces. Shader rendering in the spirit of HoI4, zoom and pan. Check: the map looks good on screenshots with different seeds.
+2. **One settlement.** The start, fog, a province with resources and population, buildings, time with pause. The smallest playable loop.
+3. **Expansion and economy.** Scouting, settlers, several provinces, money, famine.
+4. **Neighbours.** Computer countries by the same simulation, expansion, the border.
+5. **Technologies.** A tree of eras, parallel research, the spread of discoveries.
+6. **War.** Armies, tasks, automatic battles, capturing provinces.
+7. **Diplomacy, trade, events.**
+8. **Victory goals, difficulty, the world creation screen.**
+9. **Fantasy.** Races, magic, biomes, monsters.
 
-## 9. На будущее (не делаем сейчас, но не мешаем)
+## 9. For the future (not doing it now, but not getting in the way)
 
-- Режим бога: та же симуляция, полный обзор, рисование карты, силы.
-- Онлайн: благодаря детерминизму и командам можно сделать синхронизацию через обмен командами.
-- Приближение к своему городу с расстановкой домов (вариант C).
+- God mode: the same simulation, a full overview, drawing the map, powers.
+- Online: thanks to determinism and commands, synchronisation can be done by exchanging commands.
+- Zooming into your own city with houses placed (option C).
 
-## 10. Мелкие решения, принятые при проверке документа
+## 10. Small decisions made while checking the document
 
-- **[моё решение]** Мир — прямоугольник без зацикливания по краям. Несколько материков и острова.
-- **[моё решение]** На старте в мире 10–20 других племён (зависит от размера мира), разбросанных так же, как игрок. Все начинают с одной провинции и равных условий, сложность меняет только их бонусы.
-- **[моё решение]** Через море можно ходить после технологии мореплавания: корабли перевозят армии и поселенцев. До этого заморские земли недоступны.
-- **[моё решение]** Отрисовка рассчитана на 60 кадров/с при 4 тысячах провинций на обычном ноутбуке, симуляция — не меньше 1 игрового месяца в секунду на максимальной скорости.
+- **[my decision]** The world is a rectangle without wrapping at the edges. Several continents and islands.
+- **[my decision]** At the start there are 10–20 other tribes in the world (depends on the world size), scattered the same way as the player. Everyone starts with one province and equal conditions, the difficulty changes only their bonuses.
+- **[my decision]** You can cross the sea after the seafaring technology: ships carry armies and settlers. Before that the overseas lands are unreachable.
+- **[my decision]** Rendering is designed for 60 frames/s with 4 thousand provinces on an ordinary laptop, the simulation — at least 1 game month per second at maximum speed.
 
-## 11. Оставлено на усмотрение разработчика
+## 11. Left to the developer's discretion
 
-- Точные формулы роста, боя, торговли, баланс цифр.
-- Алгоритм генерации провинций (Вороной, заливка от центров по рельефу и т. п.), если результат выглядит ровно и красиво.
-- Полный список построек, технологий, ресурсов, событий и рас. Заполняется по этапам.
-- Конкретные паки ассетов: предлагаются автору на этапе, где они нужны.
+- The exact formulas of growth, combat, trade, the balance of the numbers.
+- The province generation algorithm (Voronoi, flood fill from the centres along the terrain, etc.) if the result looks crisp and beautiful.
+- The full list of buildings, technologies, resources, events and races. Filled in stage by stage.
+- Specific asset packs: offered to the author at the stage where they are needed.

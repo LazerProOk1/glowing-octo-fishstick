@@ -1,9 +1,9 @@
 import { HILL_LEVEL, MOUNTAIN_LEVEL, SEA_LEVEL as SEA } from '../../terrainLevels';
 import { above, type BiomeDef } from '../../biomes/types';
 
-// Обычные биомы. Порядок массива — коды биомов (не менять: на нём стоят эталонные хэши мира).
-// Приоритеты повторяют старый решающий список сверху вниз; строгие «>» записаны через above().
-// Уровни рельефа: море SEA_LEVEL (0.5), холмы выше HILL_LEVEL (0.72), горы выше MOUNTAIN_LEVEL (0.85).
+// Ordinary biomes. The array order is the biome codes (do not change: reference world hashes depend on it).
+// Priorities mirror the old decision list top to bottom; strict ">" is written via above().
+// Terrain levels: sea at SEA_LEVEL (0.5), hills above HILL_LEVEL (0.72), mountains above MOUNTAIN_LEVEL (0.85).
 
 export const BASE_BIOMES: BiomeDef[] = [
   {
@@ -89,8 +89,8 @@ export const BASE_BIOMES: BiomeDef[] = [
     when: { temperature: [above(20), Infinity], moisture: [-Infinity, 0.2] },
   },
   {
-    // Старый список: «t < 5 и m ≤ 0.3» или «m < 0.35»; первое уже покрыто вторым,
-    // потому что «t < 5 и m > 0.3» раньше забирает тайга.
+    // Old list: "t < 5 and m ≤ 0.3" or "m < 0.35"; the first is already covered by the second,
+    // because taiga takes "t < 5 and m > 0.3" earlier.
     id: 'steppe',
     nameKey: 'biome.steppe',
     kind: 'land',
@@ -145,9 +145,9 @@ export const BASE_BIOMES: BiomeDef[] = [
 ];
 
 /**
- * Озёра: вода замкнутых внутренних водоёмов (src/sim/world/lakes.ts). По условиям не выбирается
- * (тег lake), поэтому `when` пуст. В паке идёт последним, после фэнтези: коды остальных биомов
- * не сдвигаются.
+ * Lakes: water of closed inland bodies (src/sim/world/lakes.ts). Never chosen by conditions
+ * (tag lake), so `when` is empty. It comes last in the pack, after fantasy, so the codes of the
+ * other biomes do not shift.
  */
 export const LAKE_BIOME: BiomeDef = {
   id: 'lake',

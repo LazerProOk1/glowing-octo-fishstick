@@ -8,7 +8,7 @@ import type { World } from '../../src/sim/world/types';
 
 type P = { x: number; y: number };
 
-/** Точка внутри выпуклого многоугольника (вершины по обходу, любого направления). */
+/** Point inside a convex polygon (vertices in traversal order, either direction). */
 function insideConvex(p: P, hull: P[], eps = 1e-9): boolean {
   let sign = 0;
   for (let i = 0; i < hull.length; i++) {
@@ -30,21 +30,21 @@ describe('chaikin', () => {
     { x: 10, y: 10 },
   ];
 
-  it('сохраняет первую и последнюю точки', () => {
+  it('keeps the first and the last point', () => {
     const out = chaikin(tri, 3);
     expect(out[0]).toEqual({ x: 0, y: 0 });
     expect(out[out.length - 1]).toEqual({ x: 10, y: 10 });
   });
 
-  it('2 итерации на 3 точках дают 6 точек', () => {
+  it('2 iterations on 3 points give 6 points', () => {
     expect(chaikin(tri, 2)).toHaveLength(6);
   });
 
-  it('все точки лежат внутри выпуклой оболочки исходных', () => {
+  it('all points lie within the convex hull of the source points', () => {
     for (const p of chaikin(tri, 4)) expect(insideConvex(p, tri)).toBe(true);
   });
 
-  it('0 итераций и короткие пути возвращают копию', () => {
+  it('0 iterations and short paths return a copy', () => {
     const out = chaikin(tri, 0);
     expect(out).toEqual(tri);
     expect(out).not.toBe(tri);
@@ -54,7 +54,7 @@ describe('chaikin', () => {
     ]);
   });
 
-  it('не изменяет входной массив', () => {
+  it('does not modify the input array', () => {
     const copy = tri.map((p) => ({ ...p }));
     chaikin(tri, 3);
     expect(tri).toEqual(copy);
@@ -77,7 +77,7 @@ describe('riverWidthCells', () => {
   });
 });
 
-/** Билинейная выборка поля как texture() с clamp-to-edge (центры клеток в +0.5), см. coastAt. */
+/** Bilinear field sampling like texture() with clamp-to-edge (cell centres at +0.5), see coastAt. */
 function sampler(f: Float32Array, w: number, h: number): (x: number, y: number) => number {
   const at = (ix: number, iy: number): number =>
     f[Math.min(h - 1, Math.max(0, iy)) * w + Math.min(w - 1, Math.max(0, ix))]!;
@@ -107,17 +107,17 @@ describe.each(['1', 'Бета-7'])('river mouths (seed %j, small)', (seed) => {
     let mouths = 0;
     rivers.forEach((r, ri) => {
       const last = r.points[r.points.length - 1]!;
-      if (height[Math.floor(last.y) * w + Math.floor(last.x)]! >= SEA_LEVEL) return; // приток
+      if (height[Math.floor(last.y) * w + Math.floor(last.x)]! >= SEA_LEVEL) return; // tributary
       mouths++;
       const water = pieces.filter((p) => p.river === ri && p.kind === 'water');
       const tip = water[water.length - 1]!.points.at(-1)!;
-      // Конец в воде и не ближе 0.5 клетки к береговой линии (нулю размытой высоты): 8 точек вокруг.
+      // The end is in water and no closer than 0.5 cells to the shoreline (zero blurred height): 8 points around.
       expect(coast(tip.x, tip.y), `река ${ri}`).toBeLessThan(0);
       for (let k = 0; k < 8; k++) {
         const a = (k * Math.PI) / 4;
         expect(coast(tip.x + 0.5 * Math.cos(a), tip.y + 0.5 * Math.sin(a)), `река ${ri}`).toBeLessThan(0);
       }
-      // Подложка (тёмная кромка) не заходит в воду: её конец на суше или на самой береговой линии.
+      // The underlay (dark edge) does not enter the water: its end is on land or right at the shoreline.
       const bank = pieces.filter((p) => p.river === ri && p.kind === 'bank');
       const bankEnd = bank[bank.length - 1]!.points.at(-1)!;
       expect(coast(bankEnd.x, bankEnd.y), `река ${ri}`).toBeGreaterThanOrEqual(0);

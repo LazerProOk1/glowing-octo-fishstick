@@ -11,10 +11,10 @@ const ASSETS = join(ROOT, 'assets');
 const credits = readFileSync(join(ASSETS, 'CREDITS.md'), 'utf8');
 
 describe('DETAIL_SLOT_OF', () => {
-  it('имя слота из данных биома — его номер в атласе', () => {
+  it('a slot name from the biome data is its index in the atlas', () => {
     DETAIL_SLOT_NAMES.forEach((name, i) => expect(DETAIL_SLOT_OF[name], name).toBe(i));
   });
-  it('каждый биом базового пака попадает в используемый слот атласа', () => {
+  it('every biome of the base pack maps to a slot the atlas uses', () => {
     for (const b of BASE_PACK.biomes) {
       const slot = DETAIL_SLOT_OF[b.detail];
       expect(Number.isInteger(slot), b.id).toBe(true);

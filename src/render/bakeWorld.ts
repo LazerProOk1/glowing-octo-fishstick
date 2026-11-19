@@ -1,5 +1,5 @@
-// Подготовка данных всех текстур мира без pixi.js: выполняется в воркерах генерации,
-// чтобы главный поток только загружал готовые массивы на GPU.
+// Preparation of all world texture data without pixi.js: runs in the generation workers,
+// so the main thread only uploads the finished arrays to the GPU.
 import type { BiomeDef } from '../content/biomes/types';
 import { SEA_LEVEL } from '../content/terrainLevels';
 import type { World } from '../sim/world/types';
@@ -10,29 +10,29 @@ import { blur } from '../sim/geom/blur';
 import { COAST_SIGMA, bakeGradient, coastNearness } from './normals';
 import { smoothSeaDepth } from './seaDepth';
 
-/** Текстуры, которые зависят только от высоты и биомов (готовы сразу после этапа берегов). */
+/** Textures that depend only on height and biomes (ready right after the shores stage). */
 export interface SurfaceBake {
-  /** R16F: высота − SEA_LEVEL. */
+  /** R16F: height − SEA_LEVEL. */
   height: Uint16Array;
-  /** RGBA16F: градиент, береговая высота, близость берега. */
+  /** RGBA16F: gradient, shore height, shore proximity. */
   surface: Uint16Array;
   biomeColor: Uint8Array;
-  /** R16F, сетка seaDepthSize: крупномасштабная глубина настоящего дна для цвета воды (smoothSeaDepth). */
+  /** R16F, seaDepthSize grid: large-scale depth of the real bottom for the water colour (smoothSeaDepth). */
   seaDepth: Uint16Array;
 }
 
-/** Готовые пиксели текстур мира (раскладка каналов — см. WorldTextures в textures.ts). */
+/** Finished world texture pixels (channel layout — see WorldTextures in textures.ts). */
 export interface WorldBake extends SurfaceBake {
-  /** id для показа там, где на экране суша (displayProvinceOf). */
+  /** Display id where the screen shows land (displayProvinceOf). */
   provinceRG: Uint8Array;
-  /** id для показа там, где на экране вода (displaySeaProvinceOf). */
+  /** Display id where the screen shows water (displaySeaProvinceOf). */
   provinceSeaRG: Uint8Array;
   terrain: Uint8Array;
 }
 
 /**
- * Слегка размытая высота − SEA_LEVEL: поле береговой линии шейдера (канал B surface).
- * Суша на экране там, где его билинейная интерполяция больше нуля.
+ * Slightly blurred height − SEA_LEVEL: the shader's shoreline field (surface channel B).
+ * The screen shows land where its bilinear interpolation is above zero.
  */
 export function coastHeight(height: Float32Array, w: number, h: number): Float32Array {
   const coast = blur(height, w, h, COAST_SIGMA);
@@ -40,7 +40,7 @@ export function coastHeight(height: Float32Array, w: number, h: number): Float32
   return coast;
 }
 
-/** RGBA16F сразу в половинной точности, без промежуточного float32-массива на 8 млн значений. */
+/** RGBA16F straight in half precision, without an intermediate float32 array of 8M values. */
 function packSurface(height: Float32Array, w: number, h: number): Uint16Array {
   const grad = bakeGradient(height, w, h);
   const coast = coastHeight(height, w, h);
@@ -57,10 +57,10 @@ function packSurface(height: Float32Array, w: number, h: number): Uint16Array {
 }
 
 /**
- * Владелец клетки для показа: как provinceOf, но клетки воды, которые могут быть видны сушей
- * (у самой клетки или у одного из 8 соседей coast > 0), отдаются ближайшей сухопутной провинции
- * (обход в ширину от суши по 8 соседям, при равном расстоянии — меньший id). Так подсветка,
- * заливка и выбор провинции доходят до гладкого берега. Данные симуляции не меняются.
+ * Owner of a cell for display: like provinceOf, but water cells that may be visible as land
+ * (the cell itself or one of its 8 neighbours has coast > 0) are given to the nearest land province
+ * (breadth-first walk from land over 8 neighbours, ties — the lower id). Thus highlighting,
+ * fill and province picking reach the smooth shoreline. Simulation data is unchanged.
  */
 export function displayProvinceOf(
   world: Pick<World, 'w' | 'h' | 'provinces' | 'provinceOf'>,
@@ -70,10 +70,10 @@ export function displayProvinceOf(
 }
 
 /**
- * Зеркало displayProvinceOf для воды: клетки суши, которые могут быть видны водой (у самой клетки
- * или у одного из 8 соседей coast < 0), отдаются ближайшей морской или озёрной провинции. По этой
- * карте шейдер рисует подсветку, заливку и границы там, где на экране вода, а MapView выбирает
- * провинцию под курсором. Водные клетки сохраняют свою провинцию.
+ * Water mirror of displayProvinceOf: land cells that may be visible as water (the cell itself or
+ * one of its 8 neighbours has coast < 0) are given to the nearest sea or lake province. With this
+ * map the shader draws highlights, fill and borders where the screen shows water, and MapView picks
+ * the province under the cursor. Water cells keep their own province.
  */
 export function displaySeaProvinceOf(
   world: Pick<World, 'w' | 'h' | 'provinces' | 'provinceOf'>,
@@ -83,8 +83,8 @@ export function displaySeaProvinceOf(
 }
 
 /**
- * Общая часть обеих карт показа. toLand: клетки воды у видимой суши получают сушу; иначе клетки
- * суши у видимой воды получают воду. Обход в ширину по 8 соседям, при равном расстоянии — меньший id.
+ * Common part of both display maps. toLand: water cells near visible land get land; otherwise land
+ * cells near visible water get water. Breadth-first walk over 8 neighbours, ties — the lower id.
  */
 function spreadAcrossCoast(
   world: Pick<World, 'w' | 'h' | 'provinces' | 'provinceOf'>,
@@ -94,15 +94,15 @@ function spreadAcrossCoast(
   const { w, h, provinces, provinceOf } = world;
   const n = w * h;
   const out = provinceOf.slice();
-  // 1 — провинция той стороны берега, которой отдаём полосу.
+  // 1 — province of the bank side the strip is given to.
   const sourceOf = new Uint8Array(provinces.length);
   provinces.forEach((p, id) => (sourceOf[id] = p.isLand === toLand ? 1 : 0));
-  // Знак coast, при котором клетка может быть видна стороной-источником.
+  // The sign of coast at which a cell may be visible as the source side.
   const sign = toLand ? 1 : -1;
-  // 0 — не трогаем, 1 — полоса, ещё без владельца, 2 — владелец найден на этом слое.
+  // 0 — untouched, 1 — strip without an owner yet, 2 — owner found on this layer.
   const state = new Uint8Array(n);
-  // Затравка обхода — только клетки-источники, у которых среди 8 соседей есть клетка полосы: остальные
-  // ничего не раздают, так что результат тот же, а обход не трогает всю сушу (воду).
+  // The walk starts only from source cells that have a strip cell among their 8 neighbours: the rest
+  // hand out nothing, so the result is the same, and the walk does not touch all the land (water).
   const seeded = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
     if (sourceOf[provinceOf[i] as number]) continue;
@@ -135,7 +135,7 @@ function spreadAcrossCoast(
   }
   let frontier: number[] = [];
   for (let i = 0; i < n; i++) if (seeded[i]) frontier.push(i);
-  // Послойный обход: на слое d владелец клетки — наименьший id среди соседей слоя d − 1.
+  // Layer-by-layer walk: on layer d a cell's owner is the lowest id among the neighbours on layer d − 1.
   while (frontier.length > 0) {
     const next: number[] = [];
     for (const i of frontier) {
@@ -166,11 +166,11 @@ function spreadAcrossCoast(
   return out;
 }
 
-/** Текстуры провинций по владельцам для показа: сухопутная и морская карты (см. displayProvinceOf). */
+/** Province textures by display owners: the land map and the water map (see displayProvinceOf). */
 export interface ProvinceBake extends BakedTextures {
   /**
-   * RGBA8 в раскладке provinceRG по displaySeaProvinceOf: карта id там, где на экране вода.
-   * Канал A — вид воды по биому самой клетки (SEA_MAP_ALPHA: суша, море, озеро) для озёрного цвета.
+   * RGBA8 in provinceRG layout over displaySeaProvinceOf: the id map where the screen shows water.
+   * Alpha — water kind by the cell's own biome (SEA_MAP_ALPHA: land, sea, lake) for the lake colour.
    */
   provinceSeaRG: Uint8Array;
 }
@@ -209,7 +209,7 @@ export function bakeWorld(world: World, surface?: SurfaceBake): WorldBake {
   };
 }
 
-/** Буферы типизированных массивов, каждый один раз (повтор в списке передачи — ошибка). */
+/** Typed array buffers, each exactly once (a repeat in the transfer list is an error). */
 export function uniqueBuffers(views: Iterable<ArrayBufferView>): ArrayBuffer[] {
   const seen = new Set<ArrayBuffer>();
   for (const v of views) {
@@ -218,7 +218,7 @@ export function uniqueBuffers(views: Iterable<ArrayBufferView>): ArrayBuffer[] {
   return [...seen];
 }
 
-/** Буферы запечённых текстур, каждый один раз. */
+/** Buffers of the baked textures, each exactly once. */
 export function bakeTransferables(bake: Partial<WorldBake>): ArrayBuffer[] {
   return uniqueBuffers(Object.values(bake) as ArrayBufferView[]);
 }

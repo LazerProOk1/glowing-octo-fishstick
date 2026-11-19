@@ -1,78 +1,78 @@
-// Схема биома как данных. Биомы мира собираются из паков (src/content/registry.ts);
-// генератор и рендер опираются на поля и теги, а не на имена биомов.
+// Biome schema as data. World biomes are assembled from packs (src/content/registry.ts);
+// the generator and renderer rely on fields and tags, not on biome names.
 
-/** Слоты атласа деталей (assets/terrain/atlas.png); индекс в массиве — номер слота. */
+/** Detail atlas slots (assets/terrain/atlas.png); the array index is the slot number. */
 export const DETAIL_SLOT_NAMES = ['grass', 'forest', 'sand', 'rock', 'snow', 'mud', 'paper'] as const;
 export type DetailSlotName = (typeof DETAIL_SLOT_NAMES)[number];
 
-/** Полуинтервал [min, max): min включительно, max не включительно; ±Infinity допустимы. */
+/** Half-open interval [min, max): min inclusive, max exclusive; ±Infinity is allowed. */
 export type Range = readonly [min: number, max: number];
 
 /**
- * Роли, на которые опирается генератор. `lake` — вода озёр: такой биом не выбирается по условиям
- * `when`, его получают клетки замкнутых внутренних водоёмов (src/sim/world/lakes.ts).
+ * Roles the generator relies on. `lake` — lake water: such a biome is never chosen by `when`
+ * conditions; cells of closed inland water bodies get it (src/sim/world/lakes.ts).
  */
 export type BiomeTag = 'mountain' | 'hill' | 'deepWater' | 'shallowWater' | 'lake';
 
-/** Поля мира, по которым выбирается биом. */
+/** World fields used to choose a biome. */
 export interface BiomeConditions {
-  /** Высота 0..1, уровень моря 0.5. */
+  /** Height 0..1, sea level 0.5. */
   height?: Range;
-  /** Температура, °C. */
+  /** Temperature, °C. */
   temperature?: Range;
-  /** Влажность 0..1. */
+  /** Moisture 0..1. */
   moisture?: Range;
-  /** «Магичность» 0..1: низкочастотный шум, задаёт пятна фэнтези-биомов. */
+  /** "Arcana" 0..1: low-frequency noise that shapes the fantasy biome patches. */
   arcana?: Range;
 }
 
 export interface BiomeDef {
-  /** Латиница snake_case, уникален: 'mushroom_forest'. */
+  /** Latin snake_case, unique: 'mushroom_forest'. */
   id: string;
-  /** Ключ i18n названия: 'biome.mushroom_forest' (перевод — в src/i18n/ru.ts). */
+  /** i18n key of the name: 'biome.mushroom_forest' (translation in src/i18n/ru.ts). */
   nameKey: string;
-  /** Вода выбирается только на клетках не выше уровня моря, суша — только выше. */
+  /** Water is chosen only on cells at or below sea level, land only above it. */
   kind: 'water' | 'land';
-  /** Включается только в мире с фэнтези. */
+  /** Enabled only in a world with fantasy. */
   fantasy: boolean;
-  /** sRGB 0..255, насыщенность HSL ≤ 0.45. */
+  /** sRGB 0..255, HSL saturation ≤ 0.45. */
   color: readonly [number, number, number];
-  /** Слот атласа деталей (яркостная текстура поверх цвета). */
+  /** Detail atlas slot (a luminance texture over the colour). */
   detail: DetailSlotName;
-  /** Больше — проверяется раньше. */
+  /** Higher values are checked first. */
   priority: number;
-  /** Пусто — подходит всё (запасной биом своего вида). */
+  /** Empty means everything matches (the fallback biome of its kind). */
   when: BiomeConditions;
   tags?: readonly BiomeTag[];
-  /** Задел на будущее, пока не используется. */
+  /** Groundwork for the future, unused for now. */
   modifiers?: { defense?: number; moveCost?: number };
 }
 
 export interface PackManifest {
   id: string;
-  /** Ключ i18n названия пака: 'pack.base'. */
+  /** i18n key of the pack name: 'pack.base'. */
   nameKey: string;
   version: string;
   biomes: BiomeDef[];
-  /** Правки биомов, объявленных этим или предыдущими паками (по id). */
+  /** Edits to biomes declared by this or earlier packs (by id). */
   overrides?: Record<string, Partial<Omit<BiomeDef, 'id'>>>;
 }
 
 export interface GenOptions {
-  /** Паки по порядку; по умолчанию ['base']. */
+  /** Packs in order; default ['base']. */
   packs?: string[];
-  /** Включить фэнтези-биомы; по умолчанию false. */
+  /** Enable fantasy biomes; default false. */
   fantasy?: boolean;
-  /** id выключенных биомов: их ниша достаётся следующему подходящему по приоритету. */
+  /** Ids of disabled biomes: their niche goes to the next biome by priority. */
   disabledBiomes?: string[];
 }
 
-/** Код биома хранится в Uint8Array и упаковывается в 5 бит классов провинций. */
+/** The biome code is stored in a Uint8Array and packed into 5 bits of the province classes. */
 export const MAX_BIOMES = 32;
 
 /**
- * Наименьшее число double, большее x. Строгое «x > a» из старого решающего списка
- * записывается полуинтервалом [above(a), …): для чисел double это одно и то же.
+ * The smallest double greater than x. A strict "x > a" from the old decision list is
+ * written as the half-open interval [above(a), …): for doubles that is the same thing.
  */
 export function above(x: number): number {
   if (Number.isNaN(x) || x === Infinity) return x;

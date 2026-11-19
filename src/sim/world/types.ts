@@ -11,7 +11,7 @@ export interface Province {
   /** Equals the index in the provinces array and the value in `provinceOf`. */
   id: number;
   isLand: boolean;
-  /** Вода провинции: 'sea' — море, 'lake' — озеро (замкнутый внутренний водоём), null — суша. */
+  /** Province water: 'sea' — sea, 'lake' — lake (closed inland water body), null — land. */
   water: 'sea' | 'lake' | null;
   cellCount: number;
   /** A cell of the province near its centroid (integer cell coordinates). */
@@ -21,52 +21,52 @@ export interface Province {
   /** Ids of 4-adjacent provinces (land and sea), ascending. */
   neighbors: number[];
   /**
-   * Сухопутная провинция у моря: граничит с провинцией `water === 'sea'`. Признак будущих портов
-   * и флота (флот по озёрам не ходит); берег озера сюда не входит.
+   * Land province by the sea: borders a province with `water === 'sea'`. Basis for future ports
+   * and fleets (fleets do not sail lakes); a lake shore does not count here.
    */
   coastal: boolean;
-  /** Сухопутная провинция у озера: граничит с провинцией `water === 'lake'` (пресная вода, рыба). */
+  /** Land province by a lake: borders a province with `water === 'lake'` (fresh water, fish). */
   lakeside: boolean;
 }
 
-/** Ребро графа соседства провинций. */
+/** Edge of the province adjacency graph. */
 export interface ProvinceEdge {
-  /** a < b — id провинций. */
+  /** a < b — province ids. */
   a: number;
   b: number;
-  /** Число пар 4-соседних клеток a|b на общей границе; 0 у пролива без общей границы. */
+  /** Number of 4-adjacent cell pairs a|b on the shared border; 0 for a strait with no shared border. */
   length: number;
   /**
-   * Суша–суша: число пар границы вдоль крупной реки (ширина ≥ 2) — пары «клетка реки | другой
-   * берег»; 0 у прочих рёбер. Задел под штрафы за переправу пропорционально длине.
+   * Land–land: number of border pairs along a major river (width ≥ 2) — pairs "river cell | other
+   * bank"; 0 for other edges. Groundwork for crossing penalties proportional to length.
    */
   riverLength: number;
-  /** Граница суша–суша, не меньше половины которой идёт по крупной реке: 2·riverLength ≥ length > 0. */
+  /** Land–land border at least half of which runs along a major river: 2·riverLength ≥ length > 0. */
   river: boolean;
-  /** Сухопутные провинции без общей границы, разделённые водой не шире STRAIT_MAX_WATER клеток. */
+  /** Land provinces without a shared border, separated by water no wider than STRAIT_MAX_WATER cells. */
   strait: boolean;
 }
 
 export interface World {
-  /** Всё, что задаёт мир; генерация по тем же параметрам и той же версии даёт тот же мир. */
+  /** Everything that defines the world; the same params and version reproduce the same world. */
   params: WorldParams;
   w: number;
   h: number;
   height: Float32Array;
   temperature: Float32Array;
   moisture: Float32Array;
-  /** «Магичность» 0..1 (см. computeArcana). */
+  /** "Arcana" 0..1 (see computeArcana). */
   arcana: Float32Array;
-  /** Включённые биомы этого мира; индекс — код биома. */
+  /** Enabled biomes of this world; the index is the biome code. */
   biomes: BiomeDef[];
-  /** Коды биомов: индекс в `biomes`. */
+  /** Biome codes: index in `biomes`. */
   biome: Uint8Array;
   riverMask: Uint8Array;
   rivers: RiverPath[];
   provinceOf: Uint16Array;
   provinces: Province[];
-  /** Рёбра соседства по возрастанию (a, b); проливы — в том же списке. */
+  /** Adjacency edges in ascending (a, b) order; straits are in the same list. */
   adjacency: ProvinceEdge[];
-  /** Индексы рёбер `adjacency` по id провинции, по возрастанию. */
+  /** Indices of `adjacency` edges by province id, ascending. */
   edgesOf: number[][];
 }

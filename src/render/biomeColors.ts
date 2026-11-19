@@ -22,7 +22,7 @@ export function bakeBiomeColors(
   sigma = BIOME_SIGMA,
 ): Uint8Array {
   const n = w * h;
-  // RGB и покрытие чередуются в одном массиве и размываются за один проход.
+  // RGB and coverage are interleaved in one array and blurred in a single pass.
   const rgbc = new Float32Array(n * 4);
   const lut = colorLut(defs);
   for (let i = 0; i < n; i++) {
@@ -39,7 +39,7 @@ export function bakeBiomeColors(
   return out;
 }
 
-/** Таблица по коду биома: цвет и признак суши (RGBA), без поиска по имени в цикле. */
+/** Table by biome code: colour and land flag (RGBA), no lookup by name in the loop. */
 function colorLut(defs: readonly BiomeDef[]): Float32Array {
   const lut = new Float32Array(256 * 4);
   for (let code = 0; code < 256; code++) {
@@ -53,7 +53,7 @@ function colorLut(defs: readonly BiomeDef[]): Float32Array {
   return lut;
 }
 
-/** Нормированная свёртка → RGBA8: цвет делится на покрытие; без суши рядом — цвет пляжа, A = 0. */
+/** Normalized convolution → RGBA8: the colour is divided by the coverage; no land nearby — beach colour, A = 0. */
 function writeColor(out: Uint8Array, o: number, blurred: Float32Array, b: number): void {
   const cov = blurred[b + 3] as number;
   if (cov < 1e-6) {
@@ -70,7 +70,7 @@ function writeColor(out: Uint8Array, o: number, blurred: Float32Array, b: number
   out[o + 3] = Math.round(Math.min(1, cov) * 255);
 }
 
-/** Прямоугольник в клетках карты. */
+/** Rectangle in map cells. */
 export interface Rect {
   x: number;
   y: number;
@@ -78,15 +78,15 @@ export interface Rect {
   h: number;
 }
 
-/** Радиус размытия цветов биомов в клетках: столько клеток вокруг правки меняют цвет. */
+/** Biome colour blur radius in cells: this many cells around an edit change colour. */
 export function biomeBlurRadius(sigma = BIOME_SIGMA): number {
   return Math.ceil(3 * sigma);
 }
 
 /**
- * Пересчитывает цвета биомов в прямоугольнике `rect` (уже обрезанном краями карты) в `out`
- * (полная текстура w·h·4). Побитно совпадает с bakeBiomeColors: те же отводы ядра в том же
- * порядке, та же обрезка у краёв карты, те же округления float32 промежуточного прохода.
+ * Recomputes biome colours in the rectangle `rect` (already clipped to the map edges) into `out`
+ * (the full w·h·4 texture). Bit-identical to bakeBiomeColors: the same kernel taps in the same
+ * order, the same clipping at the map edges, the same float32 rounding of the intermediate pass.
  */
 export function bakeBiomeColorsRect(
   biome: Uint8Array,
@@ -98,9 +98,9 @@ export function bakeBiomeColorsRect(
   sigma = BIOME_SIGMA,
 ): void {
   if (rect.w <= 0 || rect.h <= 0) return;
-  // Окно = прямоугольник ± радиус ядра, обрезанное краями карты. Клетки прямоугольника в окне
-  // берут все отводы ядра без обрезки, кроме тех сторон, где окно упирается в край карты, а там
-  // обрезка окна и карты совпадает: blurInterleaved по окну даёт для них ровно то же, что по карте.
+  // The window is the rectangle ± kernel radius, clipped to the map edges. Cells of the rectangle take
+  // all kernel taps without clipping, except on sides where the window hits the map edge; there the
+  // window and map clipping coincide, so blurInterleaved over the window gives them the same result.
   const r = biomeBlurRadius(sigma);
   const x0 = Math.max(0, rect.x - r);
   const x1 = Math.min(w - 1, rect.x + rect.w - 1 + r);

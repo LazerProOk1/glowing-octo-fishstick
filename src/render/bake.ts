@@ -22,9 +22,9 @@ function clampByte(v: number): number {
 }
 
 /**
- * owner — id провинции каждой клетки для показа (по умолчанию provinceOf; рендер передаёт
- * displayProvinceOf из bakeWorld.ts). Границы провинций шейдер строит сам по картам id
- * (мягкая доля, см. softProvince.ts), поэтому поле расстояний до границ не запекается.
+ * owner — province id of each cell for display (provinceOf by default; the renderer passes
+ * displayProvinceOf from bakeWorld.ts). The shader builds province borders itself from the id maps
+ * (soft share, see softProvince.ts), so no distance-to-border field is baked.
  */
 export function bakeTextures(world: World, owner: Uint16Array = world.provinceOf): BakedTextures {
   const n = world.w * world.h;
@@ -35,12 +35,12 @@ export function bakeTextures(world: World, owner: Uint16Array = world.provinceOf
 }
 
 /**
- * RGBA-пиксели карты владельцев (раскладка provinceRG): R,G — id, B — 255 у сухопутной провинции,
- * A — 255. Неизвестный id — ошибка.
+ * RGBA pixels of the owner map (provinceRG layout): R,G — id, B — 255 for a land province,
+ * A — 255. An unknown id is an error.
  */
 export function provinceIdPixels(owner: Uint16Array, provinces: readonly Pick<World['provinces'][number], 'isLand'>[]): Uint8Array {
   const out = new Uint8Array(owner.length * 4);
-  // Суша по id провинции заранее: без поиска объекта провинции в цикле по 2 млн клеток.
+  // Land by province id computed up front: no province object lookup in a loop over 2M cells.
   const landOf = new Uint8Array(provinces.length);
   provinces.forEach((p, id) => (landOf[id] = p.isLand ? 255 : 0));
   for (let i = 0; i < owner.length; i++) {
@@ -56,33 +56,33 @@ export function provinceIdPixels(owner: Uint16Array, provinces: readonly Pick<Wo
 }
 
 /**
- * Канал A карты владельцев воды (provinceSeaRG): вид воды по биому самой клетки — суша, море или
- * озеро. Шейдер (lakeShare в mapShader.ts) читает его из тех же 16 текселей, что и мягкую долю
- * провинций, и не делает отдельных выборок кода биома и палитры. У provinceRG канал A остаётся 255.
+ * Alpha channel of the water owner map (provinceSeaRG): water kind by the cell's own biome — land,
+ * sea or lake. The shader (lakeShare in mapShader.ts) reads it from the same 16 texels as the soft
+ * province share and makes no separate biome-code or palette lookups. In provinceRG alpha stays 255.
  */
 export const SEA_MAP_ALPHA = { land: 255, sea: 128, lake: 0 } as const;
 
-/** SEA_MAP_ALPHA по коду биома (тот же разбор, что слоты палитры в paletteData, textures.ts). */
+/** SEA_MAP_ALPHA by biome code (the same mapping as the palette slots in paletteData, textures.ts). */
 export function waterClassTable(defs: readonly BiomeDef[]): number[] {
   return defs.map((d) =>
     hasTag(d, 'lake') ? SEA_MAP_ALPHA.lake : d.kind === 'water' ? SEA_MAP_ALPHA.sea : SEA_MAP_ALPHA.land,
   );
 }
 
-/** Канал A клетки i по её биому; table — waterClassTable. Неизвестный код биома — ошибка. */
+/** Alpha of cell i by its biome; table is waterClassTable. An unknown biome code is an error. */
 export function writeWaterClassCell(pixels: Uint8Array, biome: Uint8Array, table: readonly number[], i: number): void {
   const c = table[biome[i] as number];
   if (c === undefined) throw new Error(`нет биома с кодом ${biome[i]} (клетка ${i})`);
   pixels[i * 4 + 3] = c;
 }
 
-/** Записывает SEA_MAP_ALPHA в канал A RGBA-пикселей по биому каждой клетки. */
+/** Writes SEA_MAP_ALPHA into the alpha of the RGBA pixels by each cell's biome. */
 export function writeWaterClass(pixels: Uint8Array, biome: Uint8Array, defs: readonly BiomeDef[]): void {
   const table = waterClassTable(defs);
   for (let i = 0; i < biome.length; i++) writeWaterClassCell(pixels, biome, table, i);
 }
 
-/** Один пиксель текстуры terrain (RGBA: высота, код биома, влажность, ширина реки · 63). */
+/** One terrain texture pixel (RGBA: height, biome code, moisture, river width · 63). */
 export function writeTerrainCell(
   terrain: Uint8Array,
   world: Pick<World, 'height' | 'biome' | 'moisture' | 'riverMask'>,

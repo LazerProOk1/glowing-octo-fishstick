@@ -1,43 +1,43 @@
 /** sRGB, 0..255. */
 export type RGB = readonly [number, number, number];
 
-// Цвета биомов — в данных биомов (src/content/packs/*): поле color, насыщенность ≤ 0.45.
-// Здесь — приглушённые «бумажные» цвета карты помимо биомов (в духе HoI4).
+// Biome colours live in the biome data (src/content/packs/*): the color field, saturation ≤ 0.45.
+// Here are the muted "paper" map colours besides the biomes (in the spirit of HoI4).
 
-/** Цвета карты помимо биомов. */
+/** Map colours besides the biomes. */
 export const MAP_COLORS = {
-  /** Море над мелким дном: шельфы материков (тон по глубине дна, см. seaDepth.ts). */
+  /** Sea over shallow bottom: continental shelves (tint by bottom depth, see seaDepth.ts). */
   seaShallow: [92, 117, 124],
-  /** Море над самым глубоким дном (середина океана). */
+  /** Sea over the deepest bottom (mid-ocean). */
   seaDeep: [50, 69, 82],
-  /** Узкая светлая полоса моря у самого берега (2–4 клетки). */
+  /** Narrow bright sea band right at the shore (2–4 cells). */
   seaCoast: [116, 141, 145],
-  /** Озеро: светлее и зеленее моря. */
+  /** Lake: lighter and greener than the sea. */
   lakeDeep: [84, 110, 106],
-  /** Озеро у берега (полоса не шире ~2 клеток). */
+  /** Lake at the shore (a band no wider than ~2 cells). */
   lakeShallow: [122, 150, 138],
-  /** Суша, у которой среди соседних клеток нет ни одной сухопутной (узкие косы). */
+  /** Land with not a single land cell among its neighbours (narrow spits). */
   beach: [196, 184, 148],
-  /** Тонкая береговая линия. */
+  /** Thin coastline. */
   coastLine: [62, 70, 70],
-  /** Границы провинций. */
+  /** Province borders. */
   border: [78, 66, 56],
-  /** Реки: мелководье, чуть темнее для контраста с сушей. */
+  /** Rivers: shallow water, slightly darker for contrast with the land. */
   river: [96, 124, 134],
-  /** Тёмная подложка реки (кромка берегов): обводка на 40% шире воды. */
+  /** Dark river underlay (bank edge): an outline 40% wider than the water. */
   riverBank: [70, 82, 82],
-  /** Пустота за краем карты. */
+  /** Void beyond the map edge. */
   void: [56, 62, 64],
-  /** Снежные шапки на высоких вершинах (рисуются по высоте, не по биому). */
+  /** Snow caps on high peaks (drawn by height, not by biome). */
   snow: [232, 231, 224],
 } as const satisfies Record<string, RGB>;
 
-/** Цвет как литерал GLSL `vec3(...)` в линейной шкале 0..1 (без гамма-коррекции). */
+/** Colour as a GLSL `vec3(...)` literal in the linear 0..1 scale (no gamma correction). */
 export function glslVec3(c: RGB): string {
   return `vec3(${c.map((v) => (v / 255).toFixed(4)).join(', ')})`;
 }
 
-/** Цвет как число 0xRRGGBB для Pixi. */
+/** Colour as a 0xRRGGBB number for Pixi. */
 export function hexColor(c: RGB): number {
   return (c[0] << 16) | (c[1] << 8) | c[2];
 }

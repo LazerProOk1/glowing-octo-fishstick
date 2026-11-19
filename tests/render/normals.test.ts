@@ -12,14 +12,14 @@ function field(fn: (x: number, y: number) => number): Float32Array {
 }
 
 describe('bakeGradient', () => {
-  it('ровное поле даёт нулевой градиент', () => {
+  it('a flat field gives a zero gradient', () => {
     const g = bakeGradient(field(() => 0.6), W, H);
     expect(g).toHaveLength(W * H * 2);
     for (const v of g) expect(Math.abs(v)).toBeLessThan(1e-6);
   });
 
-  it('наклонная плоскость даёт постоянный градиент в её направлении', () => {
-    // h = 0.01·x + 0.02·y: градиент (0.01, 0.02) на клетку.
+  it('a tilted plane gives a constant gradient along its direction', () => {
+    // h = 0.01·x + 0.02·y: the gradient is (0.01, 0.02) per cell.
     const g = bakeGradient(field((x, y) => 0.01 * x + 0.02 * y), W, H);
     for (let y = 6; y < H - 6; y++) {
       for (let x = 6; x < W - 6; x++) {
@@ -30,15 +30,15 @@ describe('bakeGradient', () => {
     }
   });
 
-  it('на краях и для шума результат конечен', () => {
+  it('the result is finite at the edges and for noise', () => {
     let s = 1;
     const rnd = (): number => ((s = (s * 16807) % 2147483647) / 2147483647);
     const g = bakeGradient(field(() => rnd()), W, H);
     for (const v of g) expect(Number.isFinite(v)).toBe(true);
   });
 
-  it('сглаживание убирает излом ступеньки', () => {
-    // Ступенька по x: Собель без размытия дал бы градиент только в 2 столбцах.
+  it('smoothing removes the kink of a step', () => {
+    // A step along x: Sobel without blur would give a gradient in only 2 columns.
     const g = bakeGradient(field((x) => (x < W / 2 ? 0 : 1)), W, H);
     const row = 8;
     const nonZero = [];
@@ -48,8 +48,8 @@ describe('bakeGradient', () => {
 });
 
 describe('coastNearness', () => {
-  it('гладко спадает от берега: ≈0.5 у кромки, почти 0 через 8 клеток', () => {
-    // Суша при x ≥ 16.
+  it('falls off smoothly from the shore: ≈0.5 at the edge, almost 0 after 8 cells', () => {
+    // Land at x ≥ 16.
     const near = coastNearness(field((x) => (x >= 16 ? 0.6 : 0.4)), W, H, 0.5);
     const at = (x: number): number => near[8 * W + x] as number;
     expect(at(15)).toBeGreaterThan(0.3);
@@ -62,7 +62,7 @@ describe('coastNearness', () => {
 });
 
 describe('blurInterleaved', () => {
-  it('каждый канал побитно совпадает с blur', () => {
+  it('every channel matches blur bit for bit', () => {
     let s = 3;
     const rnd = (): number => ((s = (s * 16807) % 2147483647) / 2147483647);
     const ch = 4;

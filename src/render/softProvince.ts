@@ -1,31 +1,31 @@
-// Мягкая принадлежность провинциям — CPU-зеркало шейдера карты (mapShader.ts, softSide).
-// Без pixi.js: чистые функции над запечёнными массивами, их же проверяют тесты.
+// Soft province membership — the CPU mirror of the map shader (mapShader.ts, softSide).
+// No pixi.js: pure functions over the baked arrays, checked by the tests as well.
 import { fromHalf } from './halfFloat';
 
-/** Запечённые карты, по которым выбирается провинция (раскладки — см. WorldBake). */
+/** Baked maps the province is chosen from (layouts — see WorldBake). */
 export interface ProvinceMaps {
   w: number;
   h: number;
-  /** RGBA8 provinceRG: id там, где на экране суша. */
+  /** RGBA8 provinceRG: the id where the screen shows land. */
   land: Uint8Array;
-  /** RGBA8 provinceSeaRG: id там, где на экране вода. */
+  /** RGBA8 provinceSeaRG: the id where the screen shows water. */
   sea: Uint8Array;
-  /** RGBA16F surface: канал B — слегка размытая высота − SEA_LEVEL (береговая линия). */
+  /** RGBA16F surface: channel B — slightly blurred height − SEA_LEVEL (the shoreline). */
   surface: Uint16Array;
 }
 
 export interface SoftProvince {
-  /** Сторона берега в точке: суша, если размытая высота больше нуля. */
+  /** Bank side at a point: land if the blurred height is above zero. */
   landSide: boolean;
-  /** Провинция с наибольшей долей в окрестности (−1 — ни одной клетки своей стороны рядом). */
+  /** Province with the largest share nearby (−1 — no cell of that side around). */
   best: number;
-  /** Вторая по доле провинция (−1 — нет). */
+  /** Second province by share (−1 — none). */
   second: number;
-  /** Расстояние до границы best и second в клетках (≥ 0; Infinity, если second нет). */
+  /** Distance to the border of best and second in cells (≥ 0; Infinity if second is absent). */
   edge: number;
 }
 
-/** Веса кубического B-сплайна для 4 клеток (смещения −1, 0, 1, 2) при дробной части t. */
+/** Cubic B-spline weights for 4 cells (offsets −1, 0, 1, 2) at fractional part t. */
 export function bspline(t: number): [number, number, number, number] {
   const s = 1 - t;
   const t2 = t * t;
@@ -33,7 +33,7 @@ export function bspline(t: number): [number, number, number, number] {
   return [(s * s * s) / 6, (3 * t3 - 6 * t2 + 4) / 6, (-3 * t3 + 3 * t2 + 3 * t + 1) / 6, t3 / 6];
 }
 
-/** Производные весов bspline по t. */
+/** Derivatives of the bspline weights with respect to t. */
 export function bsplineD(t: number): [number, number, number, number] {
   const s = 1 - t;
   return [-0.5 * s * s, 1.5 * t * t - 2 * t, -1.5 * t * t + t + 0.5, 0.5 * t * t];
@@ -43,7 +43,7 @@ function clampI(v: number, n: number): number {
   return v < 0 ? 0 : v >= n ? n - 1 : v;
 }
 
-/** Билинейная береговая высота в точке (x, y) в клетках, как texture() с clamp-to-edge в шейдере. */
+/** Bilinear shore height at point (x, y) in cells, like texture() with clamp-to-edge in the shader. */
 export function coastAt(maps: ProvinceMaps, x: number, y: number): number {
   const { w, h, surface } = maps;
   const cx = Math.floor(x - 0.5);
@@ -57,16 +57,16 @@ export function coastAt(maps: ProvinceMaps, x: number, y: number): number {
 }
 
 /**
- * Доли провинций в окрестности 4×4 клеток точки (x, y) с весами кубического B-сплайна, только по
- * клеткам своей стороны берега (по карте этой стороны). Кандидаты — провинции 4 ближайших клеток.
- * Граница двух провинций — линия равных долей: она гладкая, а не лесенка по клеткам.
- * Ограничения (те же в шейдере):
- * - тонкие полоски провинции шириной в клетку и меньше могут пропасть: их доля нигде не набирает
- *   большинства, точку забирает сосед;
- * - кандидаты — только провинции 4 ближайших клеток: на стыке 4 и более провинций пятая, у которой
- *   доля могла бы быть больше, не учитывается — возможен небольшой шов;
- * - сторона берега на CPU считается по half-float в точности JS, на GPU — с точностью фильтрации
- *   текстуры: у самой береговой линии сторона (и выбранная карта) может разойтись не больше чем на 1 px.
+ * Province shares around the 4×4 cell neighbourhood of point (x, y) with cubic B-spline weights, using
+ * only cells of its own bank side (the map of that side). Candidates are the provinces of the 4 nearest cells.
+ * The border of two provinces is the line of equal shares: smooth, not a per-cell staircase.
+ * Limitations (the same in the shader):
+ * - thin province strips a cell wide or less may vanish: their share never reaches a majority
+ *   anywhere, and a neighbour takes the point;
+ * - candidates are only the provinces of the 4 nearest cells: where 4 or more provinces meet, a fifth one
+ *   that could have had a larger share is ignored — a small seam is possible;
+ * - the bank side is computed on the CPU with half-float in JS precision, on the GPU with the texture
+ *   filtering precision: right at the shoreline the side (and the chosen map) may differ by at most 1 px.
  */
 export function softProvince(maps: ProvinceMaps, x: number, y: number): SoftProvince {
   const landSide = coastAt(maps, x, y) > 0;
@@ -112,7 +112,7 @@ export function softProvince(maps: ProvinceMaps, x: number, y: number): SoftProv
     }
   }
   if (sum < 1e-4) return { landSide, best: -1, second: -1, edge: Infinity };
-  // Доля m = a / sum и её градиент (правило частного).
+  // Share m = a / sum and its gradient (quotient rule).
   const m = a.map((v, c) => ((cand[c] as number) < 0 ? -1 : v / sum));
   const mx = a.map((v, c) => ((ax[c] as number) * sum - v * sumX) / (sum * sum));
   const my = a.map((v, c) => ((ay[c] as number) * sum - v * sumY) / (sum * sum));
@@ -131,7 +131,7 @@ export function softProvince(maps: ProvinceMaps, x: number, y: number): SoftProv
   return { landSide, best, second: cand[s] as number, edge: diff / Math.max(g, 1e-3) };
 }
 
-/** Провинция под точкой (x, y) в клетках — та же, что подсвечивает шейдер; null — вне карты. */
+/** Province under point (x, y) in cells — the one the shader highlights; null — outside the map. */
 export function pickProvince(maps: ProvinceMaps, x: number, y: number): number | null {
   if (!(x >= 0 && y >= 0 && x < maps.w && y < maps.h)) return null;
   const r = softProvince(maps, x, y);

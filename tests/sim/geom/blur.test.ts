@@ -3,7 +3,7 @@ import { blur, gaussianKernel } from '../../../src/sim/geom/blur';
 import { createRng } from '../../../src/sim/rng';
 
 describe('gaussianKernel', () => {
-  it('сумма 1, радиус ceil(3σ), симметрия', () => {
+  it('sum 1, radius ceil(3σ), symmetry', () => {
     const k = gaussianKernel(1.25);
     expect(k.length).toBe(2 * Math.ceil(3 * 1.25) + 1);
     let s = 0;
@@ -14,12 +14,12 @@ describe('gaussianKernel', () => {
 });
 
 describe('blur', () => {
-  it('сохраняет сумму на случайном поле 64×32 (1e-4)', () => {
+  it('preserves the sum on a random 64×32 field (1e-4)', () => {
     const w = 64;
     const h = 32;
     const sigma = 1.5;
-    // Обрезка у краёв дублирует крайние клетки, поэтому случайные значения лежат не ближе
-    // радиуса ядра к краю: вся масса остаётся внутри карты.
+    // Edge clamping duplicates the edge cells, so the random values stay at least a kernel
+    // radius away from the edge: all the mass stays inside the map.
     const pad = Math.ceil(3 * sigma) + 1;
     const rng = createRng('blur-sum');
     const src = new Float32Array(w * h);
@@ -35,7 +35,7 @@ describe('blur', () => {
     expect(Math.abs(a - b) / a).toBeLessThan(1e-4);
   });
 
-  it('постоянное поле не меняется', () => {
+  it('a constant field does not change', () => {
     const out = blur(new Float32Array(20 * 10).fill(0.25), 20, 10, 2);
     for (const v of out) expect(v).toBeCloseTo(0.25, 6);
   });
