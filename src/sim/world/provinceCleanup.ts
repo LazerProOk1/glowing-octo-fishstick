@@ -1,5 +1,6 @@
 import { MAX_BIOMES } from '../../content/biomes/types';
 import { labelByKey } from '../geom/label';
+import { ERR_CLEANUP_NO_CONVERGE } from './errors';
 import { KIND_CORRIDOR, KIND_LAND, KIND_WATER } from './provinceSeeds';
 
 /**
@@ -102,9 +103,6 @@ export function smoothOwners(owner: Int32Array, cls: Uint8Array, w: number, h: n
     }
   }
 }
-
-/** Код ошибки, когда очистка обломков не сошлась; текст для игрока — в ui (errorDetail, ключ error.cleanupNoConverge). */
-export const ERR_CLEANUP_NO_CONVERGE = 'province_cleanup_no_converge';
 
 /** Keeps the largest 4-connected piece of each province; other pieces join their main foreign neighbour. */
 export function fixFragments(owner: Int32Array, kind: Uint8Array, isLand: number[], w: number, h: number): void {

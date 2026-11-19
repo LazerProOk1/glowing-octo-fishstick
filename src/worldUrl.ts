@@ -41,8 +41,9 @@ export function parseWorldUrl(hash: string): WorldParams {
     const size = params.get('size') ?? DEFAULT_SIZE;
     out.options.size = isWorldSize(size) ? size : DEFAULT_SIZE;
     out.options.disabledBiomes = normalizeOff(list(params.get('off')));
-    // `packs=` с пустым списком — осознанный выбор «без паков», он переживает круг build → parse.
-    if (params.has('packs')) out.packs = list(params.get('packs'));
+    // Пустой `packs=` (обрезанная ссылка) — паки по умолчанию: без паков мир не построить.
+    const packs = list(params.get('packs'));
+    if (packs.length > 0) out.packs = packs;
   }
   return out;
 }
@@ -55,6 +56,6 @@ export function buildWorldUrl(p: WorldParams): string {
   if (p.options.disabledBiomes.length > 0) {
     params.push(`off=${normalizeOff(p.options.disabledBiomes).map(encodeURIComponent).join(',')}`);
   }
-  if (!sameList(p.packs, DEFAULT_PACKS)) params.push(`packs=${p.packs.map(encodeURIComponent).join(',')}`);
+  if (p.packs.length > 0 && !sameList(p.packs, DEFAULT_PACKS)) params.push(`packs=${p.packs.map(encodeURIComponent).join(',')}`);
   return `#${encodeURIComponent(p.seed)}${params.length > 0 ? `?${params.join('&')}` : ''}`;
 }

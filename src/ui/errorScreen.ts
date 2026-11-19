@@ -1,5 +1,5 @@
 import { t } from '../i18n/ru';
-import { ERR_CLEANUP_NO_CONVERGE } from '../sim/world/provinceCleanup';
+import { ERR_CLEANUP_NO_CONVERGE } from '../sim/world/errors';
 import { el } from './dom';
 
 /**

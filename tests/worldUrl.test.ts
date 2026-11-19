@@ -58,8 +58,8 @@ describe('parseWorldUrl', () => {
     expect(parseWorldUrl('#x?off=%D0%BB%D0%B5%D1%81,desert').options.disabledBiomes).toEqual(['desert', 'лес']);
   });
 
-  it('packs= без значений — пустой список паков', () => {
-    expect(parseWorldUrl('#abc?packs=').packs).toEqual([]);
+  it('packs= без значений — паки по умолчанию', () => {
+    expect(parseWorldUrl('#abc?packs=').packs).toEqual(['base']);
   });
 
   it('битая кодировка не роняет разбор', () => {
@@ -92,11 +92,10 @@ describe('buildWorldUrl', () => {
     expect(parseWorldUrl(buildWorldUrl(p))).toEqual(p);
   });
 
-  it('пустой список паков и id биомов с «%», «+», кириллицей переживают круг', () => {
-    const p = params('x', { disabledBiomes: ['100%41', 'a+b', 'лес'].sort() }, []);
-    const url = buildWorldUrl(p);
-    expect(url).toContain('packs=');
-    expect(parseWorldUrl(url)).toEqual(p);
+  it('id биомов с «%», «+», кириллицей переживают круг; пустой список паков в адрес не пишется', () => {
+    const p = params('x', { disabledBiomes: ['100%41', 'a+b', 'лес'].sort() });
+    expect(parseWorldUrl(buildWorldUrl(p))).toEqual(p);
+    expect(buildWorldUrl(params('x', {}, []))).toBe('#x');
   });
 
   it('сид со знаком вопроса и амперсандом переживает круг', () => {
