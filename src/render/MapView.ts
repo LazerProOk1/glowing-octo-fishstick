@@ -252,26 +252,32 @@ export class MapView {
 
   /**
    * Честный замер кадра: синхронно рисует frames кадров и после каждого ждёт конца работы
-   * видеокарты (gl.finish). От requestAnimationFrame не зависит, поэтому верен и в скрытой вкладке.
+   * видеокарты. gl.finish() для этого не годится: Chrome (ANGLE) считает его обычным flush и
+   * возвращается сразу, так что мерилось бы только время отправки команд. Чтение одного пикселя
+   * (readPixels) заставляет дождаться результата рисования. renderer.render каждый раз
+   * выполняет весь шейдер заново. От requestAnimationFrame не зависит, верен и в скрытой вкладке.
    * Два первых кадра не замеряются (прогрев: компиляция шейдера, загрузка текстур).
-   * Не WebGL (ждать конца работы нечем) — null.
+   * Не WebGL или среднее меньше 0.05 мс (синхронизация не сработала) — null, «недоступно».
    */
   benchmark(frames = 120): FrameStats | null {
     const { renderer, stage } = this.app;
     if (renderer.type !== RendererType.WEBGL) return null;
     const gl = (renderer as WebGLRenderer).gl;
+    const px = new Uint8Array(4);
+    const sync = (): void => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
     for (let i = 0; i < BENCH_WARMUP_FRAMES; i++) {
       renderer.render(stage);
-      gl.finish();
+      sync();
     }
     const samples: number[] = [];
     for (let i = 0; i < frames; i++) {
       const t0 = performance.now();
       renderer.render(stage);
-      gl.finish();
+      sync();
       samples.push(performance.now() - t0);
     }
-    return frameStats(samples);
+    const stats = frameStats(samples);
+    return stats.avg < 0.05 ? null : stats;
   }
 
   destroy(): void {
