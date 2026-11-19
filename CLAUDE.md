@@ -1,127 +1,55 @@
-# Проект: стратегия про поселения (glowing-octo-fishstick)
+# Settlement strategy (glowing-octo-fishstick)
 
-Браузерная стратегия: TypeScript strict, PixiJS 8 (WebGL2), Vite, Vitest, ESLint 9.
-Автор говорит по-русски и не технический эксперт: объяснять просто, без жаргона.
-Все ответы, коммиты и тексты интерфейса — по-русски.
+Always reply to the user in Russian, using simple non-technical language (the author is not a programmer).
+Browser strategy game: TypeScript strict, PixiJS 8 (WebGL2), Vite, Vitest, ESLint 9.
 
-## Где что лежит
-- Спек: `docs/superpowers/specs/2026-11-16-settlement-strategy-design.md`
-- Планы: `docs/superpowers/plans/` (этап 1.5 `2026-11-18-stage-1-5-feedback.md` — закрыт 2026-11-19)
-- Архитектура: `docs/architecture.md`
-- Решения этапа 1 и отложенные мелочи: `docs/superpowers/stage-1-decisions.md` (и `stage-*-decisions.md`)
-- Отзыв автора: `docs/feedback/stage-1.md`
-- Журнал SDD (локальный, не в git): `.superpowers/sdd/<план>/progress.md`, там же брифы и отчёты задач
+## Where things are
+- Spec: `docs/superpowers/specs/2026-11-16-settlement-strategy-design.md`; architecture + stage-2 risks: `docs/architecture.md`
+- Plans: `docs/superpowers/plans/`; decisions and deferred minors: `docs/superpowers/stage-*-decisions.md`
+- Author feedback: `docs/feedback/`; screenshots: `docs/screenshots/`
+- SDD ledger (local, not in git): `.superpowers/sdd/<plan>/progress.md` with briefs and reports
 
-## Где мы сейчас (обновлять в конце каждого этапа)
-Этапы 1 (карта) и 1.5 (доработки по отзыву) закрыты, ветка `stage-1-map` запушена, в `main` не слита.
-Итоги и все решения: `docs/superpowers/stage-1-decisions.md`, скриншоты: `docs/screenshots/stage-1-5/`.
-Автору ещё показать скриншоты моря и рек (вид принимал Claude по чек-листу).
-Следующая сессия, по порядку (когда у автора восстановятся недельные лимиты):
-1. Построить карту кода graphify (`/graphify`, дальше `--update`), чтобы агенты не перечитывали
-   и не дублировали код.
-2. Автор сам запускает `/ponytail-audit`; найденное разобрать вместе.
-3. Попробовать OpenCode (команда `oc`, не `opencode`) вторым ревьюером на одном диффе и сравнить.
-4. Этап 2 (одно поселение): начать с обсуждения с автором (brainstorming), опираясь на раздел
-   «Готовность к этапу 2» в `docs/architecture.md`.
+## Current state (update at the end of each stage)
+Stages 1 (map) and 1.5 (feedback fixes) are closed; branch `stage-1-map` pushed, not merged into `main`.
+Still to show the author: sea and river screenshots (`docs/screenshots/stage-1-5/`; look accepted by Claude via checklist).
+Next session, in order (once the author's weekly limits reset):
+1. Build the code graph with graphify (`/graphify`, later `--update`) so agents stop re-reading/duplicating code.
+2. Author runs `/ponytail-audit`; triage the findings together.
+3. Try OpenCode as a second reviewer on one diff and compare.
+4. Stage 2 (one settlement): start with brainstorming with the author, based on «Готовность к этапу 2» in `docs/architecture.md`.
 
-## Как работаем (порядок, который автор одобрил)
-- **Новое (этап, крупная фича):** сначала обсуждение с автором (навык superpowers:brainstorming),
-  спек, затем план задачами (superpowers:writing-plans) в `docs/superpowers/plans/`.
-- **Выполнение — через агентов** (superpowers:subagent-driven-development). Claude в главной
-  сессии — контроллер: сам код не пишет, раздаёт задачи и принимает решения.
-  - На каждую задачу: свежий агент-исполнитель (бриф из плана), затем отдельный агент-ревьюер
-    (соответствие плану и качество). Замечания Critical/Important — назад тому же исполнителю,
-    потом короткое повторное ревью. В конце этапа — ревью всей ветки, одна волна исправлений.
-  - Модели: механика — sonnet, суждение/шейдеры/архитектура — opus; всегда указывать явно.
-  - Параллельно можно вести только то, что не трогает одни и те же файлы; агенты коммитят
-    свои файлы по путям (`git commit <пути>`), без `git add -A`.
-  - Журнал этапа: `.superpowers/sdd/<план>/progress.md` — каждое решение строкой
-    `Ruling: что — почему — чем грозит ошибка`. В конце этапа решения переносятся в
-    `docs/superpowers/stage-*-decisions.md`, журнал удаляется.
-- **Отзыв автора** — гипотезы: каждое замечание проверить самому в коде и браузере,
-  потом план. Автор не технарь: отвечать просто, по-русски.
-- **Внешний вид** принимает контроллер в браузере по чек-листу ниже; если автор на связи —
-  только после его «да» на скриншоты.
-- **Команды в терминале** писать сразу в форме rtk (`rtk git …`, `rtk read F`, `rtk vitest …`),
-  иначе хук их переписывает и автоматический режим отклоняет (подробно — `~/.claude/RTK.md`).
-- **Внешние бесплатные модели:** OpenCode Claude вызывает сам (`oc run -m opencode/<id> "…"`,
-  только чтение и второе мнение). LM Arena, Qwen, Codex — только руками автора по готовому заданию.
-- **Экономия токенов:** длинную сессию не тянуть — новый этап начинать в новой сессии;
-  передавать агентам файлы (бриф, дифф), а не пересказ.
+## Workflow
+- New stage/feature: brainstorming with the author → spec → plan of tasks (superpowers:writing-plans).
+- Execution via subagents (superpowers:subagent-driven-development). The main session is the controller: it does not write code, it dispatches and rules.
+  - Per task: fresh implementer → separate reviewer → Critical/Important back to the same implementer → short re-review. End of stage: whole-branch review, one fix wave.
+  - Parallel only for tasks touching different files.
+  - Ledger: every decision as `Ruling: what — why — cost if wrong`; at stage end move them to `stage-*-decisions.md`, delete the ledger.
+- Author feedback is a hypothesis: reproduce each note in code/browser before planning.
+- Look changes: read `docs/visual-checklist.md` before accepting any rendered result.
+- Commits: read `docs/commit-rules.md` before committing. Push `stage-1-map` after each task; never touch `main`, never delete branches.
+- Shell: write commands in rtk form (`rtk git …`, `rtk read F`, `rtk vitest …`), see `~/.claude/RTK.md`.
 
-## Команды
-- `npm run dev` — дев-сервер (порт 5173, конфиг в `.claude/launch.json`)
-- `npm test` — Vitest
-- `npm run lint` — ESLint
-- `npx tsc --noEmit` — проверка типов
-- `npm run build` — типы и сборка в `dist`
+## Token economy
+- Language: code, code comments, identifiers, CLAUDE.md, briefs and agent reports — English. Replies to the author, commit descriptions, `src/i18n/ru.ts` — Russian. Translate old Russian comments only when touching that file.
+- Models (always set explicitly): `haiku` — file search, reading logs/docs, tiny edits; `sonnet` — mechanical tasks, tests, UI, re-reviews; `opus` — architecture, shaders, hard debugging, final review.
+- Sessions: 1 session = 1 phase (discussion+plan / execution / final review). Prefer a fresh session over a long tail; tell the author when it is time to switch (context long or phase done).
+- Agent reports: terse English — changed files, test result, blockers. No retelling of the work; details go to the report file.
+- Hand agents files (brief, diff), not summaries.
+- External free models: Claude may call OpenCode itself (`oc run -m opencode/<id> "…"`, read-only second opinion; use `oc`, not `opencode`). LM Arena, Qwen, Codex — only manually by the author from a self-contained task.
 
-## Жёсткие правила
-- `strict: true`, `noUncheckedIndexedAccess: true`; `any` запрещён.
-- `src/sim/**` не импортирует `src/render`, `src/ui`, `src/worker`, `src/i18n`, `pixi.js`, DOM.
-  В sim нет `Math.random`, `Date`, `performance.now`, `crypto`, `setTimeout`, `fetch`, `self`.
-- Файл не длиннее ~450 строк.
-- Все тексты интерфейса в `src/i18n/ru.ts`, по-русски.
-- Интерфейс сдержанный: тёмные нейтральные панели, рамка 1px, PT Sans, без орнаментов, неона,
-  градиентных карточек и эмодзи.
-- Карта в духе HoI4, приглушённые «бумажные» цвета. На любом зуме нет пикселей.
-- Производительность: 60 кадров/с на 4000 провинций; генерация medium до 8 с, в воркере.
+## Commands
+`npm run dev` (port 5173) · `npm test` · `npm run lint` · `npx tsc --noEmit` · `npm run build`
 
-## Приёмка внешнего вида (карта, интерфейс)
-Ревью кода не оценивает вид. Задачу, меняющую картинку, закрывает только проверка в браузере
-по этому списку; если автор на связи — показать ему скриншоты «было/стало» и дождаться «да».
-Смотреть на трёх зумах (общий вид, средний, максимальный) и минимум на двух сидах, рядом
-со скриншотами «было» из `docs/screenshots/`. Спрашивать себя: «так выглядела бы настоящая
-карта / HoI4?», а не «стало ли лучше, чем было». Отклонять, если есть:
-- одинаковый эффект вокруг каждого объекта (ореол, свечение, обводка у каждого острова);
-- пятна и «облака» из мелкого шума там, где должно быть ровно (открытое море, равнины);
-- ступеньки и пиксели на любом зуме (берег, границы, подсветка, заливка);
-- резкие прямые линии, которых нет в природе (границы биомов по широте, по сетке);
-- тёмные полосы и швы между соседними областями;
-- кислотные или неоновые цвета, лишний контраст; всё должно быть приглушённым;
-- реки, обрывающиеся на суше, подсветка, не доходящая до берега.
-Отдельно навести курсор на сушу и на воду у берега, на озеро, включить режим «Провинции» (M).
-Прошлые ошибки: «ИИ-интерфейс» (этап 1), ореол вокруг островов у моря (этап 1.5).
+## Hard rules
+- `strict`, `noUncheckedIndexedAccess`; no `any`. Files ≤ ~450 lines.
+- `src/sim/**` imports nothing from `src/render`, `src/ui`, `src/worker`, `src/i18n`, `pixi.js`, DOM; no `Math.random`, `Date`, `performance.now`, `crypto`, `setTimeout`, `fetch`, `self`.
+- `src/game/**`: same, plus no inexact Math functions (lint-enforced).
+- All UI text in `src/i18n/ru.ts`. Restrained UI: dark neutral panels, 1px borders, PT Sans; no ornaments, neon, gradient cards, emoji.
+- Map: HoI4-like muted "paper" colours; no pixels at any zoom.
+- Performance: 60 FPS on 4000 provinces; medium generation ≤ 8 s in the worker.
 
-## Правило GEN_VERSION
-`GEN_VERSION` (`src/sim/world/params.ts`) поднимается на 1 при любом изменении генерации, которое
-меняет результат для тех же `WorldParams` (массивы мира, провинции, соседство, состав `World`).
-В том же коммите обновляется отпечаток в `tests/sim/world/fingerprint.test.ts`, единственное место
-с ожидаемыми хешами. Оптимизации с тем же результатом и правки отрисовки версию не меняют.
-Чистые рефакторинги обязаны оставить отпечатки без изменений. Подробности: `docs/architecture.md`.
-Внутри одного плана версия поднимается не больше одного раза; следующие изменения мира в том же
-плане только обновляют отпечатки.
+## GEN_VERSION
+`GEN_VERSION` (`src/sim/world/params.ts`) is bumped by 1 for any generation change that alters output for the same `WorldParams`. In the same commit update `tests/sim/world/fingerprint.test.ts` — the only file with expected hashes. Same-output optimisations and render changes don't bump it; pure refactors must leave fingerprints unchanged. At most one bump per plan. Details: `docs/architecture.md`.
 
-## Git
-- Рабочая ветка: `stage-1-map`. В конце каждого коммита строка
-  `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
-- После каждой завершённой задачи: `git push origin stage-1-map`.
-- `main` не трогать. Ветки не удалять (в том числе удалённую `arena/...`).
-- Не коммитить `.superpowers/`, `dist`, `node_modules`, локальные настройки.
-
-### Сообщения коммитов (Conventional Commits)
-Формат: `тип(область): описание`. Тип и область — на английском, всё после двоеточия
-(описание и тело) — только по-русски. Описание короткое, с маленькой буквы, без точки.
-Пример: `fix(render): берег без лесенки у подсветки`.
-
-Типы:
-- `feat` — новая возможность; `fix` — исправление ошибки;
-- `refactor` — перестройка кода без изменения поведения (отпечатки мира не меняются);
-- `perf` — ускорение с тем же результатом; `test` — только тесты; `docs` — документация;
-- `style` — форматирование без изменения кода; `build` — сборка, Vite, зависимости в `package.json`;
-- `ci` — CI; `chore` — прочее (`.gitignore`, конфиги); `revert` — откат коммита.
-
-Области этого проекта: `sim` (генерация и симуляция), `render` (карта, шейдеры), `ui`
-(интерфейс), `worker`, `content` (биомы, паки), `i18n`, `assets`, `tools`, `deps`. Если правка
-задевает несколько областей, область не пишется.
-
-Тело (через пустую строку, по желанию, по-русски): что изменилось и зачем. Если меняется
-результат генерации (поднят `GEN_VERSION`) или ломается совместимость (формат сохранений,
-протокол воркера), добавить строку `BREAKING CHANGE: …` с объяснением по-русски.
-
-## После сжатия контекста
-1. Прочитать этот файл.
-2. Прочитать журнал `.superpowers/sdd/<план>/progress.md` и `git log --oneline -20`.
-3. Открыть текущий план и найти первую невыполненную задачу.
-4. Не переделывать то, что уже закоммичено. Перед правкой проверить `git status`.
-5. Перед сообщением «готово» прогнать `npm test`, `npm run lint`, `npx tsc --noEmit`.
+## After context compaction
+Read this file → the ledger and `git log --oneline -20` → the current plan's first unfinished task. Don't redo committed work; check `git status` before editing. Before saying "done": `npm test`, `npm run lint`, `npx tsc --noEmit`.
