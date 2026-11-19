@@ -50,6 +50,40 @@ describe('правила ESLint для src/sim', () => {
     }
   });
 
+  it('запрещает дробную математику движка в src/game, но не в src/render', async () => {
+    const game = await lint('export const x = Math.sin(1);\n', 'src/game/x.ts');
+    const render = await lint('export const x = Math.sin(1);\n', 'src/render/x.ts');
+    expect(game.length).toBeGreaterThan(0);
+    expect(game[0]?.message).toContain('docs/architecture.md');
+    expect(render).toEqual([]);
+  });
+
+  it('запрещает все функции дробной математики в src/game', async () => {
+    for (const fn of ['pow(2, 3)', 'exp(1)', 'log(2)', 'sin(1)', 'cos(1)', 'tan(1)', 'atan2(1, 2)', 'hypot(3, 4)', 'cbrt(8)']) {
+      const errors = await lint(`export const x = Math.${fn};\n`, 'src/game/x.ts');
+      expect(errors.length, fn).toBeGreaterThan(0);
+    }
+  });
+
+  it('запрещает ** с дробной или нелитеральной степенью в src/game, целая разрешена', async () => {
+    const frac = await lint('export const x = 2 ** 0.5;\n', 'src/game/x.ts');
+    const v = await lint('export const f = (a: number, b: number) => a ** b;\n', 'src/game/x.ts');
+    const assign = await lint('let y = 2;\ny **= 0.5;\nexport { y };\n', 'src/game/x.ts');
+    const int = await lint('export const x = 2 ** 3;\n', 'src/game/x.ts');
+    expect(frac.length).toBeGreaterThan(0);
+    expect(v.length).toBeGreaterThan(0);
+    expect(assign.length).toBeGreaterThan(0);
+    expect(int).toEqual([]);
+  });
+
+  it('src/game наследует правила src/sim', async () => {
+    const rnd = await lint('export const x = Math.random();\n', 'src/game/x.ts');
+    const date = await lint('export const x = Date.now();\n', 'src/game/x.ts');
+    const pixi = await lint("import 'pixi.js';\n", 'src/game/x.ts');
+    const ui = await lint("import '../ui/a';\n", 'src/game/x.ts');
+    for (const errors of [rnd, date, pixi, ui]) expect(errors.length).toBeGreaterThan(0);
+  });
+
   it('запрещает Date и performance.now в src/sim', async () => {
     const a = await lint('export const x = Date.now();\n', 'src/sim/x.ts');
     const b = await lint('export const x = performance.now();\n', 'src/sim/x.ts');
