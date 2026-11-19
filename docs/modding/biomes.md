@@ -1,60 +1,60 @@
-# Биомы: как добавить, выключить, сделать пак
+# Biomes: how to add, disable, make a pack
 
-Биомы описаны данными. Генератор выбирает биом клетки по её высоте, температуре, влажности и «магичности» (`arcana`), а рендер берёт цвет и текстуру из тех же данных. Имена биомов ни генератору, ни шейдеру не известны: генератор опирается на вид (`kind`) и теги (`tags`).
+Biomes are described by data. The generator picks the biome of a cell by its height, temperature, moisture and "arcana" (`arcana`), and the renderer takes the colour and texture from the same data. Biome names are unknown to both the generator and the shader: the generator relies on the kind (`kind`) and tags (`tags`).
 
-Где что лежит:
+Where things live:
 
-| Файл | Что в нём |
+| File | What is in it |
 |---|---|
-| `src/content/biomes/types.ts` | схема: `BiomeDef`, `PackManifest`, `GenOptions` |
-| `src/content/packs/base/biomes.ts` | обычные биомы |
-| `src/content/packs/base/fantasyBiomes.ts` | фэнтези-биомы |
-| `src/content/packs/base/manifest.ts` | базовый пак |
-| `src/content/registry.ts` | список паков и сборка биомов мира (`resolveBiomes`) |
+| `src/content/biomes/types.ts` | schema: `BiomeDef`, `PackManifest`, `GenOptions` |
+| `src/content/packs/base/biomes.ts` | ordinary biomes |
+| `src/content/packs/base/fantasyBiomes.ts` | fantasy biomes |
+| `src/content/packs/base/manifest.ts` | the base pack |
+| `src/content/registry.ts` | the pack list and the assembly of the world biomes (`resolveBiomes`) |
 
-## Как выбирается биом
+## How the biome is chosen
 
-1. Клетка ниже или на уровне моря (высота ≤ 0.5) — выбирается среди биомов с `kind: 'water'`, выше — среди `kind: 'land'`.
-2. Биомы проверяются по убыванию `priority`. Первый, у которого все условия `when` выполнены, и есть биом клетки.
-3. Условие — полуинтервал `[min, max)`: `min` включительно, `max` нет. Можно писать `-Infinity` и `Infinity`. Условие, которого нет, подходит всегда.
-4. Если ничего не подошло, берётся запасной биом своего вида — биом без условий (`when: {}`). Он проверяется последним при любом приоритете. Для суши это равнины, для воды — побережье.
+1. A cell below or at sea level (height ≤ 0.5) is chosen among biomes with `kind: 'water'`, above — among `kind: 'land'`.
+2. Biomes are checked by descending `priority`. The first one whose `when` conditions all hold is the biome of the cell.
+3. A condition is the half-open interval `[min, max)`: `min` inclusive, `max` exclusive. `-Infinity` and `Infinity` may be used. A missing condition always matches.
+4. If nothing matches, the fallback biome of that kind is taken — a biome without conditions (`when: {}`). It is checked last at any priority. For land it is plains ("равнины"), for water — coast ("побережье").
 
-Поля мира, по которым пишутся условия:
+World fields that the conditions are written on:
 
-| Поле | Диапазон | Ориентиры |
+| Field | Range | Landmarks |
 |---|---|---|
-| `height` | 0..1 | море ≤ 0.5, холмы > 0.72, горы > 0.85 |
-| `temperature` | °C, в основном −25..30, на высоких горах ниже | ледник < −10, тундра < −2, тайга < 5 |
-| `moisture` | 0..1 | степь < 0.35, лес > 0.5, болото > 0.72 |
-| `arcana` | 0..1 | большие пятна шума; около 4 % суши выше 0.9, около 4 % ниже 0.1 |
+| `height` | 0..1 | sea ≤ 0.5, hills > 0.72, mountains > 0.85 |
+| `temperature` | °C, mostly −25..30, lower on high mountains | glacier < −10, tundra < −2, taiga < 5 |
+| `moisture` | 0..1 | steppe < 0.35, forest > 0.5, swamp > 0.72 |
+| `arcana` | 0..1 | large noise patches; about 4 % of the land above 0.9, about 4 % below 0.1 |
 
-## Поля биома
+## Biome fields
 
-Обязательные:
+Required:
 
-- `id` — латиница snake_case, уникален: `mushroom_forest`. Это код биома в данных; в адресе мира и в `disabledBiomes` пишется он.
-- `nameKey` — ключ перевода названия: `biome.<id>`. Сам текст — в `src/i18n/ru.ts` (`'biome.mushroom_forest': 'грибной лес'`), его видно в подсказке над провинцией. Тест `tests/i18n-content.test.ts` не пропустит биом без перевода.
-- `kind` — `'land'` или `'water'`.
-- `fantasy` — `true`, если биом появляется только в мире с фэнтези.
-- `color` — цвет `[r, g, b]`, целые 0..255. Насыщенность HSL не больше 0.45 (карта приглушённая; тест не пропустит ярче). Светлота 0.2..0.9.
-- `detail` — текстура-деталь из атласа: `grass`, `forest`, `sand`, `rock`, `snow`, `mud`, `paper`. Атлас даёт только узор яркости, цвет берётся из `color`.
-- `priority` — число; больше — проверяется раньше.
-- `when` — условия (см. выше); `{}` — запасной биом.
+- `id` — latin snake_case, unique: `mushroom_forest`. This is the biome code in the data; it is what the world address and `disabledBiomes` use.
+- `nameKey` — the translation key of the name: `biome.<id>`. The text itself is in `src/i18n/ru.ts` (`'biome.mushroom_forest': 'грибной лес'`), and it is visible in the tooltip above a province. The test `tests/i18n-content.test.ts` will not let a biome without a translation through.
+- `kind` — `'land'` or `'water'`.
+- `fantasy` — `true` if the biome appears only in a world with fantasy.
+- `color` — colour `[r, g, b]`, integers 0..255. HSL saturation no more than 0.45 (the map is muted; the test will not let a brighter one through). Lightness 0.2..0.9.
+- `detail` — the detail texture from the atlas: `grass`, `forest`, `sand`, `rock`, `snow`, `mud`, `paper`. The atlas provides only a luminance pattern, the colour comes from `color`.
+- `priority` — a number; higher is checked earlier.
+- `when` — conditions (see above); `{}` is the fallback biome.
 
-Необязательные:
+Optional:
 
-- `tags` — роли для генератора:
-  - `mountain` — горный массив: провинции не размазывают его по низинам, а провинция с ним считается горной;
-  - `hill` — холмы: горная клетка может отойти только к холмам;
-  - `deepWater`, `shallowWater` — глубокая и мелкая вода (мелкой водой становятся утонувшие островки);
-  - `lake` — вода озёр (базовый биом `lake`, «озеро»). Озеро — замкнутый водоём, который не касается края карты и занимает не больше `LAKE_MAX_CELLS` (6000) клеток (`src/sim/world/lakes.ts`). Такой биом не выбирается по условиям: `when` у него пуст, но запасным он не считается, его получают все клетки озёр. Биом с этим тегом должен быть водным. Провинции озёр помечены `water: 'lake'` и не смешиваются с морскими; шейдер рисует озёра светлее и зеленее моря (в палитре у них свой маркер вместо слота детали). В паке озеро идёт последним, чтобы коды прочих биомов не сдвигались.
-- `modifiers` — `{ defense, moveCost }`, задел на будущее, пока не используется.
+- `tags` — roles for the generator:
+  - `mountain` — a mountain range: provinces do not smear it over the lowlands, and a province with it counts as mountainous;
+  - `hill` — hills: a mountain cell may go only to hills;
+  - `deepWater`, `shallowWater` — deep and shallow water (drowned islets become shallow water);
+  - `lake` — lake water (the base biome `lake`, "озеро"). A lake is a closed water body that does not touch the map edge and covers no more than `LAKE_MAX_CELLS` (6000) cells (`src/sim/world/lakes.ts`). Such a biome is never chosen by conditions: its `when` is empty, but it does not count as a fallback, it is given to all lake cells. A biome with this tag must be water. Lake provinces are marked `water: 'lake'` and do not mix with sea ones; the shader draws lakes lighter and greener than the sea (in the palette they have their own marker instead of a detail slot). In the pack the lake comes last, so that the codes of the other biomes do not shift.
+- `modifiers` — `{ defense, moveCost }`, groundwork for the future, not used yet.
 
-## Пример: грибной лес
+## Example: mushroom forest
 
-Добавим влажный тёплый лес, растущий пятнами там, где магичность высокая.
+Let us add a humid warm forest that grows in patches where the arcana is high.
 
-**1. Опишите биом.** В `src/content/packs/base/fantasyBiomes.ts` (для фэнтези) или `biomes.ts` (для обычного) добавьте запись в массив:
+**1. Describe the biome.** In `src/content/packs/base/fantasyBiomes.ts` (for fantasy) or `biomes.ts` (for an ordinary one) add an entry to the array:
 
 ```ts
 {
@@ -69,41 +69,41 @@
 },
 ```
 
-**2. Добавьте перевод.** В `src/i18n/ru.ts`: `'biome.mushroom_forest': 'грибной лес',`.
+**2. Add the translation.** In `src/i18n/ru.ts`: `'biome.mushroom_forest': 'грибной лес',`.
 
-**3. Подберите приоритет.** Обычные биомы суши стоят так: горы 95, холмы 90, ледник 80, тундра 70, джунгли 60, пустыня 50, тайга 40, степь 30, болото 20, лес 10, равнины 0 (запасной). Приоритет 75 ставит грибной лес выше всех климатических биомов, но ниже холмов и гор: на холмах он не вырастет.
+**3. Pick a priority.** The ordinary land biomes stand like this: mountains 95, hills 90, glacier 80, tundra 70, jungle 60, desert 50, taiga 40, steppe 30, swamp 20, forest 10, plains 0 (fallback). Priority 75 puts the mushroom forest above all climate biomes, but below hills and mountains: it will not grow on hills.
 
-**4. Подберите цвет.** Возьмите цвет близкого обычного биома и сдвиньте оттенок, не поднимая насыщенность. У леса `[109, 126, 84]`; у грибного леса `[128, 106, 118]` — та же светлота, сиреневато-бурый оттенок.
+**4. Pick a colour.** Take the colour of a close ordinary biome and shift the hue without raising the saturation. Forest is `[109, 126, 84]`; mushroom forest is `[128, 106, 118]` — the same lightness, a lilac-brown hue.
 
-**5. Проверьте, сколько его на карте.** Новый биом должен быть заметен, но не заполнять материк. Запустите `npx vitest run tests/content` — тест фэнтези проверяет, что каждый фэнтези-биом занимает хотя бы 200 клеток на одном из сидов `"1"`, `"2"`, `"Бета-7"`, `"worldbox"`, а все вместе — 3..12 % суши. Если биома слишком много, сузьте условия (например, `arcana: [0.85, Infinity]`); если мало — расширьте.
+**5. Check how much of it is on the map.** A new biome must be noticeable but must not fill the continent. Run `npx vitest run tests/content` — the fantasy test checks that every fantasy biome covers at least 200 cells on one of the seeds `"1"`, `"2"`, `"Бета-7"`, `"worldbox"`, and all of them together 3..12 % of the land. If there is too much of the biome, narrow the conditions (for example `arcana: [0.85, Infinity]`); if too little, widen them.
 
-**6. Посмотрите в браузере.** `npm run dev`, затем адрес `#Бета-7?fantasy=1`. Наведите курсор на провинцию — в подсказке будет «грибной лес».
+**6. Look at it in the browser.** `npm run dev`, then the address `#Бета-7?fantasy=1`. Hover over a province — the tooltip shows "грибной лес".
 
-Код генератора, шейдера и интерфейса менять не нужно.
+The generator, shader and interface code do not need to change.
 
-## Включить и выключить
+## Enabling and disabling
 
-Через адрес мира:
+Via the world address:
 
-- `#Бета-7?fantasy=1` — с фэнтези-биомами;
-- `#Бета-7?off=swamp,desert` — без болот и пустынь;
-- `#Бета-7?fantasy=1&off=magic_forest` — с фэнтези, но без магического леса;
-- `#Бета-7?fantasy=1&size=small&off=swamp` — то же для маленькой карты (`small` 1024×512, `medium` 2048×1024 — по умолчанию, `large` 3072×1536).
+- `#Бета-7?fantasy=1` — with fantasy biomes;
+- `#Бета-7?off=swamp,desert` — without swamps and deserts;
+- `#Бета-7?fantasy=1&off=magic_forest` — with fantasy, but without the magic forest;
+- `#Бета-7?fantasy=1&size=small&off=swamp` — the same for a small map (`small` 1024×512, `medium` 2048×1024 — the default, `large` 3072×1536).
 
-Через код — параметры мира (`WorldParams`, src/sim/world/params.ts):
+Via code — the world params (`WorldParams`, src/sim/world/params.ts):
 
 ```ts
 const p = defaultParams('Бета-7');
 generateWorld({ ...p, options: { ...p.options, fantasy: true, disabledBiomes: ['swamp'] } });
 ```
 
-Выключенный биом убирается из списка мира, его клетки достаются следующему по приоритету подходящему биому. Выключить горы можно — их займут холмы. Нельзя выключить запасной биом суши (`plains`) и водные биомы с тегами `deepWater`/`shallowWater`/`lake` (`ocean`, `coast`, `lake`): генерация остановится с ошибкой, где назван биом.
+A disabled biome is removed from the world list, and its cells go to the next suitable biome by priority. Mountains can be disabled — hills will take them. The land fallback biome (`plains`) and the water biomes tagged `deepWater`/`shallowWater`/`lake` (`ocean`, `coast`, `lake`) cannot be disabled: generation stops with an error that names the biome.
 
-Коды биомов в мире — это номера в списке включённых биомов (`world.biomes`). Без фэнтези и без выключенных биомов список совпадает с порядком в `biomes.ts`; фэнтези-биомы идут после обычных. Порядок в `biomes.ts` не меняйте: на нём держатся эталонные хэши мира в `tests/sim/world/fingerprint.test.ts`. Любое изменение, меняющее результат генерации (в том числе новый биом в базовом паке), требует поднять `GEN_VERSION` в `src/sim/world/params.ts` и обновить отпечаток.
+Biome codes in the world are indices in the list of enabled biomes (`world.biomes`). Without fantasy and without disabled biomes the list matches the order in `biomes.ts`; fantasy biomes come after the ordinary ones. Do not change the order in `biomes.ts`: the reference world hashes in `tests/sim/world/fingerprint.test.ts` rest on it. Any change that alters the generation result (including a new biome in the base pack) requires bumping `GEN_VERSION` in `src/sim/world/params.ts` and updating the fingerprint.
 
-## Свой пак
+## Your own pack
 
-Пак — папка `src/content/packs/<id>/` с файлом `manifest.ts`:
+A pack is a `src/content/packs/<id>/` folder with a `manifest.ts` file:
 
 ```ts
 import type { PackManifest } from '../../biomes/types';
@@ -130,7 +130,7 @@ export const WW2_PACK: PackManifest = {
 };
 ```
 
-Затем подключите его в `src/content/registry.ts`:
+Then hook it up in `src/content/registry.ts`:
 
 ```ts
 import { WW2_PACK } from './packs/ww2/manifest';
@@ -138,36 +138,36 @@ import { WW2_PACK } from './packs/ww2/manifest';
 export const PACKS: readonly PackManifest[] = [BASE_PACK, WW2_PACK];
 ```
 
-Переводы `pack.ww2` и `biome.bocage` добавьте в `src/i18n/ru.ts`. Включите пак в параметрах мира: `generateWorld({ ...defaultParams(seed), packs: ['base', 'ww2'] })` или адресом `#seed?packs=base,ww2`.
+Add the translations of `pack.ww2` and `biome.bocage` to `src/i18n/ru.ts`. Enable the pack in the world params: `generateWorld({ ...defaultParams(seed), packs: ['base', 'ww2'] })` or with the address `#seed?packs=base,ww2`.
 
-Правила сборки:
+Assembly rules:
 
-- паки применяются по порядку списка `packs`;
-- пустой `packs=` в адресе (например, обрезанная ссылка) читается как паки по умолчанию, а `buildWorldUrl` пустой список не пишет;
-- биомы пака дописываются в конец списка (их коды идут после биомов предыдущих паков);
-- `overrides` меняет поля уже объявленных биомов (этого или предыдущих паков) по `id`; `id` менять нельзя. Поле заменяется целиком: `overrides: { forest: { when: { moisture: [0.6, Infinity] } } }` задаёт лесу новые условия полностью, прежние условия по другим полям не сохраняются;
-- все объявленные биомы проверяются после правок, в том числе выключенные и фэнтези в мире без фэнтези;
-- объявить биом с уже занятым `id` нельзя — для правки есть `overrides`;
-- override несуществующего биома, неизвестный пак и неизвестный биом в `disabledBiomes` — ошибка;
-- биомов в мире не больше 32.
+- packs are applied in the order of the `packs` list;
+- an empty `packs=` in the address (for example a truncated link) is read as the default packs, and `buildWorldUrl` does not write an empty list;
+- the biomes of a pack are appended to the end of the list (their codes come after the biomes of the previous packs);
+- `overrides` changes the fields of already declared biomes (of this or previous packs) by `id`; `id` cannot be changed. A field is replaced whole: `overrides: { forest: { when: { moisture: [0.6, Infinity] } } }` gives the forest its new conditions in full, the previous conditions on other fields are not kept;
+- all declared biomes are validated after the edits, including the disabled ones and the fantasy ones in a world without fantasy;
+- a biome with an already taken `id` cannot be declared — use `overrides` to edit it;
+- an override of a non-existent biome, an unknown pack and an unknown biome in `disabledBiomes` are errors;
+- a world has no more than 32 biomes.
 
-## Что проверяют тесты
+## What the tests check
 
 `tests/content/registry.test.ts`:
 
-- `id` уникальны и в snake_case, обязательные поля заполнены;
-- цвет — целые 0..255, насыщенность ≤ 0.45, светлота 0.2..0.9;
-- `detail` — существующий слот атласа;
-- у каждого условия `min < max`;
-- ровно один запасной биом суши, есть вода с тегами `deepWater`, `shallowWater` и `lake`, есть биомы с тегами `mountain` и `hill`;
-- выключение, ошибки при выключении обязательных биомов, сборка пака с `overrides`.
+- `id`s are unique and in snake_case, the required fields are filled in;
+- the colour is integers 0..255, saturation ≤ 0.45, lightness 0.2..0.9;
+- `detail` is an existing atlas slot;
+- every condition has `min < max`;
+- there is exactly one land fallback biome, there is water tagged `deepWater`, `shallowWater` and `lake`, and there are biomes tagged `mountain` and `hill`;
+- disabling, errors when disabling required biomes, assembling a pack with `overrides`.
 
-Те же проверки выполняет `resolveBiomes` при каждой генерации, так что ошибка в данных пака видна сразу.
+The same checks are performed by `resolveBiomes` on every generation, so a mistake in pack data shows up immediately.
 
-`tests/content/fantasy.test.ts` — доля фэнтези-биомов на карте, выключение `swamp` и `desert` (клетки ушли другим биомам суши, провинции однородны).
+`tests/content/fantasy.test.ts` — the share of fantasy biomes on the map, disabling `swamp` and `desert` (the cells went to other land biomes, the provinces are uniform).
 
-`tests/sim/world/biomes.test.ts` — обычный мир совпадает клетка в клетку со старым решающим списком.
+`tests/sim/world/biomes.test.ts` — an ordinary world matches the old decision list cell for cell.
 
-`tests/sim/world/provinces.test.ts` — провинции однородны по биому, горные массивы (тег `mountain`) лежат в горных провинциях; в том числе с фэнтези.
+`tests/sim/world/provinces.test.ts` — provinces are uniform by biome, mountain ranges (tag `mountain`) lie in mountainous provinces; with fantasy too.
 
-`tests/render/palette.test.ts` — цвета всех биомов приглушены.
+`tests/render/palette.test.ts` — the colours of all biomes are muted.
