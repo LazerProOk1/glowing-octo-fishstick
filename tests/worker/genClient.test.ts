@@ -164,7 +164,7 @@ describe('genClient', () => {
     expect(workers.length).toBe(before + 1);
   });
 
-  it('the request carries the protocol version', async () => {
+  it('the request carries the protocol version', () => {
     const { factory, workers } = fakeFactory();
     const client = createGenClient(factory);
     void client.requestWorld(P('a')).catch(() => undefined);
@@ -189,7 +189,7 @@ describe('genClient', () => {
 });
 
 describe('versionErrorReply (worker side)', () => {
-  it('own version — no reply; foreign or missing version — an error message with the request id', async () => {
+  it('own version — no reply; foreign or missing version — an error message with the request id', () => {
     expect(versionErrorReply({ v: PROTOCOL_VERSION, id: 3 })).toBeNull();
     const reply = versionErrorReply({ v: PROTOCOL_VERSION + 1, id: 3 });
     expect(reply).toMatchObject({ v: PROTOCOL_VERSION, type: 'error', id: 3 });
@@ -200,7 +200,7 @@ describe('versionErrorReply (worker side)', () => {
 });
 
 describe('collectTransferables', () => {
-  it('returns the buffers of all typed arrays without duplicates', async () => {
+  it('returns the buffers of all typed arrays without duplicates', () => {
     const world = fakeWorld('x');
     const shared = new ArrayBuffer(16);
     world.biome = new Uint8Array(shared, 0, 8);
@@ -218,7 +218,7 @@ describe('collectTransferables', () => {
 });
 
 describe('bakeTransferables', () => {
-  it('returns all seven buffers of the baked textures', async () => {
+  it('returns all seven buffers of the baked textures', () => {
     const b = fakeBake();
     const list = bakeTransferables(b);
     expect(list.length).toBe(7);
@@ -227,7 +227,7 @@ describe('bakeTransferables', () => {
     expect(list).toContain(b.provinceSeaRG.buffer);
   });
 
-  it('surfaceTransferables: all terrain texture fields, including future ones', async () => {
+  it('surfaceTransferables: all terrain texture fields, including future ones', () => {
     const { height, surface, biomeColor, seaDepth } = fakeBake();
     const extra = new Float32Array(4);
     const s = { height, surface, biomeColor, seaDepth, extra } as SurfaceBake;
