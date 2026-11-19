@@ -2,6 +2,7 @@ import { t, translate } from '../i18n/ru';
 import type { World } from '../sim/world/types';
 import { LOAD_STEPS, type GenTimings, type LoadStep } from '../worker/protocol';
 import { el, formatMs } from './dom';
+import type { FrameStats } from '../render/frameBench';
 import { keyLabel, type Hotkey } from './hotkeys';
 
 const FPS_INTERVAL_MS = 500;
@@ -22,6 +23,7 @@ export class DebugPanel {
   private readonly root: HTMLElement;
   private readonly seedValue: HTMLElement;
   private readonly fpsValue: HTMLElement;
+  private readonly benchValue: HTMLElement;
   private readonly provValue: HTMLElement;
   private readonly landValue: HTMLElement;
   private readonly seaValue: HTMLElement;
@@ -37,6 +39,7 @@ export class DebugPanel {
     parent: HTMLElement,
     private readonly getFps: () => number,
     private readonly onSeed: (seed: string) => void,
+    private readonly onBench: () => FrameStats,
   ) {
     this.root = el('section', 'debug ui-panel');
     this.root.hidden = true;
@@ -49,6 +52,11 @@ export class DebugPanel {
     this.seedValue = seed.value;
     const fps = row(t('debug.fps'));
     this.fpsValue = fps.value;
+    const bench = row(t('debug.frame'));
+    this.benchValue = bench.value;
+    const benchBtn = el('button', 'ui-button debug__bench', t('debug.bench'));
+    benchBtn.type = 'button';
+    benchBtn.addEventListener('click', this.runBench);
     const prov = row(t('debug.provinces'));
     this.provValue = prov.value;
     const land = row(t('debug.land'));
@@ -85,7 +93,7 @@ export class DebugPanel {
 
     this.keys = el('div', 'debug__group');
 
-    this.root.append(head, seed.row, fps.row, prov.row, land.row, sea.row, mode.row, timings, this.keys, field);
+    this.root.append(head, seed.row, fps.row, benchBtn, bench.row, prov.row, land.row, sea.row, mode.row, timings, this.keys, field);
     parent.append(this.root);
 
     // Enter в поле зерна — поведение самого поля, не горячая клавиша.
@@ -148,6 +156,18 @@ export class DebugPanel {
 
   private readonly tickFps = (): void => {
     this.fpsValue.textContent = String(Math.round(this.getFps()));
+  };
+
+  private readonly runBench = (): void => {
+    this.benchValue.textContent = t('debug.benchRunning');
+    // Даём браузеру показать надпись, затем считаем (замер блокирует поток на время кадров).
+    window.setTimeout(() => {
+      const r = this.onBench();
+      this.benchValue.textContent = t('debug.benchResult')
+        .replace('{avg}', r.avg.toFixed(1))
+        .replace('{p95}', r.p95.toFixed(1))
+        .replace('{fps}', String(Math.round(r.fps)));
+    }, 30);
   };
 
   private readonly onInputKey = (e: KeyboardEvent): void => {

@@ -308,3 +308,8 @@ body {
     transition: none;
   }
 }
+
+.debug__bench {
+  margin: 4px 0;
+  width: 100%;
+}

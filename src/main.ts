@@ -137,6 +137,7 @@ async function start(root: HTMLElement): Promise<void> {
       if (requestKey(next) === requestKey(parseWorldUrl(location.hash))) regenerate(next);
       else location.hash = requestKey(next);
     },
+    () => view.benchmark(),
   );
   debug.setSeed(first.req.seed);
   debug.setMapMode(view.mapMode.nameKey);

@@ -13,6 +13,7 @@ import {
 } from 'pixi.js';
 import { DEFAULT_SIZE, SIZE_PRESETS } from '../sim/world/params';
 import type { World } from '../sim/world/types';
+import { frameStats, type FrameStats } from './frameBench';
 import { clampCamera, minZoom, screenToWorld, zoomAt, type Camera, type MapSize } from './camera';
 import { bakeWorld, type WorldBake } from './bakeWorld';
 import type { Rect } from './derived';
@@ -239,6 +240,23 @@ export class MapView {
   onHover(cb: (id: number | null) => void): () => void {
     this.hoverListeners.add(cb);
     return () => this.hoverListeners.delete(cb);
+  }
+
+  /**
+   * Честный замер кадра: синхронно рисует frames кадров и после каждого ждёт конца работы
+   * видеокарты (gl.finish). От requestAnimationFrame не зависит, поэтому верен и в скрытой вкладке.
+   */
+  benchmark(frames = 120): FrameStats {
+    const { renderer, stage } = this.app;
+    const gl = renderer.type === RendererType.WEBGL ? (renderer as WebGLRenderer).gl : null;
+    const samples: number[] = [];
+    for (let i = 0; i < frames; i++) {
+      const t0 = performance.now();
+      renderer.render(stage);
+      gl?.finish();
+      samples.push(performance.now() - t0);
+    }
+    return frameStats(samples);
   }
 
   destroy(): void {
