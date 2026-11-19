@@ -6,11 +6,23 @@
 
 ## Где что лежит
 - Спек: `docs/superpowers/specs/2026-11-16-settlement-strategy-design.md`
-- Планы: `docs/superpowers/plans/` (текущий: `2026-11-18-stage-1-5-feedback.md`)
+- Планы: `docs/superpowers/plans/` (этап 1.5 `2026-11-18-stage-1-5-feedback.md` — закрыт 2026-11-19)
 - Архитектура: `docs/architecture.md`
 - Решения этапа 1 и отложенные мелочи: `docs/superpowers/stage-1-decisions.md` (и `stage-*-decisions.md`)
 - Отзыв автора: `docs/feedback/stage-1.md`
 - Журнал SDD (локальный, не в git): `.superpowers/sdd/<план>/progress.md`, там же брифы и отчёты задач
+
+## Где мы сейчас (обновлять в конце каждого этапа)
+Этапы 1 (карта) и 1.5 (доработки по отзыву) закрыты, ветка `stage-1-map` запушена, в `main` не слита.
+Итоги и все решения: `docs/superpowers/stage-1-decisions.md`, скриншоты: `docs/screenshots/stage-1-5/`.
+Автору ещё показать скриншоты моря и рек (вид принимал Claude по чек-листу).
+Следующая сессия, по порядку (когда у автора восстановятся недельные лимиты):
+1. Построить карту кода graphify (`/graphify`, дальше `--update`), чтобы агенты не перечитывали
+   и не дублировали код.
+2. Автор сам запускает `/ponytail-audit`; найденное разобрать вместе.
+3. Попробовать OpenCode (команда `oc`, не `opencode`) вторым ревьюером на одном диффе и сравнить.
+4. Этап 2 (одно поселение): начать с обсуждения с автором (brainstorming), опираясь на раздел
+   «Готовность к этапу 2» в `docs/architecture.md`.
 
 ## Команды
 - `npm run dev` — дев-сервер (порт 5173, конфиг в `.claude/launch.json`)
