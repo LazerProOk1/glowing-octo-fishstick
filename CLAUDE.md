@@ -13,11 +13,10 @@ Browser strategy game: TypeScript strict, PixiJS 8 (WebGL2), Vite, Vitest, ESLin
 Stages 1 (map) and 1.5 (feedback fixes) are closed; branch `stage-1-map` pushed, not merged into `main`.
 Still to show the author: sea and river screenshots (`docs/screenshots/stage-1-5/`; look accepted by Claude via checklist).
 Next session, in order (once the author's weekly limits reset):
-1. Read every report in `docs/reports/` (`arena-translate-review.md`, `docs-audit.md`, `project-status.md`, `deepseek-review.md`) and fix the confirmed findings; keep unresolved ones in the stage decisions.
-2. Build the code graph with graphify (`/graphify`, later `--update`) so agents stop re-reading/duplicating code.
-3. Run `ponytail-audit` (installed as a skill; Task B of `docs/reports/deepseek-review.md`) and triage the findings together.
-4. Try OpenCode as a second reviewer on one diff and compare.
-5. Stage 2 (one settlement): start with brainstorming with the author, based on «Готовность к этапу 2» in `docs/architecture.md`.
+1. Read every report in `docs/reports/` (`arena-translate-review.md`, `docs-audit.md`, `project-status.md`, `deepseek-review.md`) and fix all confirmed findings; re-check every report after the fixes.
+2. Run `ponytail-audit` (installed as a skill; Task B of `docs/reports/deepseek-review.md`) and triage the findings together.
+3. Merge `stage-1-map` into `main` (author-approved).
+4. Stage 2 (one settlement): start with brainstorming with the author, based on «Готовность к этапу 2» in `docs/architecture.md`; build the code graph with graphify (`/graphify`, later `--update`) as part of Stage 2.
 
 ## Workflow
 - New stage/feature: brainstorming with the author → spec → plan of tasks (superpowers:writing-plans).
@@ -32,6 +31,7 @@ Next session, in order (once the author's weekly limits reset):
 
 ## Token economy
 - Language: code, code comments, identifiers, CLAUDE.md, briefs, agent reports, commit bodies — English. Replies to the author, commit titles, `src/i18n/ru.ts` — Russian. The commit co-author line names the model that made the commit (see `docs/commit-rules.md`). Translate old Russian comments only when touching that file.
+- Docs: author-facing docs in Russian; agent-facing docs under `docs/**` in English, except `README.md`, `docs/feedback/**`, `docs/commit-rules.md` and `src/game/README.md`.
 - Models (always set explicitly): `haiku` — file search, reading logs/docs, tiny edits; `sonnet` — mechanical tasks, tests, UI, re-reviews; `opus` — architecture, shaders, hard debugging, final review.
 - Sessions: 1 session = 1 phase (discussion+plan / execution / final review). Prefer a fresh session over a long tail; tell the author when it is time to switch (context long or phase done).
 - Agent reports: terse English — changed files, test result, blockers. No retelling of the work; details go to the report file.

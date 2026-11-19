@@ -19,7 +19,7 @@ browser. `grep -c "✗\|FAIL"` over the run log is 0.
 
 ## What is on the branch
 
-9 commits, 106 files, +2424 / −1971 against `e07d4541`:
+At the time of this report: 9 commits, 106 files, +2424 / −1971 against `e07d4541`:
 
 - `db513d2` — every Russian code comment and test title under `src/**` and `tests/**` translated to
   English. The diff was checked hunk by hunk: comments and test titles only, no code, logic, formatting,
@@ -52,7 +52,8 @@ From `docs/reports/arena-translate-review.md` (written while reading the code, d
 - **I2** "biome → water kind" is implemented twice (`src/render/bake.ts:63-70` vs
   `src/render/textures.ts:109-118`) with a comment claiming both are the same mapping.
 - **I3** the detail atlas slots are declared twice (`src/content/biomes/types.ts:5`,
-  `src/render/assets.ts:11-27`), and nothing ties the two orders together.
+  `src/render/assets.ts:7-27`); `tests/render/assets.test.ts:15` asserts the name→index order, so the
+  order cannot drift silently.
 - **I5** an unknown biome code throws in `bake.ts:73-77`, but `biomeColors.ts:44-51` silently paints
   beach and marks it land.
 - **I6** the Cyrillic guard test only looks at `src/ui/*.ts` (`tests/i18n.test.ts:13,58`).
@@ -62,11 +63,11 @@ The line references were spot-checked against the current code and still point w
 ## Documentation state
 
 English: `docs/architecture.md`, `docs/modding/biomes.md`, both plans, the spec, the stage 1 decisions
-log, `docs/screenshots/stage-1-5/README.md`, `docs/reports/*`, `docs/translation-glossary.md`.
+log, `docs/screenshots/stage-1-5/README.md`, `docs/reports/*`, `docs/translation-glossary.md`,
+`docs/visual-checklist.md`.
 
 Russian on purpose: `README.md`, `docs/feedback/stage-1.md` (the author's own words),
-`docs/commit-rules.md` (quotes Russian commit titles), `src/game/README.md`,
-`docs/visual-checklist.md`.
+`docs/commit-rules.md` (quotes Russian commit titles), `src/game/README.md`.
 
 Details and the two Important findings are in `docs/reports/docs-audit.md`.
 

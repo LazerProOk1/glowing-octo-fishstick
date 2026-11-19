@@ -44,13 +44,14 @@ reports, commit bodies". Documents under `docs/**` are not mentioned, and until 
 Russian. After this branch most of them are English:
 
 - English now: `docs/architecture.md`, `docs/modding/biomes.md`, both plans, the spec, the stage-1
-  decisions log, `docs/screenshots/stage-1-5/README.md`, `docs/reports/*`.
+  decisions log, `docs/screenshots/stage-1-5/README.md`, `docs/reports/*`, `docs/visual-checklist.md`.
 - Russian on purpose: `README.md`, `docs/feedback/stage-1.md` (the author's own words),
-  `docs/commit-rules.md` (quotes Russian commit titles), `src/game/README.md`, `docs/visual-checklist.md`.
+  `docs/commit-rules.md` (quotes Russian commit titles), `src/game/README.md`.
 
 Without this line being updated, the next agent either translates the remaining Russian files by
 accident or "restores" the old ones. Suggested fix: one sentence in `CLAUDE.md` saying that `docs/**`
-is English except `README.md` and `docs/feedback/**`, which stay Russian.
+is English except `README.md`, `docs/feedback/**`, `docs/commit-rules.md` and `src/game/README.md`, which
+stay Russian.
 
 ## Minor
 
@@ -78,8 +79,8 @@ is not a path a reader can open. Cosmetic, present in the original too.
 ### A6. Russian files that were deliberately left alone
 
 `README.md` (12 Russian lines), `docs/feedback/stage-1.md` (17), `docs/commit-rules.md` (8, quoting
-Russian commit titles), `src/game/README.md` (12), `docs/visual-checklist.md` (1). Listed so that the
-"is everything translated?" question has an answer: no, and that is intended.
+Russian commit titles), `src/game/README.md` (12). Listed so that the "is everything translated?" question
+has an answer: no, and that is intended.
 
 ### A7. Leftovers worth a look when the code is touched next
 
@@ -90,6 +91,11 @@ Russian commit titles), `src/game/README.md` (12), `docs/visual-checklist.md` (1
   `ERR_CLEANUP_NO_CONVERGE`.
 - `docs/architecture.md` says "no more than ~450 lines" while `src/render/mapShader.ts` is 455 lines
   (report item I1). The doc is right, the code is over the limit.
+
+## Follow-up
+
+- A1 fixed: `docs/modding/biomes.md:171` now points to `tests/sim/world/provinces.*.test.ts` (shared suite `provincesSuite.ts`).
+- A2 fixed: `CLAUDE.md` now has an explicit docs-language rule.
 
 ## What was checked and found consistent
 

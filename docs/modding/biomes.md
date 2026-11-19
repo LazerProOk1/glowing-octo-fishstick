@@ -168,6 +168,6 @@ The same checks are performed by `resolveBiomes` on every generation, so a mista
 
 `tests/sim/world/biomes.test.ts` — an ordinary world matches the old decision list cell for cell.
 
-`tests/sim/world/provinces.test.ts` — provinces are uniform by biome, mountain ranges (tag `mountain`) lie in mountainous provinces; with fantasy too.
+`tests/sim/world/provinces.*.test.ts` (shared suite: `provincesSuite.ts`) — provinces are uniform by biome, mountain ranges (tag `mountain`) lie in mountainous provinces; with fantasy too.
 
 `tests/render/palette.test.ts` — the colours of all biomes are muted.

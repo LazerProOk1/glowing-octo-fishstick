@@ -8,12 +8,13 @@ Scope: comments and test names in `src/**` and `tests/**`; review notes collecte
 
 ### What was translated
 
-- 96 files touched: 89 under `src/`, 7 under `tests/` (all test files that carried Russian titles or comments).
+- 96 files touched: 51 under `src/`, 45 under `tests/` (all test files that carried Russian titles or comments).
 - 802 comment lines (`//`, `/* */`, JSDoc) rewritten in English.
 - 273 `describe` / `it` / `test` title lines rewritten in English.
-- Nothing else was changed: a line-by-line check of the diff shows every modified hunk is either a comment
-  line or a test-title line. No code, logic, formatting, import, string literal or identifier changes.
-  A verification script rejected any hunk that was not a comment or a test title (`0` violations).
+- Review found one code-token exception: five test callbacks in `tests/worker/genClient.test.ts`
+  (lines 167, 192, 203, 221, 230) gained `async`; they contain no `await`, so the change is behaviour-neutral.
+  Those five `async` were removed in a follow-up commit, and the final diff is comments, test titles and docs only.
+- No other code, logic, formatting, import, string literal or identifier changes.
 
 ### Deliberately left in Russian (not comments / not titles)
 
@@ -104,13 +105,15 @@ both encoders switch on it; fix the comment.
 #### I3. Detail atlas slots are declared twice, in two layers
 
 `src/content/biomes/types.ts:5` declares `DETAIL_SLOT_NAMES = ['grass','forest','sand','rock','snow','mud','paper']`;
-`src/render/assets.ts:11-27` declares the same set again as `DetailSlot` + `DETAIL_SLOT_OF`, which fixes the
+`src/render/assets.ts:7-27` declares the same set again as `DetailSlot` + `DETAIL_SLOT_OF`, which fixes the
 numeric slot order used by `assets/terrain/atlas.png`. `src/content/registry.ts:54` validates `def.detail`
-against the content copy only, and `tests/content/registry.test.ts:47` checks only names, so nothing ties the
-two lists together. Adding a slot means editing both files and repainting the atlas with the same order.
+against the content copy only, and `tests/content/registry.test.ts:47` checks only names. However,
+`tests/render/assets.test.ts:15` asserts that every name maps to its index, so the order cannot drift
+silently. Adding a slot still means editing both files and repainting the atlas with the same order.
 
 Suggested fix: keep the single ordered list in `src/content/biomes/types.ts` and derive
-`DETAIL_SLOT_OF` in `src/render/assets.ts` from it (index = slot), or add a test asserting both orders match.
+`DETAIL_SLOT_OF` in `src/render/assets.ts` from it (index = slot); the existing assets test already guards
+the order until then.
 
 #### I4. Tests assert on GLSL source text instead of shader behaviour
 

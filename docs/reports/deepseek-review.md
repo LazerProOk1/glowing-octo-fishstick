@@ -4,7 +4,7 @@ Base: `stage-1-map`. Head: `arena/88549d63-glowing-octo-fishstick` (`ebfca7e`). 
 
 ## Task A — is PR #1 comments/docs only?
 
-### A1. Non-comment / non-title changes
+### A1. Non-comment / non-title changes (at review head)
 
 Code-token changes (5, one file):
 
@@ -15,6 +15,8 @@ Code-token changes (5, one file):
 - `tests/worker/genClient.test.ts:230` — `() => {` → `async () => {`.
 
 No `await` was added in that file; the change is behaviour-neutral but is a code-token change.
+
+Resolved after review: all five were removed in a follow-up commit; the final PR diff has no code-token changes.
 
 Eight changed lines contain code plus a translated trailing comment; the code before `//` is byte-identical: `src/main.ts:162`, `src/worker/genClient.ts:87,112`, `tests/render/camera.test.ts:74-75`, `tests/render/coast.test.ts:238`, `tests/render/riverLayer.test.ts:110`, `tests/sim/world/biomes.test.ts:124`.
 
@@ -45,13 +47,13 @@ Report accuracy (`docs/reports/arena-translate-review.md`):
 - C1 — **CONFIRMED** — `src/ui/errorScreen.ts:31` returns `raw` for all but `ERR_CLEANUP_NO_CONVERGE`; `src/main.ts:112` passes it to `showError`; Russian throws at `src/sim/world/generateWorld.ts:20,43,46`.
 - I1 — **CONFIRMED** — `src/render/mapShader.ts:1-455` is 455 lines; `CLAUDE.md:44`; `src/render/MapView.ts` 431, `src/render/riverLayer.ts` 381; no other `src/**/*.ts` is over 450.
 - I2 — **CONFIRMED** — `src/render/bake.ts:65-68` and `src/render/textures.ts:117` share the lake/water/land branch but encode alpha 0/128/255 vs atlas slots; the comment at `bake.ts:65` claims one mapping.
-- I3 — **CONFIRMED** — `src/content/biomes/types.ts:5` and `src/render/assets.ts:7-27` declare the slot order twice; sub-claim “nothing ties the two lists” is **WRONG**: `tests/render/assets.test.ts:15` asserts the order.
+- I3 — **CONFIRMED** — `src/content/biomes/types.ts:5` and `src/render/assets.ts:7-27` declare the slot order twice; sub-claim “nothing ties the two lists” was **WRONG** at review time: `tests/render/assets.test.ts:15` asserts the order; corrected in the follow-up.
 - I4 — **CONFIRMED** — `tests/render/seaDepth.test.ts:39-45` and `tests/render/seaWaves.test.ts:42-56` assert GLSL substrings, not behaviour.
 
 `docs/reports/docs-audit.md`:
 
 - A1 — **CONFIRMED** — `docs/modding/biomes.md:171` cites `tests/sim/world/provinces.test.ts`; that file is absent.
-- A2 — **CONFIRMED** — `CLAUDE.md:33` lists code/comments but has no `docs/**` rule; sub-claim “`docs/visual-checklist.md` stays Russian” is **WRONG**: 0 Cyrillic characters.
+- A2 — **CONFIRMED** — `CLAUDE.md:33` lists code/comments but has no `docs/**` rule; sub-claim “`docs/visual-checklist.md` stays Russian” was **WRONG** at review time: 0 Cyrillic characters; corrected in the follow-up.
 - A3 — **CONFIRMED** — `docs/superpowers/plans/2026-11-16-stage-1-map.md:208-209` and `docs/superpowers/plans/2026-11-18-stage-1-5-feedback.md:58,66` cite `src/render/distanceField.ts`; absent, code moved to `src/sim/geom/edt.ts:46`.
 - A4 — **CONFIRMED** — `docs/superpowers/plans/2026-11-16-stage-1-map.md:383,405` cite `tests/golden.test.ts`; absent.
 - A5 — **CONFIRMED** — `docs/screenshots/stage-1-5/README.md:13` uses `-mid.jpg` shorthand, not an openable path.
@@ -79,6 +81,14 @@ Ranked by estimated lines saved. No style, correctness or performance findings.
 Dependency findings: none; `package.json` has one runtime dependency, `pixi.js`.
 
 net: ~−366 lines, −0 deps.
+
+## Follow-up (after this review)
+
+- Five `async` insertions removed from `tests/worker/genClient.test.ts`: the final diff is comments, test titles and docs only.
+- `docs/reports/arena-translate-review.md`: 89/7 corrected to 51/45; the “0 violations” claim and the I3 sub-claim corrected.
+- `docs/reports/docs-audit.md` and `docs/reports/project-status.md`: `docs/visual-checklist.md` moved to the English list; the project-status I3 claim corrected; the suggested CLAUDE.md rule corrected.
+- docs-audit A1/A2 fixed: the modding guide now points to `tests/sim/world/provinces.*.test.ts` / `provincesSuite.ts`; `CLAUDE.md` now has an explicit docs-language rule.
+- `CLAUDE.md`: next-session order is now reports → ponytail-audit → merge to `main` → Stage 2 with graphify.
 
 ## Counts and limits
 
