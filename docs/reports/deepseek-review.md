@@ -2,6 +2,8 @@
 
 Base: `stage-1-map`. Head: `arena/88549d63-glowing-octo-fishstick` (`ebfca7e`). Reviewed 2026-11-19.
 
+Translation under review: **Arena Agent Mode via LM Arena** (commits `db513d2`..`ebfca7e`; co-authors `Arena Agent Mode via LM Arena` and `arena-agent`). Review, report and follow-up fixes: **DeepSeek Harness**.
+
 Post-review change: the root MIT `LICENSE` was removed in a separate commit (`d61750c`); the `src/`/`tests/` diff is still comments and test titles only.
 
 ## Task A — are the source changes comments/docs only?
