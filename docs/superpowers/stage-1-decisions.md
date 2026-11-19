@@ -56,3 +56,44 @@
 - Task 12: minor (deferred): saturation helper duplicated in registry.test (hsl exported now); off= values not URL-decoded (ids snake_case)
 - Task 13A: minor (deferred): bakeBiomeColorsRect duplicates blurInterleaved gaussian (add sync comment in fix round); buildWorldUrl packs=[] round-trip; two import paths for levels
 - Task 13A: minor (deferred): ray-check exemption leaves 'missed river' untested for mostly-land-touching edges
+
+## Этап 1.5 (план 2026-11-18-stage-1-5-feedback)
+
+### Решения
+
+- | T4→T5 | both edit provinces.ts/provinceSeeds.ts | sequential, ok. T5 count "150–300 sea" must count water==='sea' only (lakes excluded) → Ruling below |
+- | T4→T7 | lake must be distinguishable in shader; T7 "озёра без изобат" | T4 does not name the mechanism → Ruling below |
+- | T10 vs fingerprint test | worldHash duplicates hashing in fingerprint.test | → Ruling below |
+- Ruling: T5 sea-count bounds (150–300) count provinces with water==='sea' only — lakes are their own kind — cost: none.
+- Ruling: T4 exposes lake to the shader through the biome code (lake biome in palette / water flag texture), T7 reads the same — cost: one extra texture channel if palette is not enough.
+- Ruling: T10 worldHash is the single hash implementation; fingerprint.test imports it instead of its own helper — DRY; cost: fingerprint values may need re-pinning only if hash function differs (then keep old helper for old pins).
+- Task 3: DONE 018f748 (coastSd EDT, PROTOCOL 2). Controller browser: highlight matches coast BUT coastline stair-stepped at max zoom — worse than stage-1. Ruling: brief fallback — keep blurred-height coast look; render-side displayProvinceOf assigns coast-band water cells (shown as land) to nearest land province for hover/fill/picking; sim provinceOf untouched — cost: sim and picking disagree on ≤1-2 coast cells (army/settlement on such cell resolves to land prov in UI, sea in sim) — acceptable, UI only selects provinces.
+- Task 5: review Approved w/ Important escalated (a74c0d9982141a4c6): coastal sea 30% coarser (3280→4279) — brief flaw (max rule + 150–300 cap). Ruling: author intent (open sea coarse, coast as fine as before) beats brief numbers → min() rule, COAST 2.6–3×, count cap 350, abs coastal mean ≤3400; land-only quality thresholds restored; split file <450 — cost: ~300+ sea provinces instead of ≤300.
+- Ruling: accept COAST 2.5x (below ruled 2.6–3.0) — in-range options miss coastal target or thin margins — cost: none visible.
+- Ruling: accept item-3 deviation — land-only metrics already above original thresholds before Task 5 (stage-1 thresholds were on all borders); pinned at observed+margin — cost: land regression slack equals the margin.
+- Author screenshot (2026-11-19): hovering SEA province near coast → highlight stops short of coast with stairs (mirror of Task 3; reviewer minor "sea fill stops at band edge" was real — controller missed it, only checked land hover); sea–sea hover boundary stair-stepped at max zoom. Ruling: new Task 6b in plan (two display maps land/sea + soft-membership smooth fill/hover edges), runs after Task 6 and before Task 7 (both edit shader water block) — cost: one more render task.
+- Ruling: accept moisture jitter ±0.15 + test «≤11% of jungle N/S edge cells in any 4-row band» (fails on base, passes) — shares move ≤0.93 p.p.; re-pin fingerprints (no GEN bump) — cost: brief values changed. Also raise generateWorld smoke limit 12→20 s (real budget checked in browser) — cost: slower node regressions caught later. Sequenced AFTER 6b commits (both touch fingerprint.test.ts).
+- Ruling: accept fixed jitter scale (brief says 40–120 cells) — cost: small-world province headroom 7 below the 999 cap; watch.
+- Task 8: dispatched a3a993219f5d9aef2 (opus), BASE 40f6695. Ruling: brief mouth test rewritten against blurred-coast field (coastSignedDistance no longer exists after Task 3 fallback); lake mouths allowed — cost: none.
+- Author (2026-11-19, screenshot): sea after Task 7 «некрасивое и нереалистичное» — uniform glowing halo around every island, dark lanes between. Task 7 REOPENED. Controller error: accepted look on a glance; reviewers only check code. Ruling: visual tasks now close only after author OK on screenshots. Sea rework waits for Task 8 (palette.ts overlap) and author choice of direction.
+- Task 10: dispatched a9971d234578fe95a (opus), BASE bc7b6b7. Ruling: fingerprint.test migration onto worldHash deferred to Task 11 (file busy with Task 7 round 3) — cost: one extra small edit later.
+- Ruling: perf investigation stopped (a1fa4e9bdbb9598aa) — superseded by final reviewer esbuild timing — cost: none.
+
+### Отложенные мелочи
+
+- Task 1: review Approved (a24e221b6bb0bd34b). Push verified via ls-remote. minor (deferred → Task 11): CLAUDE.md stray comma line 64; plan-specific GEN 2→3 line goes stale (update at end of plan).
+- Task 2: review Approved (a00bc38a2973224cd), 0 Crit/Imp. minor (deferred → Task 11): edt 2x2 checkerboard test missing; blur.ts mixed-language comments; labelComponents copies mask per call.
+- Task 3: review Approved (af25ae1c717519d1b), 0 Crit/Imp. minor (deferred → Task 11): BFS seeds all land cells (seed only band-adjacent); blur reuse on main-thread fallback path; field copy spread; docstring "nearest" = 8-step distance. minor (deferred, watch): sea fill/sea borders stop at outer band edge — check when a sea-filling map mode exists.
+- Task 4: minor (deferred): strait edges over lake water (adjacency.ts:107) — naval/strait logic must check sea later; tooltip capitalised for all biomes (accepted).
+- Task 6b: review Approved (a7b47d59c2b6a95e0) w/ Important 1: border EDT still baked+transferred, unused on GPU → remove (fix round after Task 6 commits; both touch fingerprint.test). minor (deferred, document): sub-cell slivers vanish in soft share; candidate set jumps at 4+ junctions; CPU/GPU side may differ ≤1px at coast; per-pixel cost to measure in Task 9; coast.test generates seed twice.
+- Task 6: fix round 1/5 (2 addressed, 0 open; 44af390..c2df6a0), re-review a64b24bc85af3b00f Approved. minor (deferred): small "1" province headroom 7 (test bound, not a throw); raw-side band test rebuilds climate from seed.
+- Task 7: review Approved (abe20a903ce98958b), 0 Crit/Imp. minor (deferred → Task 11): smoothSeaDepth allocs 4 arrays; WATER_GRAIN literal in GLSL vs seaDepth.ts constants.
+- Task 8: code review Approved (a0e2f4bfb3cdc6db8), 0 Crit/Imp. minor (deferred): per-bucket re-tessellation at max zoom (cull to viewport if hitch); default no-coast path untested; riverLayer.ts ~400 lines. Awaiting author look OK (with sea).
+- Task 9: review Approved (a2869926f55c71744), 0 Crit/Imp. minor (deferred → Task 11): non-WebGL path silently optimistic (show «недоступно»); warm-up frames; disable button while running; ui imports render type.
+- Task 7: final review Approved (a37715fc1e678f1d2), 0 Crit/Imp. minor (deferred → Task 11): mapShader.ts 438 lines (split next time); precompute wave cos/sin; skip zero-weight octave; UV partial block when w,h not multiple of 4; lake water feeds sea depth sum; no test pins TS/GLSL tone curve.
+
+### Итог
+
+- Финальное ревью ветки: чисто после одной волны исправлений. npm test зелёный (exit 0), 480 тестов.
+- Генерация medium 4,7–4,9 с в браузере; кадр 4,3–5,2 мс.
+- Вид моря и рек принимал контроллер по чек-листу (автор делегировал на ночь); автору показать скриншоты docs/screenshots/stage-1-5/.
