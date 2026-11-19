@@ -273,7 +273,7 @@ This is the answer to the main question of the feedback: what would substantiall
   - `worldHash` changes when the seed changes;
   - lint: `Math.sin(1)` in `src/game/x.ts` gives an error, in `src/render/x.ts` it does not.
 - [ ] **Step 2:** Run it and make sure it FAILs.
-- [ ] **Step 3:** Implement it. In `docs/architecture.md` add a section "Готовность к этапу 2" (Readiness for stage 2) with a risk table (risk → what is decided → when to do it):
+- [ ] **Step 3:** Implement it. In `docs/architecture.md` add the section "Readiness for stage 2" with a risk table (risk → what is decided → when to do it):
   - **Determinism between browsers.** World generation uses floating-point maths, and on different engines `Math.sin` and the like may produce different bits. The solution: on entering online compare `worldHash`; if it does not match, the host sends the world (a snapshot of about 4–8 MB compressed). The game logic (`src/game`) works in integers or fixed point from day one, enforced by the linter. When to do it: the rule now, the synchronisation at the online stage.
   - **Where the simulation lives.** Today the worker generates the world and **hands it over** to the main thread, keeping nothing itself. The decision for stage 2: the generation worker becomes the simulation worker, stores the `World` and the game state and sends snapshots and changes to the renderer. The main thread keeps only a copy of `provinceOf` for hovering. When to do it: at the start of stage 2.
   - **Time.** A fixed tick of one "day". The speed changes the number of ticks per second, not the length of a tick. Player commands are scheduled on a tick number.
