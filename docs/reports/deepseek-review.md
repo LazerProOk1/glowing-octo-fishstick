@@ -94,6 +94,8 @@ net: ~−366 lines, −0 deps.
 - docs-audit A1/A2 fixed: the modding guide now points to `tests/sim/world/provinces.*.test.ts` / `provincesSuite.ts`; `CLAUDE.md` now has an explicit docs-language rule.
 - `CLAUDE.md`: next-session order is now reports → ponytail-audit → merge to `main` → Stage 2 with graphify.
 - Root MIT `LICENSE` removed in `d61750c`; the source diff is unchanged (comments, test titles and docs).
+- 2026-11-20: all A4 findings fixed except where noted: arena C1/I1/I2/I3/I4 (see `arena-translate-review.md` section 4); docs-audit A5 fixed, A3/A4 kept by design (historical plans).
+- Task B items 7, 9, 10, 13 done (`2586e01`: `DETAIL_SLOT_OF` derived, province state flags removed, `encode/decodeProvinceId` removed, `BiomeDef.modifiers` removed). Items 1-6, 8, 11, 12 remain for the ponytail-audit step.
 
 ## Counts and limits
 

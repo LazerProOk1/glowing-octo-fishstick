@@ -96,6 +96,9 @@ has an answer: no, and that is intended.
 
 - A1 fixed: `docs/modding/biomes.md:171` now points to `tests/sim/world/provinces.*.test.ts` (shared suite `provincesSuite.ts`).
 - A2 fixed: `CLAUDE.md` now has an explicit docs-language rule.
+- A3/A4 kept by design: the plans are historical, rewriting them would falsify history.
+- A5 fixed — `632b544`, `614ad99`: `docs/screenshots/stage-1-5/README.md` uses full screenshot paths.
+- A7 leftovers resolved: the `ru.ts` comment (M7), C1 (`CodedError`, `532c1be`/`7d5edca`) and `mapShader.ts` size (I1, `04c5246`/`0aded21`, now 358 lines). See `arena-translate-review.md` section 4.
 
 ## What was checked and found consistent
 

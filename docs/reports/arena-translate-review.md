@@ -237,3 +237,24 @@ Files near the 450-line limit (informational, no action needed yet):
 7. JSDoc blocks occasionally needed one extra line because English is longer than Russian; the meaning is
    unchanged but a few blocks are re-wrapped (`src/sim/world/adjacency.ts`, `src/sim/world/biomes.ts`,
    `src/sim/world/worldHash.ts`, `src/render/softProvince.ts`, `tests/sim/world/provincesSuite.ts`).
+
+## 4. Follow-up (fixes)
+
+Re-checked against the code on 2026-11-20; nothing below needs fixing again.
+
+- C1 fixed — `532c1be`, `7d5edca`: `CodedError` in `src/content/errors.ts`; `errorDetail` in `src/ui/errorScreen.ts` maps `error.<code>` keys from `src/i18n/ru.ts`.
+- I1 fixed — `04c5246`, `0aded21`: `src/render/mapShader.ts` 455 -> 358 lines, soft-province GLSL moved to `src/render/shaders/softProvince.ts` (shader bytes identical). Largest file is now `src/render/MapView.ts` (431).
+- I2 fixed — `2586e01`: shared `waterKind` in `src/content/registry.ts`, used by `src/render/textures.ts` (and `bake.ts`).
+- I3 fixed — `2586e01`: `DETAIL_SLOT_OF` derived from `DETAIL_SLOT_NAMES` in `src/render/assets.ts`.
+- I4 fixed — `0aded21`: GLSL substring assertions removed; kept only a narrow no-texture-fetch guard in `tests/render/seaWaves.test.ts` (per-pixel cost).
+- I5 fixed — `2586e01`: `biomeColors.ts` now throws `CodedError('no_biome_code')` like `bake.ts`.
+- I6 fixed — `532c1be`: `tests/i18n.test.ts` scans every `.ts` under `src` except `src/i18n`.
+- M1 fixed — `2586e01`: `BiomeDef.modifiers` removed.
+- M2 fixed — `2586e01`: unused province state flags removed from `src/render/provinceData.ts`.
+- M3 fixed — `2586e01`: `encodeProvinceId`/`decodeProvinceId` removed.
+- M4 not changed, by design: the inlined biome rule is the 2M-cell hot path (`src/sim/world/biomes.ts`); `tests/sim/world/biomes.test.ts` compares it with a reference copy.
+- M5 fixed — `18d50cb`: `buildWorldUrl` trims the seed (`src/worldUrl.ts`). Seed normalisation inside `defaultParams` deliberately not added (debug panel and URL parse already trim).
+- M6 fixed — `ca633e7`: request id is checked before the protocol-mismatch rejection (`src/worker/genClient.ts`).
+- M8 fixed — `ca633e7`: `startTimeout` clears the previous timer (`src/worker/genWorker.ts`).
+- M7 fixed — `532c1be`/`7d5edca`: the `src/i18n/ru.ts` comment now says "future en.ts" instead of promising an existing file.
+- M9 not a bug — `4d34a9d`: probe on 5 seeds found 0 unreachable strip cells in generated worlds; behaviour pinned in `tests/render/coast.test.ts`, explained in `src/render/bakeWorld.ts`.

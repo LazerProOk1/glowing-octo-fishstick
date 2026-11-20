@@ -35,30 +35,17 @@ At the time of this report: 9 commits, 106 files, +2424 / −1971 against `e07d4
 
 | Signal | Value | Comment |
 | --- | --- | --- |
-| Files over the ~450-line limit | 1 | `src/render/mapShader.ts` 455 |
-| Next largest | — | `MapView.ts` 431, `provinces.ts` 421, `riverLayer.ts` 381 |
+| Files over the ~450-line limit | 0 | `mapShader.ts` is 358 now |
+| Largest | — | `MapView.ts` 431, `provinces.ts` 421, `riverLayer.ts` 381 |
 | Tests | 47 files | Green, deterministic, 4.5 min |
 | Type errors | 0 | `strict`, `noUncheckedIndexedAccess` |
 | Lint errors | 0 | Includes the `src/sim` import and `Math.random` bans |
 
-## Open findings that this branch did not cause and did not fix
+## Open findings
 
-From `docs/reports/arena-translate-review.md` (written while reading the code, deliberately not fixed):
-
-- **C1** Russian exception messages reach the player through `errorDetail()`, bypassing `ru.ts`
-  (`src/ui/errorScreen.ts:29-31`, `src/main.ts:112,172,202`). Re-confirmed today: the function still
-  returns the raw message for everything except `ERR_CLEANUP_NO_CONVERGE`.
-- **I1** `mapShader.ts` is 455 lines against a ~450 limit — still true.
-- **I2** "biome → water kind" is implemented twice (`src/render/bake.ts:63-70` vs
-  `src/render/textures.ts:109-118`) with a comment claiming both are the same mapping.
-- **I3** the detail atlas slots are declared twice (`src/content/biomes/types.ts:5`,
-  `src/render/assets.ts:7-27`); `tests/render/assets.test.ts:15` asserts the name→index order, so the
-  order cannot drift silently.
-- **I5** an unknown biome code throws in `bake.ts:73-77`, but `biomeColors.ts:44-51` silently paints
-  beach and marks it land.
-- **I6** the Cyrillic guard test only looks at `src/ui/*.ts` (`tests/i18n.test.ts:13,58`).
-
-The line references were spot-checked against the current code and still point where the report says.
+None. The findings from `docs/reports/arena-translate-review.md` (C1, I1-I6, M1-M9) were fixed on
+2026-11-20, or kept by design (M4) or shown not to be a bug (M9); see its section 4. The remaining
+over-engineering candidates are in Task B of `docs/reports/deepseek-review.md` (ponytail-audit step).
 
 ## Documentation state
 
@@ -74,5 +61,5 @@ Details and the two Important findings are in `docs/reports/docs-audit.md`.
 ## Verdict
 
 From the checks: the branch is green and safe to merge — it changes comments, test titles and
-documents, and removes the root MIT `LICENSE`; the source code is unchanged. From the code: the project carries the five open findings listed above, all
-pre-existing, all cheap to fix in a separate pass, none of them blocking.
+documents, and removes the root MIT `LICENSE`. From the code: the findings listed in the reports
+were fixed on 2026-11-20 (follow-up in `arena-translate-review.md`); nothing blocks the merge.
