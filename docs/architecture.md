@@ -81,6 +81,8 @@ the host.
 
 ## Readiness for stage 2
 
+"Stage 2" is the old name for milestone 1, sub-stages 1.1–1.3 (spec §8 maps old stage numbers to sub-stages).
+
 There is no game logic yet, so the cheap rules are pinned down now, while they do not have to be redone.
 Short words used below:
 

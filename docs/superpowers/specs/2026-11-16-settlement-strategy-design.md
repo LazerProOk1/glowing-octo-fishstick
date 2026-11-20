@@ -187,19 +187,58 @@ We are not making the editor itself, but the data is separated so that it is pos
 - **Changed the provinces** (repainted cells, merged or split): `provinceOf` is recomputed in the region, the distance field to the borders in the region, the province list (centre, biome, coastalness) and the adjacency graph edges of the affected provinces; the province data texture is updated for the affected ids.
 - **God mode** works on top of the same simulation: a full overview (a map mode without fog), drawing biomes and provinces through these functions, "powers" — simulation commands, like the player's.
 
-## 8. Development order (roughly)
+## 8. Development order: milestones and sub-stages
 
-The detailed plan is written separately. Every stage must give a playable result, after it the author plays for 15 minutes and writes down the remarks.
+**[author's decision 2026-11-20]** Development goes by **milestones**, each split into **sub-stages**. Every sub-stage ends with a small but finished, polished result the author can open and look at; raw work between sub-stages is not shown. The detailed plan of each sub-stage is written separately.
 
-1. **The map.** World generation from a seed: terrain, biomes, rivers, 2–4 thousand provinces. Shader rendering in the spirit of HoI4, zoom and pan. Check: the map looks good on screenshots with different seeds.
-2. **One settlement.** The start, fog, a province with resources and population, buildings, time with pause. The smallest playable loop.
-3. **Expansion and economy.** Scouting, settlers, several provinces, money, famine.
-4. **Neighbours.** Computer countries by the same simulation, expansion, the border.
-5. **Technologies.** A tree of eras, parallel research, the spread of discoveries.
-6. **War.** Armies, tasks, automatic battles, capturing provinces.
-7. **Diplomacy, trade, events.**
-8. **Victory goals, difficulty, the world creation screen.**
-9. **Fantasy.** Races, magic, biomes, monsters.
+**Sub-stage rule.**
+1. The mechanic, with a simple test right away.
+2. Polish: the look by `docs/visual-checklist.md`, convenience, balance.
+3. Before/after screenshots and a short "what to look at" note for the author.
+4. The author looks when convenient; notes about this sub-stage are fixed before moving on.
+
+**"Polished before showing" checklist.** Nothing looks temporary (no placeholder squares, no English text, no errors on screen); 60 FPS on the full map; five different seeds checked by the visual checklist; a 15–20 minute match passes without obvious breakage or boredom (there is always a goal and a threat); before/after screenshots of every look change.
+
+**Why this order** (changed from the first draft). Pressure must come early: seasons, famine and disease already in milestone 1, rivals and war in milestone 2. War goes before technologies: technologies only matter when there is a rival to outpace. The first complete match (Conquest victory and defeat) comes at the end of milestone 2. From milestone 1 a headless "bot plays 100 years" test runs the simulation without a screen and catches breakage and runaway balance.
+
+0. **The map** (done: stages 1 and 1.5). World generation from a seed, HoI4-style shader rendering, zoom and pan.
+
+**Milestone 1 "Own tribe"**
+- 1.1 **Time and start.** Date on the map, pause on space, 3–5 speeds; start in a random province, fog around, only neighbours visible. Polish: a soft "paper" fog edge, smooth reveal at start, top bar in our style.
+- 1.2 **The settlement lives.** Population, food, wood, stone rise and fall on their own; province panel on click (numbers, building slots); a town sprite on the map grows with the population. Polish: the chosen icon pack, clear tooltips, readable numbers.
+- 1.3 **Buildings and seasons.** Farm, sawmill, housing, storehouse, construction takes time; winter, famine, overcrowding and disease; event feed bottom right. Polish: balance so the first 10 years are interesting, a noticeable but calm season change on the map.
+- 1.4 **Scouting.** A scout walks provinces and lifts the fog. Polish: the path is visible, the figure moves smoothly, the fog melts nicely.
+- 1.5 **Expansion.** Settlers take free land; several provinces, taxes and money, the "owner" map mode with a country fill and a crisp border. Polish: HoI4-style country border, a handy list of own provinces.
+- 1.6 **Milestone polish.** Save and load, five seeds, 60 FPS, a 15–20 minute match.
+
+**Milestone 2 "Living world and war"**
+- 2.1 **Neighbours appear.** 10–20 tribes with their own colours grow and take land. Polish: distinct country colours, country names curved along the territory as in HoI4.
+- 2.2 **Relations.** Peace or war, declaring war, a country window (size, strength, attitude). Polish: it is clear who is dangerous.
+- 2.3 **Armies and movement.** Recruiting, army figures, movement through provinces, tasks ("defend the border", "advance on the capital"). Polish: smooth movement, readable strength badges, order arrows.
+- 2.4 **Battles and capture.** Automatic battles with rivers, mountains and straits; provinces pass to the winner. Polish: a visible battle animation, a clear outcome ("why I lost").
+- 2.5 **Victory, defeat and milestone polish.** Conquest victory and defeat — the first full match; a results screen, AI balance, a long "bot plays 100 years" run.
+
+**Milestone 3 "Eras"**
+- 3.1 **Technology tree.** Eras, several researches at once, a good-looking tree screen.
+- 3.2 **Knowledge and lagging behind.** Discoveries spread to neighbours; technologies affect armies and construction.
+- 3.3 **Trade.** Agreements, caravans on the map, routes cut by war.
+- 3.4 **The sea.** Seafaring, ships, carrying armies and settlers.
+- 3.5 **Diplomacy.** Alliances and vassals; AI countries negotiate among themselves.
+- 3.6 **Events and milestone polish.** Epidemics, revolts, golden age; technologies that protect against them.
+
+**Milestone 4 "Full game"**
+- 4.1 **World creation screen.** Seed, size, difficulty, goal.
+- 4.2 **Departure victory.** Late eras, the rocket, the race with neighbours; the launch shown on the map.
+- 4.3 **Difficulty and balance of the whole match.**
+- 4.4 **Menu, settings, sound** and the final polish of the whole game.
+
+**Milestone 5 "Fantasy"**
+- 5.1 Magic lands and resources.
+- 5.2 Races with bonuses.
+- 5.3 The magic technology branch.
+- 5.4 Monsters and milestone polish.
+
+The old stage numbers map as follows: "stage 2" (one settlement) = 1.1–1.3; "stage 3" (expansion) = 1.4–1.5; "stage 4" (neighbours) = 2.1–2.2; "stage 6" (war) = 2.3–2.5; "stage 5" (technologies) = 3.1–3.2; "stage 7" = 3.3–3.6; "stage 8" = milestone 4; "stage 9" = milestone 5.
 
 ## 9. For the future (not doing it now, but not getting in the way)
 

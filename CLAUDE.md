@@ -17,7 +17,9 @@ Next session, in order (once the author's weekly limits reset):
    CI added 2026-11-20: `.github/workflows/ci.yml` (lint, types, tests, build on push to `main`/`stage-*` and PRs, ~2 min).
 2. Run `ponytail-audit` (installed as a skill; Task B of `docs/reports/deepseek-review.md`) and triage the findings together.
 3. Merge `stage-1-map` into `main` (author-approved).
-4. Stage 2 (one settlement): start with brainstorming with the author, based on «Готовность к этапу 2» in `docs/architecture.md`; build the code graph with graphify (`/graphify`, later `--update`) as part of Stage 2.
+4. Milestone 1, sub-stage 1.1 (time, start, fog): start with brainstorming with the author, based on «Readiness for stage 2» in `docs/architecture.md`; build the code graph with graphify (`/graphify`, later `--update`) as part of it.
+
+Roadmap (2026-11-20): development goes by milestones split into sub-stages, spec §8. Each sub-stage ends polished and viewable (mechanic → polish by checklist → before/after screenshots + "what to look at" note → author notes); raw work between sub-stages is not shown. Old "stage N" names map to sub-stages at the end of spec §8.
 
 ## Workflow
 - New stage/feature: brainstorming with the author → spec → plan of tasks (superpowers:writing-plans).
