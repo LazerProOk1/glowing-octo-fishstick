@@ -134,6 +134,7 @@ function startSurfaceBake(
   // competes with generation for the CPU, and long generation of a large world must not bring it down.
   const startTimeout = (): void => {
     if (settled) return;
+    clearTimeout(timer);
     timer = setTimeout(
       () => dropSurfaceWorker(worker, new Error('surface worker timed out'), true),
       SURFACE_TIMEOUT_MS,

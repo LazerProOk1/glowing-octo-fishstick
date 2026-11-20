@@ -77,14 +77,14 @@ export function createGenClient(factory: WorkerFactory = viteWorkerFactory): Gen
   };
 
   const onMessage = (msg: GenResponse): void => {
+    const p = current;
+    if (!p || msg.id !== p.id) return; // answer to a superseded request
     const mismatch = protocolMismatch(msg);
     if (mismatch !== null) {
       // Worker of a different version: its answers cannot be trusted — stop it and reject the request.
       onError(mismatch);
       return;
     }
-    const p = current;
-    if (!p || msg.id !== p.id) return; // answer to a superseded request
     if (msg.type === 'stage') {
       p.onStage?.(msg.stage);
       return;

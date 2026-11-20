@@ -186,6 +186,19 @@ describe('genClient', () => {
     workers[1]!.emit({ id: workers[1]!.requests[0]!.id, type: 'stage', stage: 'height' } as unknown as GenResponse);
     await expect(p2).rejects.toThrow(/protocol version/);
   });
+
+  it('a protocol-mismatched message for a superseded id is ignored', async () => {
+    const { factory, workers } = fakeFactory();
+    const client = createGenClient(factory);
+    const first = client.requestWorld(P('a'));
+    first.catch(() => undefined);
+    const staleId = workers[0]!.requests[0]!.id;
+    const second = client.requestWorld(P('b'));
+    workers[1]!.emit({ v: PROTOCOL_VERSION + 1, type: 'stage', id: staleId, stage: 'height' } as unknown as GenResponse);
+    expect(workers[1]!.terminated).toBe(false);
+    workers[1]!.emit({ v: PROTOCOL_VERSION, type: 'done', id: workers[1]!.requests[0]!.id, world: fakeWorld('b'), bake, timings });
+    await expect(second).resolves.toBeDefined();
+  });
 });
 
 describe('versionErrorReply (worker side)', () => {
