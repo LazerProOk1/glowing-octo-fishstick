@@ -8,6 +8,8 @@ uniform sampler2D uProvState; // RGBA8 per province id, same layout as uProvData
 uniform float uFogOn;         // 1 = fog shown, 0 = the whole map visible (uProvState R not read)
 
 const vec3 FOG_TINT = ${glslVec3(MAP_COLORS.fog)};
+const float FOG_MID = 0.28;     // fog mid-tone luminance
+const float FOG_CONTRAST = 0.28; // share of the original luminance contrast kept under fog
 const vec3 PLAYER = ${glslVec3(MAP_COLORS.player)};
 
 vec4 provState(float id) {
@@ -67,7 +69,10 @@ float fogSeen(vec2 p) {
 // kept, so hillshade, coastline and paper grain still read.
 vec3 fogged(vec3 c) {
   float l = dot(c, vec3(0.299, 0.587, 0.114));
-  return mix(mix(vec3(l), c, 0.06) * 0.66, FOG_TINT, 0.16);
+  // Luminance compressed toward one dim mid-tone: shallow rims, coasts and land read as one paper
+  // (kept luminance left a bright rim around every island and lake), relief stays guessable.
+  float f = mix(FOG_MID, l, FOG_CONTRAST);
+  return mix(mix(vec3(f), c * (f / max(l, 1e-3)), 0.06), FOG_TINT, 0.16);
 }
 
 // Own-province line on one side: 1 on the equal-share line where exactly one of best/second is own.

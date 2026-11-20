@@ -114,6 +114,7 @@ export class FogLayer {
     const st = this.state;
     if (!st) return;
     const own = new Set(ids);
+    for (const id of own) if (!Number.isInteger(id) || id < 0 || id >= st.count) throw new Error(`bad province id ${id}`);
     for (let id = 0; id < st.count; id++) st.setOwn(id, own.has(id));
   }
 
