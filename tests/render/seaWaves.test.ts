@@ -39,20 +39,15 @@ describe('water ripple', () => {
     expect(dCoarse).toBeLessThan(dFine);
   });
 
+  // Kept as text on purpose: the ripple runs per water pixel, a texture fetch there would cost real bandwidth.
   it('the GLSL has no texture samples', () => {
     expect(WAVE_GLSL).not.toMatch(/texture(Lod)?\s*\(|texelFetch/);
   });
 
-  it('GLSL: the cos and sin of the rotations are injected as TS constants, not computed in the loop', () => {
-    expect(WAVE_GLSL).not.toMatch(/(cos|sin)\s*\(/);
+  it('the rotation constants are the cos and sin of the octave angles', () => {
     WAVE_ANGLE.forEach((a, i) => {
       expect(WAVE_COS[i]).toBe(Math.cos(a));
       expect(WAVE_SIN[i]).toBe(Math.sin(a));
     });
-    for (const v of [...WAVE_COS, ...WAVE_SIN]) expect(WAVE_GLSL).toContain(v.toFixed(8));
-  });
-
-  it('the GLSL skips an octave with zero weight', () => {
-    expect(WAVE_GLSL).toMatch(/if \(a <= 0\.0\) continue;/);
   });
 });

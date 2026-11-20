@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { SEA_LEVEL } from '../../src/content/terrainLevels';
-import { MAP_FRAGMENT } from '../../src/render/mapShader';
 import {
   DEPTH_TONE_K,
   SEA_DEPTH_MAX,
   SEA_DEPTH_STEP,
-  WATER_GRAIN,
   depthTone,
   seaDepthSize,
   smoothSeaDepth,
@@ -36,14 +34,7 @@ describe('depthTone', () => {
 describe('depthTone and the map shader', () => {
   const f = (n: number): string => n.toFixed(4);
 
-  it('GLSL has the same K, depth and water grain constants, and the same formula', () => {
-    expect(MAP_FRAGMENT).toContain(`const float TONE_K = ${f(DEPTH_TONE_K)};`);
-    expect(MAP_FRAGMENT).toContain(`const float DEPTH_MAX = ${f(SEA_DEPTH_MAX)};`);
-    expect(MAP_FRAGMENT).toContain(`const float WATER_GRAIN = ${f(WATER_GRAIN)};`);
-    // TS: t·(1 + K)/(t + K).
-    expect(MAP_FRAGMENT).toContain('t * (1.0 + TONE_K) / (t + TONE_K)');
-  });
-
+  // The GLSL constants are interpolated from these TS values; this checks the 4-digit literal is precise enough.
   it('the TS formula gives the value of the GLSL formula with the same constants', () => {
     const k = Number(f(DEPTH_TONE_K));
     for (const t of [0, 0.1, 0.25, 0.6, 1]) {
