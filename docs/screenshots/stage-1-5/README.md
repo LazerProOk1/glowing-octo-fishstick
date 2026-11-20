@@ -9,8 +9,8 @@
 | The "Провинции" (Provinces) mode | `../stage-1/seed-1-provinces-f3.jpg` | `seed-1-provinces-mode.jpg` |
 | Land highlight near the coast | (a staircase — the author's screenshot) | `seed-1-max-land-hover.jpg` |
 | Sea highlight near the coast | (a staircase — the author's screenshot) | `seed-1-max-sea-hover.jpg` |
-| worldbox | `../stage-1/worldbox-overview.jpg`, `worldbox-mid.jpg` | `worldbox-overview.jpg`, `worldbox-mid.jpg` |
-| Бета-7 with fantasy | `../stage-1/beta-7-fantasy-overview.jpg`, `../stage-1/beta-7-fantasy-mid.jpg` | `beta-7-fantasy-overview.jpg`, `-mid.jpg` |
+| worldbox | `../stage-1/worldbox-overview.jpg`, `../stage-1/worldbox-mid.jpg` | `worldbox-overview.jpg`, `worldbox-mid.jpg` |
+| Бета-7 with fantasy | `../stage-1/beta-7-fantasy-overview.jpg`, `../stage-1/beta-7-fantasy-mid.jpg` | `beta-7-fantasy-overview.jpg`, `beta-7-fantasy-mid.jpg` |
 | Small and large world | — | `seed-1-small.jpg`, `seed-1-large-f3.jpg` |
 
 What changed in the picture:
