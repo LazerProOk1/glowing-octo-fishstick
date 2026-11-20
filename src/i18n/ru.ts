@@ -69,6 +69,7 @@ export const ru = {
   'error.no_shallow_water_biome': 'В наборе биомов нет мелководья.',
   'error.no_province': 'Внутренняя ошибка: нет провинции {id} (клетка {cell}).',
   'error.no_biome_code': 'Внутренняя ошибка: нет биома с кодом {code} (клетка {cell}).',
+  'error.no_start_province': 'В мире нет суши, чтобы начать игру. Попробуйте другой сид.',
   'error.invalid_pack': 'Ошибка в паке контента: {reason}',
   'error.retry': 'Перезагрузить',
 

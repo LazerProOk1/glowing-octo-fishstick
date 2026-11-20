@@ -10,6 +10,7 @@ export const FANTASY_BIOMES: BiomeDef[] = [
   {
     id: 'mushroom_forest',
     nameKey: 'biome.mushroom_forest',
+    startable: true,
     kind: 'land',
     fantasy: true,
     color: [128, 106, 118],
@@ -20,6 +21,7 @@ export const FANTASY_BIOMES: BiomeDef[] = [
   {
     id: 'magic_forest',
     nameKey: 'biome.magic_forest',
+    startable: true,
     kind: 'land',
     fantasy: true,
     color: [84, 118, 110],

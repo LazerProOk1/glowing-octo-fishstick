@@ -33,6 +33,8 @@ export interface BiomeDef {
   nameKey: string;
   /** Water is chosen only on cells at or below sea level, land only above it. */
   kind: 'water' | 'land';
+  /** Land biome a player may start in (src/game/start.ts); default false. */
+  startable?: boolean;
   /** Enabled only in a world with fantasy. */
   fantasy: boolean;
   /** sRGB 0..255, HSL saturation ≤ 0.45. */

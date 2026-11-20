@@ -31,6 +31,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   {
     id: 'plains',
     nameKey: 'biome.plains',
+    startable: true,
     kind: 'land',
     fantasy: false,
     color: [148, 155, 110],
@@ -41,6 +42,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   {
     id: 'forest',
     nameKey: 'biome.forest',
+    startable: true,
     kind: 'land',
     fantasy: false,
     color: [109, 126, 84],
@@ -51,6 +53,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   {
     id: 'taiga',
     nameKey: 'biome.taiga',
+    startable: true,
     kind: 'land',
     fantasy: false,
     color: [94, 110, 90],
@@ -93,6 +96,7 @@ export const BASE_BIOMES: BiomeDef[] = [
     // because taiga takes "t < 5 and m > 0.3" earlier.
     id: 'steppe',
     nameKey: 'biome.steppe',
+    startable: true,
     kind: 'land',
     fantasy: false,
     color: [172, 166, 124],
@@ -113,6 +117,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   {
     id: 'hills',
     nameKey: 'biome.hills',
+    startable: true,
     kind: 'land',
     fantasy: false,
     color: [158, 145, 118],
@@ -135,6 +140,7 @@ export const BASE_BIOMES: BiomeDef[] = [
   {
     id: 'jungle',
     nameKey: 'biome.jungle',
+    startable: true,
     kind: 'land',
     fantasy: false,
     color: [60, 100, 68],
