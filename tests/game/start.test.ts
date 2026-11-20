@@ -20,7 +20,10 @@ const landNeighbours = (w: World, id: number): number =>
 describe('pickStartProvince', { timeout: 60_000 }, () => {
   it('is deterministic', () => {
     const a = small('1');
-    expect(pickStartProvince(a)).toBe(pickStartProvince({ ...a }));
+    const p = defaultParams('1');
+    const fresh = generateWorld({ ...p, options: { ...p.options, size: 'small' } });
+    expect(fresh).not.toBe(a);
+    expect(pickStartProvince(fresh)).toBe(pickStartProvince(a));
   });
 
   it.each(['1', 'worldbox', 'Бета-7', '42', 'abc'])('seed %s: startable biome, ≥ 3 land neighbours', (seed) => {
