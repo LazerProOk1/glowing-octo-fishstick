@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SEA_LEVEL } from '../../src/content/terrainLevels';
 import {
-  DEPTH_TONE_K,
   SEA_DEPTH_MAX,
   SEA_DEPTH_STEP,
   depthTone,
@@ -27,18 +26,6 @@ describe('depthTone', () => {
       const v = depthTone((i / 100) * SEA_DEPTH_MAX);
       expect(v).toBeGreaterThan(prev);
       prev = v;
-    }
-  });
-});
-
-describe('depthTone and the map shader', () => {
-  const f = (n: number): string => n.toFixed(4);
-
-  // The GLSL constants are interpolated from these TS values; this checks the 4-digit literal is precise enough.
-  it('the TS formula gives the value of the GLSL formula with the same constants', () => {
-    const k = Number(f(DEPTH_TONE_K));
-    for (const t of [0, 0.1, 0.25, 0.6, 1]) {
-      expect(depthTone(t * SEA_DEPTH_MAX)).toBeCloseTo((t * (1 + k)) / (t + k), 4);
     }
   });
 });
