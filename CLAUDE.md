@@ -10,14 +10,15 @@ Browser strategy game: TypeScript strict, PixiJS 8 (WebGL2), Vite, Vitest, ESLin
 - SDD ledger (local, not in git): `.superpowers/sdd/<plan>/progress.md` with briefs and reports
 
 ## Current state (update at the end of each stage)
-Stages 1 (map) and 1.5 (feedback fixes) are closed; branch `stage-1-map` pushed, not merged into `main`.
+Stages 1 (map) and 1.5 (feedback fixes) are closed; `stage-1-map` fast-forwarded into `main` 2026-11-20. New work starts on a fresh `stage-*` branch from `main`.
 Still to show the author: sea and river screenshots (`docs/screenshots/stage-1-5/`; look accepted by Claude via checklist).
 Next session, in order (once the author's weekly limits reset):
 1. ~~Fix all confirmed findings in `docs/reports/`~~ — done 2026-11-20 (see `docs/reports/arena-translate-review.md` §4, rulings in `stage-1-decisions.md`).
    CI added 2026-11-20: `.github/workflows/ci.yml` (lint, types, tests, build on push to `main`/`stage-*` and PRs, ~2 min).
 2. Run `ponytail-audit` (installed as a skill; Task B of `docs/reports/deepseek-review.md`) and triage the findings together.
-3. Merge `stage-1-map` into `main` (author-approved).
-4. Milestone 1, sub-stage 1.1 (time, start, fog): start with brainstorming with the author, based on «Readiness for stage 2» in `docs/architecture.md`; build the code graph with graphify (`/graphify`, later `--update`) as part of it.
+3. ~~Merge `stage-1-map` into `main`~~ — done 2026-11-20.
+4. Milestone 1, sub-stage 1.1 (time, start, fog): start with brainstorming with the author, based on «Readiness for stage 2» in `docs/architecture.md`.
+   Code graph built 2026-11-20 over `src/` (AST only, local, git-ignored): `graphify-out/GRAPH_REPORT.md`, `graph.html`; refresh with `/graphify src --update`.
 
 Roadmap (2026-11-20): development goes by milestones split into sub-stages, spec §8. Each sub-stage ends polished and viewable (mechanic → polish by checklist → before/after screenshots + "what to look at" note → author notes); raw work between sub-stages is not shown. Old "stage N" names map to sub-stages at the end of spec §8.
 
