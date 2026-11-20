@@ -50,6 +50,10 @@ describe('parseWorldUrl', () => {
     expect(parseWorldUrl('#%20abc%20')).toEqual(params('abc'));
   });
 
+  it('a padded seed round-trips as its trimmed form', () => {
+    expect(parseWorldUrl(buildWorldUrl(params(' abc ')))).toEqual(params('abc'));
+  });
+
   it('extra params and fantasy≠1 are ignored', () => {
     expect(parseWorldUrl('#abc?foo=bar&fantasy=0&off=')).toEqual(params('abc'));
   });

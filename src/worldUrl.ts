@@ -57,5 +57,5 @@ export function buildWorldUrl(p: WorldParams): string {
     params.push(`off=${normalizeOff(p.options.disabledBiomes).map(encodeURIComponent).join(',')}`);
   }
   if (p.packs.length > 0 && !sameList(p.packs, DEFAULT_PACKS)) params.push(`packs=${p.packs.map(encodeURIComponent).join(',')}`);
-  return `#${encodeURIComponent(p.seed)}${params.length > 0 ? `?${params.join('&')}` : ''}`;
+  return `#${encodeURIComponent(p.seed.trim())}${params.length > 0 ? `?${params.join('&')}` : ''}`;
 }
