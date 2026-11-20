@@ -1,6 +1,7 @@
 // Soft province membership GLSL, injected into MAP_FRAGMENT (mapShader.ts). Needs cellAt, decodeId,
 // uProvince, uProvinceSea and uHovered from the map shader. CPU mirror: ../softProvince.ts.
-export const SOFT_GLSL = /* glsl */ `
+/** Cubic B-spline weights, shared with the fog (shaders/fog.ts). */
+export const BSPLINE_GLSL = /* glsl */ `
 // Cubic B-spline weights of the 4 cells at offsets -1, 0, 1, 2 for the fraction t, and d/dt.
 vec4 bspline(float t) {
   float s = 1.0 - t;
@@ -13,7 +14,10 @@ vec4 bsplineD(float t) {
   float s = 1.0 - t;
   return vec4(-0.5 * s * s, 1.5 * t * t - 2.0 * t, -1.5 * t * t + t + 0.5, 0.5 * t * t);
 }
+`;
 
+export const SOFT_GLSL = /* glsl */ `
+${BSPLINE_GLSL}
 vec4 provAt(ivec2 c, bool landSide) {
   if (landSide) return texelFetch(uProvince, c, 0);
   return texelFetch(uProvinceSea, c, 0);

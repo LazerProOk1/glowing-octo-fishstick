@@ -30,6 +30,10 @@ export const MAP_COLORS = {
   void: [56, 62, 64],
   /** Snow caps on high peaks (drawn by height, not by biome). */
   snow: [232, 231, 224],
+  /** Fog of war: the cool dark tone unknown land and sea are pulled toward. */
+  fog: [52, 56, 60],
+  /** Player colour: the own province border. */
+  player: [150, 70, 58],
 } as const satisfies Record<string, RGB>;
 
 /** Colour as a GLSL `vec3(...)` literal in the linear 0..1 scale (no gamma correction). */

@@ -5,6 +5,7 @@ import { PROVINCE_FLAGS } from './provinceData';
 import { LAKE_SLOT, PALETTE_SIZE } from './textures';
 import { DEPTH_TONE_K, SEA_DEPTH_MAX, SEA_DEPTH_STEP, WATER_GRAIN } from './seaDepth';
 import { WAVE_GLSL } from './seaWaves';
+import { FOG_GLSL } from './shaders/fog';
 import { SOFT_GLSL } from './shaders/softProvince';
 
 /** A number as a GLSL float literal. */
@@ -198,6 +199,7 @@ float lakeShare(float cls[16], vec2 pc, vec2 pw, vec2 p) {
   return waterW > 0.0 ? lakeW / waterW : 0.0;
 }
 ${SOFT_GLSL}
+${FOG_GLSL}
 // Map mode fill on one side: best province, blended into the runner-up across 1 px at their edge.
 vec4 sideFill(Side sd) {
   if (sd.best < 0.0) return vec4(0.0);
@@ -334,6 +336,22 @@ void main() {
   float zoomFade = mix(0.08, 1.0, smoothstep(0.9, 3.5, zoom));
   float borderA = zoomFade * (0.35 * landMask * lineLand + 0.15 * (1.0 - landMask) * lineSea);
   col = mix(col, BORDER, borderA);
+
+  // ---- fog of war over everything drawn so far (every map mode); grain and hover stay on top.
+  if (uFogOn > 0.5) col = mix(fogged(col), col, fogSeen(p));
+
+  // ---- own province: crisp thin line in the player colour on its equal-share line, a bit
+  // stronger than the province border; along its coast just inside the coastline. No glow.
+  float ownW = 1.6 * uCam.w;
+  float ownLo = max(0.5 * ownW - 0.5, 0.0);
+  float ownHi = 0.5 * ownW + 0.5;
+  float own = landMask * ownLine(sl.best, sl.second, sl.edgePx, ownLo, ownHi)
+    + (1.0 - landMask) * ownLine(ss.best, ss.second, ss.edgePx, ownLo, ownHi);
+  if (showLand && sl.best >= 0.0 && provState(sl.best).g > 0.5) {
+    float c = coastPx - (0.5 * ownW + 0.5 * coastW);
+    own = max(own, landMask * (1.0 - smoothstep(ownLo, ownHi, abs(c))));
+  }
+  col = mix(col, PLAYER, 0.9 * own);
 
   // ---- hover: soft edge (~6 px) on the same line; at the coast the coastline cuts it.
   float hovered = 0.0;

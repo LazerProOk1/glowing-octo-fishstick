@@ -13,13 +13,15 @@ import {
 } from 'pixi.js';
 import { DEFAULT_SIZE, SIZE_PRESETS } from '../sim/world/params';
 import type { World } from '../sim/world/types';
-import { frameStats, type FrameStats } from './frameBench';
+import type { FrameStats } from './frameBench';
+import { benchmarkFrames } from './gpuBench';
 import { clampCamera, minZoom, screenToWorld, zoomAt, type Camera, type MapSize } from './camera';
 import { bakeWorld, type WorldBake } from './bakeWorld';
 import type { Rect } from './derived';
 import { DEFAULT_FILL, MAP_MODES, mapModeById, type MapMode, type ProvinceRGBA } from './mapModes';
 import { MAP_FRAGMENT, MAP_VERTEX } from './mapShader';
 import { PROVINCE_FLAGS, ProvinceData, WEBGL2_MIN_TEXTURE_SIZE } from './provinceData';
+import { FogLayer } from './fogLayer';
 import { RiverLayer } from './riverLayer';
 import { coastAt, pickProvince, type ProvinceMaps } from './softProvince';
 import {
@@ -33,8 +35,6 @@ import {
 
 /** Zoom multiplier per wheel notch (deltaY = 100 px). */
 const ZOOM_STEP = 1.12;
-/** Warm-up frames before the measurement, not counted in the results. */
-const BENCH_WARMUP_FRAMES = 2;
 
 /**
  * Map: a full-screen quad with the terrain/biomes/borders shader and the river layer on top.
@@ -63,6 +63,8 @@ export class MapView {
   /** Province data (mode fill colour, flags) and its texture; present while a world is shown. */
   private provData: ProvinceData | null = null;
   private provSource: BufferImageSource | null = null;
+  /** Fog of war and own provinces (province state texture, river fog filter). */
+  private readonly fog: FogLayer;
   private mode: MapMode;
   private readonly maxTextureSize: number;
   private cam: Camera = { x: this.map.w / 2, y: this.map.h / 2, zoom: 1 };
@@ -80,6 +82,7 @@ export class MapView {
       uHovered: { value: -1, type: 'f32' },
       uFill: { value: 0, type: 'f32' },
       uProvDataW: { value: 1, type: 'f32' },
+      uFogOn: { value: 0, type: 'f32' },
     });
     const first = MAP_MODES[0];
     if (!first) throw new Error('MAP_MODES is empty');
@@ -102,6 +105,7 @@ export class MapView {
         uPalette: this.blank,
         uAtlas: this.atlas,
         uProvData: this.blank,
+        uProvState: this.blank,
       },
     });
     const quad = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
@@ -111,6 +115,7 @@ export class MapView {
       indices: new Uint32Array([0, 1, 2, 0, 2, 3]),
     });
     this.mesh = new Mesh<MeshGeometry, Shader>({ geometry: this.geometry, shader: this.shader });
+    this.fog = new FogLayer(this.shader, this.uniforms, this.rivers.container, this.maxTextureSize);
     this.mesh.visible = false;
     this.root.addChild(this.mesh, this.rivers.container);
     app.stage.addChild(this.root);
@@ -218,6 +223,24 @@ export class MapView {
   }
 
   /**
+   * Fog visibility by province id (0 unknown, otherwise visible), length = province count, e.g.
+   * startVisibility. The first call for a world turns the fog on; until then the whole map shows.
+   */
+  setVisibility(vis: Uint8Array): void {
+    this.fog.setVisibility(vis);
+  }
+
+  /** The player's own provinces: a crisp border in the player colour; the rest lose the flag. */
+  setOwnProvinces(ids: Iterable<number>): void {
+    this.fog.setOwnProvinces(ids);
+  }
+
+  /** Fog switch: off shows the whole world without changing the visibility data. */
+  setFogEnabled(on: boolean): void {
+    this.fog.setEnabled(on);
+  }
+
+  /**
    * Uploads to the GPU the rows of the terrain, biome colour, height and water owner map textures
    * (its alpha is the water kind by biome) that `rect` touches —
    * after updateDerivedRect over the same arrays that were passed to setWorld (bake).
@@ -251,34 +274,9 @@ export class MapView {
     return () => this.hoverListeners.delete(cb);
   }
 
-  /**
-   * Honest frame benchmark: draws `frames` frames synchronously and waits for the GPU to finish
-   * after each. gl.finish() does not work for this: Chrome (ANGLE) treats it as an ordinary flush and
-   * returns immediately, so only the command submission time would be measured. Reading one pixel
-   * (readPixels) forces a wait for the drawing result. renderer.render runs the whole shader again
-   * each time. Independent of requestAnimationFrame, and correct in a hidden tab too.
-   * The first two frames are not measured (warm-up: shader compilation, texture upload).
-   * No WebGL, or a mean below 0.05 ms (the sync did not work) — null, "unavailable".
-   */
+  /** Honest frame benchmark (see benchmarkFrames). */
   benchmark(frames = 120): FrameStats | null {
-    const { renderer, stage } = this.app;
-    if (renderer.type !== RendererType.WEBGL) return null;
-    const gl = (renderer as WebGLRenderer).gl;
-    const px = new Uint8Array(4);
-    const sync = (): void => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    for (let i = 0; i < BENCH_WARMUP_FRAMES; i++) {
-      renderer.render(stage);
-      sync();
-    }
-    const samples: number[] = [];
-    for (let i = 0; i < frames; i++) {
-      const t0 = performance.now();
-      renderer.render(stage);
-      sync();
-      samples.push(performance.now() - t0);
-    }
-    const stats = frameStats(samples);
-    return stats.avg < 0.05 ? null : stats;
+    return benchmarkFrames(this.app, frames);
   }
 
   destroy(): void {
@@ -307,6 +305,7 @@ export class MapView {
     this.provSource?.destroy();
     this.provSource = null;
     this.provData = null;
+    this.fog.destroy();
     this.blank.destroy();
     this.atlas.destroy();
     this.root.destroy();
@@ -323,6 +322,8 @@ export class MapView {
     this.provData = data;
     this.uniforms.uniforms.uProvDataW = data.width;
     this.applyFill(anyFill);
+    // Same layout as the data texture (uProvDataW serves both).
+    this.fog.setWorld(world.provinces.length, this.shader.resources.uProvince as TextureSource);
   }
 
   private applyFill(anyFill: boolean): void {
@@ -331,10 +332,11 @@ export class MapView {
     this.uniforms.update();
   }
 
-  /** Once per frame: upload of the texels changed by setProvinceData (one range). */
+  /** Once per frame: upload of the texels changed by setProvinceData and the state setters (one range each). */
   private readonly flushProvinceData = (): void => {
     const range = this.provData?.takeDirty();
     if (range && this.provSource) this.provSource.update(range.start, range.end);
+    this.fog.flush();
   };
 
   /** Applies the camera constraints and updates the uniforms, the quad and the river layer. */
