@@ -1,4 +1,5 @@
 import type { BiomeDef, Range } from '../../content/biomes/types';
+import { CodedError } from './errors';
 import { hasTag, isFallback } from '../../content/registry';
 import { SEA_LEVEL } from '../../content/terrainLevels';
 import { createNoise2D, fbm } from '../noise';
@@ -49,7 +50,7 @@ export function compileBiomes(biomes: readonly BiomeDef[]): CompiledBiomes {
       hi[k * DIMS + d] = r[1];
     });
   });
-  if (landStart === 0 || landStart === n) throw new Error('нужны и водные, и сухопутные биомы');
+  if (landStart === 0 || landStart === n) throw new CodedError('need_water_and_land_biomes');
   return { code, lo, hi, landStart };
 }
 

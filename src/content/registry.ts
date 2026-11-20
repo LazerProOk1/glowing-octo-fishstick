@@ -8,8 +8,12 @@ import {
   type GenOptions,
   type PackManifest,
 } from './biomes/types';
+import { CodedError } from '../sim/world/errors';
 import { hsl } from './color';
 import { BASE_PACK } from './packs/base/manifest';
+
+/** Pack validation error: one generic code, the English reason (with ids) is the param. */
+const packError = (reason: string): CodedError => new CodedError('invalid_pack', { reason });
 
 /** All known packs. A new pack: src/content/packs/<id>/manifest.ts plus a line here. */
 export const PACKS: readonly PackManifest[] = [BASE_PACK];
@@ -39,24 +43,24 @@ export function isRequired(def: BiomeDef): boolean {
 /** Validation of one biome; throws an error with the biome id. */
 export function validateBiome(def: BiomeDef): void {
   const fail = (what: string): never => {
-    throw new Error(`биом «${def.id}»: ${what}`);
+    throw packError(`biome "${def.id}": ${what}`);
   };
-  if (!/^[a-z][a-z0-9_]*$/.test(def.id)) fail('id — латиница snake_case');
+  if (!/^[a-z][a-z0-9_]*$/.test(def.id)) fail('id must be latin snake_case');
   // The name is an i18n key (translation in src/i18n/ru.ts), not ready-made text.
-  if (!/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/.test(def.nameKey)) fail(`название — ключ i18n вида biome.${def.id}`);
-  if (def.kind !== 'water' && def.kind !== 'land') fail(`неизвестный вид ${String(def.kind)}`);
+  if (!/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/.test(def.nameKey)) fail(`name must be an i18n key like biome.${def.id}`);
+  if (def.kind !== 'water' && def.kind !== 'land') fail(`unknown kind ${String(def.kind)}`);
   if (def.color.length !== 3 || def.color.some((v) => !Number.isInteger(v) || v < 0 || v > 255)) {
-    fail('цвет — три целых 0..255');
+    fail('color must be three integers 0..255');
   }
   const { s, l } = hsl(def.color);
-  if (s > 0.45) fail('цвет слишком насыщен (насыщенность HSL > 0.45)');
-  if (l < 0.2 || l > 0.9) fail('цвет слишком тёмный или светлый (светлота HSL вне 0.2..0.9)');
-  if (!(DETAIL_SLOT_NAMES as readonly string[]).includes(def.detail)) fail(`нет слота атласа «${def.detail}»`);
-  if (!Number.isFinite(def.priority)) fail('приоритет — конечное число');
-  if (hasTag(def, 'lake') && def.kind !== 'water') fail('биом с тегом lake должен быть водным');
+  if (s > 0.45) fail('color is too saturated (HSL saturation > 0.45)');
+  if (l < 0.2 || l > 0.9) fail('color is too dark or too light (HSL lightness outside 0.2..0.9)');
+  if (!(DETAIL_SLOT_NAMES as readonly string[]).includes(def.detail)) fail(`no atlas slot "${def.detail}"`);
+  if (!Number.isFinite(def.priority)) fail('priority must be a finite number');
+  if (hasTag(def, 'lake') && def.kind !== 'water') fail('a biome with the lake tag must be water');
   for (const [k, r] of Object.entries(def.when) as Array<[string, readonly [number, number] | undefined]>) {
     if (r === undefined) continue;
-    if (!(r[0] < r[1])) fail(`условие ${k}: нужно min < max`);
+    if (!(r[0] < r[1])) fail(`condition ${k}: min must be < max`);
   }
 }
 
@@ -69,14 +73,14 @@ export function resolveBiomes(options: GenOptions = {}, available: readonly Pack
   const byId = new Map<string, BiomeDef>();
   for (const packId of options.packs ?? DEFAULT_PACKS) {
     const pack = available.find((p) => p.id === packId);
-    if (!pack) throw new Error(`неизвестный пак «${packId}»`);
+    if (!pack) throw packError(`unknown pack "${packId}"`);
     for (const b of pack.biomes) {
-      if (byId.has(b.id)) throw new Error(`пак «${pack.id}»: биом «${b.id}» уже объявлен, используйте overrides`);
+      if (byId.has(b.id)) throw packError(`pack "${pack.id}": biome "${b.id}" is already declared, use overrides`);
       byId.set(b.id, b);
     }
     for (const [id, patch] of Object.entries(pack.overrides ?? {})) {
       const old = byId.get(id);
-      if (!old) throw new Error(`пак «${pack.id}»: override неизвестного биома «${id}»`);
+      if (!old) throw packError(`pack "${pack.id}": override of unknown biome "${id}"`);
       byId.set(id, { ...old, ...patch, id });
     }
   }
@@ -86,19 +90,19 @@ export function resolveBiomes(options: GenOptions = {}, available: readonly Pack
   const disabled = new Set(options.disabledBiomes ?? []);
   for (const id of disabled) {
     const def = byId.get(id);
-    if (!def) throw new Error(`нельзя выключить неизвестный биом «${id}»`);
-    if (isRequired(def)) throw new Error(`биом «${id}» нельзя выключить: без него мир не собрать`);
+    if (!def) throw packError(`cannot disable unknown biome "${id}"`);
+    if (isRequired(def)) throw packError(`biome "${id}" cannot be disabled: the world cannot be built without it`);
   }
   const list = [...byId.values()].filter((b) => (options.fantasy || !b.fantasy) && !disabled.has(b.id));
-  if (list.length > MAX_BIOMES) throw new Error(`слишком много биомов: ${list.length} (максимум ${MAX_BIOMES})`);
+  if (list.length > MAX_BIOMES) throw packError(`too many biomes: ${list.length} (max ${MAX_BIOMES})`);
   for (const kind of ['land', 'water'] as const) {
     const fallbacks = list.filter((b) => b.kind === kind && isFallback(b));
     if (fallbacks.length !== 1) {
-      throw new Error(`нужен ровно один запасной биом вида ${kind} без условий, а их ${fallbacks.length}`);
+      throw packError(`exactly one fallback ${kind} biome without conditions is needed, found ${fallbacks.length}`);
     }
   }
   for (const tag of ['deepWater', 'shallowWater', 'lake'] as const) {
-    if (!list.some((b) => b.kind === 'water' && hasTag(b, tag))) throw new Error(`нет водного биома с тегом ${tag}`);
+    if (!list.some((b) => b.kind === 'water' && hasTag(b, tag))) throw packError(`no water biome with tag ${tag}`);
   }
   return list;
 }

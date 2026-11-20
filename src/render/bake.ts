@@ -1,4 +1,5 @@
 import type { BiomeDef } from '../content/biomes/types';
+import { CodedError } from '../sim/world/errors';
 import { hasTag } from '../content/registry';
 import type { World } from '../sim/world/types';
 
@@ -46,7 +47,7 @@ export function provinceIdPixels(owner: Uint16Array, provinces: readonly Pick<Wo
   for (let i = 0; i < owner.length; i++) {
     const o = i * 4;
     const id = owner[i] as number;
-    if (id >= provinces.length) throw new Error(`нет провинции с id ${id} (клетка ${i})`);
+    if (id >= provinces.length) throw new CodedError('no_province', { id, cell: i });
     out[o] = id & 255;
     out[o + 1] = id >> 8;
     out[o + 2] = landOf[id] as number;
@@ -72,7 +73,7 @@ export function waterClassTable(defs: readonly BiomeDef[]): number[] {
 /** Alpha of cell i by its biome; table is waterClassTable. An unknown biome code is an error. */
 export function writeWaterClassCell(pixels: Uint8Array, biome: Uint8Array, table: readonly number[], i: number): void {
   const c = table[biome[i] as number];
-  if (c === undefined) throw new Error(`нет биома с кодом ${biome[i]} (клетка ${i})`);
+  if (c === undefined) throw new CodedError('no_biome_code', { code: biome[i] ?? -1, cell: i });
   pixels[i * 4 + 3] = c;
 }
 

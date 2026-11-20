@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { ru, t } from '../src/i18n/ru';
@@ -10,6 +10,10 @@ const UI_DIR = join(process.cwd(), 'src', 'ui');
 const uiFiles = readdirSync(UI_DIR)
   .filter((f) => f.endsWith('.ts'))
   .map((f) => join(UI_DIR, f));
+/** Every .ts file under src except src/i18n (the only place for player-facing Russian). */
+const srcFiles = (readdirSync(join(process.cwd(), 'src'), { recursive: true }) as string[])
+  .filter((f) => f.endsWith('.ts') && !f.startsWith(`i18n${sep}`))
+  .map((f) => join(process.cwd(), 'src', f));
 /** Files that call t(): the whole UI and the entry point. */
 const callerFiles = [...uiFiles, join(process.cwd(), 'src', 'main.ts')];
 
@@ -55,9 +59,10 @@ describe('i18n', () => {
     expect(uiFiles.length).toBeGreaterThan(0);
   });
 
-  it('string literals in src/ui/*.ts contain no cyrillic', () => {
+  it('string literals outside src/i18n contain no cyrillic', () => {
+    expect(srcFiles.length).toBeGreaterThan(uiFiles.length);
     const offenders: string[] = [];
-    for (const file of uiFiles) {
+    for (const file of srcFiles) {
       for (const s of stringLiterals(file)) if (CYRILLIC.test(s)) offenders.push(`${file}: ${s}`);
     }
     expect(offenders).toEqual([]);

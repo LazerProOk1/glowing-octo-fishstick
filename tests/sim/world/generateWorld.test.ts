@@ -12,7 +12,7 @@ const { w: WORLD_W, h: WORLD_H } = SIZE_PRESETS.medium;
 
 describe('assertProvinceCount', () => {
   it('65536 throws, 65535 does not', () => {
-    expect(() => assertProvinceCount(65536)).toThrow('слишком много провинций');
+    expect(() => assertProvinceCount(65536)).toThrow('too_many_provinces');
     expect(() => assertProvinceCount(65535)).not.toThrow();
   });
 });
@@ -62,7 +62,7 @@ describe('generateWorld', () => {
   });
 
   it('params of another generator version are rejected with a clear error', () => {
-    expect(() => generateWorld({ ...defaultParams('x'), genVersion: GEN_VERSION - 1 })).toThrow('версии генератора');
+    expect(() => generateWorld({ ...defaultParams('x'), genVersion: GEN_VERSION - 1 })).toThrow('gen_version_mismatch');
   });
 
   it('the params are a copy: editing the source does not change the world', () => {

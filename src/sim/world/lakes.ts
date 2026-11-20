@@ -1,4 +1,5 @@
 // Lakes: closed inland water bodies, a water type separate from the sea.
+import { CodedError } from './errors';
 import type { BiomeDef } from '../../content/biomes/types';
 import { hasTag } from '../../content/registry';
 import { SEA_LEVEL } from '../../content/terrainLevels';
@@ -37,7 +38,7 @@ export function findLakes(height: Float32Array, w: number, h: number): Uint8Arra
  */
 export function applyLakeBiome(biomes: Uint8Array, lake: Uint8Array, defs: readonly BiomeDef[]): Uint8Array {
   const code = defs.findIndex((d) => hasTag(d, 'lake'));
-  if (code < 0) throw new Error('нет биома с тегом lake');
+  if (code < 0) throw new CodedError('no_lake_biome');
   const out = new Uint8Array(biomes);
   for (let i = 0; i < out.length; i++) if (lake[i]) out[i] = code;
   return out;

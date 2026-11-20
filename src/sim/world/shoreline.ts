@@ -1,4 +1,5 @@
 import type { BiomeDef } from '../../content/biomes/types';
+import { CodedError } from './errors';
 import { hasTag } from '../../content/registry';
 import { labelComponents } from '../geom/label';
 import { SEA_LEVEL } from '../../content/terrainLevels';
@@ -26,7 +27,7 @@ export function normalizeShoreline(
 ): { height: Float32Array; biomes: Uint8Array } {
   const n = w * h;
   const COAST = defs.findIndex((d) => hasTag(d, 'shallowWater'));
-  if (COAST < 0) throw new Error('нет биома с тегом shallowWater');
+  if (COAST < 0) throw new CodedError('no_shallow_water_biome');
   const outH = new Float32Array(height);
   const outB = new Uint8Array(biomes);
   const isLand = (i: number): boolean => outH[i]! > SEA_LEVEL;

@@ -1,4 +1,5 @@
 import type { BiomeDef } from '../../content/biomes/types';
+import { CodedError } from './errors';
 import { resolveBiomes } from '../../content/registry';
 import { createRng } from '../rng';
 import { computeAdjacency } from './adjacency';
@@ -17,7 +18,7 @@ export const MAX_PROVINCES = 65535;
 
 export function assertProvinceCount(n: number): void {
   if (n > MAX_PROVINCES) {
-    throw new Error(`слишком много провинций: ${n} (максимум ${MAX_PROVINCES})`);
+    throw new CodedError('too_many_provinces', { n, max: MAX_PROVINCES });
   }
 }
 
@@ -40,10 +41,10 @@ export function generateWorld(
   onSurface?: (height: Float32Array, biome: Uint8Array, defs: BiomeDef[], w: number, h: number) => void,
 ): World {
   if (params.genVersion !== GEN_VERSION) {
-    throw new Error(`мир описан для версии генератора ${params.genVersion}, а текущая — ${GEN_VERSION}`);
+    throw new CodedError('gen_version_mismatch', { world: params.genVersion, current: GEN_VERSION });
   }
   const preset = SIZE_PRESETS[params.options.size] as (typeof SIZE_PRESETS)[WorldSize] | undefined;
-  if (!preset) throw new Error(`неизвестный размер мира «${String(params.options.size)}»`);
+  if (!preset) throw new CodedError('unknown_world_size', { size: String(params.options.size) });
   const { w, h } = preset;
   const { seed } = params;
   const defs = resolveBiomes(genOptionsOf(params));

@@ -138,7 +138,7 @@ export class MapView {
         this.shader.resources.uAtlas = source;
         old.destroy();
       })
-      .catch((err: unknown) => console.error('не удалось загрузить атлас рельефа', err));
+      .catch((err: unknown) => console.error('failed to load the terrain atlas', err));
     this.sync();
   }
 
