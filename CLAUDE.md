@@ -7,6 +7,7 @@ Browser strategy game: TypeScript strict, PixiJS 8 (WebGL2), Vite, Vitest, ESLin
 - Spec: `docs/superpowers/specs/2026-11-16-settlement-strategy-design.md`; architecture + stage-2 risks: `docs/architecture.md`
 - Plans: `docs/superpowers/plans/`; decisions and deferred minors: `docs/superpowers/stage-*-decisions.md`
 - Author feedback: `docs/feedback/`; screenshots: `docs/screenshots/`
+- Code graph (local, git-ignored, `src/` only): before searching code or briefing an agent on where things are, read `graphify-out/GRAPH_REPORT.md` or run `graphify query "<question>"`; still read the real files before editing. Rebuilt after each commit by a local git hook (log `~/.cache/graphify-rebuild.log`); missing graph → `/graphify src`.
 - SDD ledger (local, not in git): `.superpowers/sdd/<plan>/progress.md` with briefs and reports
 
 ## Current state (update at the end of each stage)
@@ -18,7 +19,7 @@ Next session, in order (once the author's weekly limits reset):
 2. Run `ponytail-audit` (installed as a skill; Task B of `docs/reports/deepseek-review.md`) and triage the findings together.
 3. ~~Merge `stage-1-map` into `main`~~ — done 2026-11-20.
 4. Milestone 1, sub-stage 1.1 (time, start, fog): start with brainstorming with the author, based on «Readiness for stage 2» in `docs/architecture.md`.
-   Code graph built 2026-11-20 over `src/` (AST only, local, git-ignored): `graphify-out/GRAPH_REPORT.md`, `graph.html`; refresh with `/graphify src --update`.
+   Code graph built 2026-11-20 (see «Where things are»).
 
 Roadmap (2026-11-20): development goes by milestones split into sub-stages, spec §8. Each sub-stage ends polished and viewable (mechanic → polish by checklist → before/after screenshots + "what to look at" note → author notes); raw work between sub-stages is not shown. Old "stage N" names map to sub-stages at the end of spec §8.
 
