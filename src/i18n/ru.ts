@@ -111,3 +111,25 @@ export function t(key: RuKey): string {
 export function translate(key: string): string {
   return Object.hasOwn(ru, key) ? ru[key as RuKey] : key;
 }
+
+/** Месяцы в родительном падеже («1 марта»). */
+export const MONTHS_GENITIVE = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+] as const;
+
+/** «1 марта 3000 г. до н. э.»; год отрицательный — до нашей эры, нулевого года нет. */
+export function formatDate(d: { day: number; month: number; year: number }): string {
+  const era = d.year < 0 ? 'до н. э.' : 'н. э.';
+  return `${d.day} ${MONTHS_GENITIVE[d.month - 1] ?? ''} ${Math.abs(d.year)} г. ${era}`;
+}
