@@ -1,5 +1,5 @@
 import type { BiomeDef } from '../../content/biomes/types';
-import { CodedError } from './errors';
+import { CodedError } from '../../content/errors';
 import { hasTag } from '../../content/registry';
 import { labelComponents } from '../geom/label';
 import { SEA_LEVEL } from '../../content/terrainLevels';

@@ -1,5 +1,5 @@
 import type { BiomeDef } from '../../content/biomes/types';
-import { CodedError } from './errors';
+import { CodedError } from '../../content/errors';
 import { resolveBiomes } from '../../content/registry';
 import { createRng } from '../rng';
 import { computeAdjacency } from './adjacency';

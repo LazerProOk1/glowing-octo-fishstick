@@ -1,5 +1,5 @@
 import type { BiomeDef } from '../content/biomes/types';
-import { CodedError } from '../sim/world/errors';
+import { CodedError } from '../content/errors';
 import { hasTag } from '../content/registry';
 import type { World } from '../sim/world/types';
 

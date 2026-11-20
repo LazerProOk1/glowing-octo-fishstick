@@ -1,6 +1,6 @@
 import { MAX_BIOMES } from '../../content/biomes/types';
 import { labelByKey } from '../geom/label';
-import { ERR_CLEANUP_NO_CONVERGE } from './errors';
+import { CodedError } from '../../content/errors';
 import { KIND_CORRIDOR, KIND_LAND, KIND_WATER } from './provinceSeeds';
 
 /**
@@ -142,7 +142,7 @@ export function fixFragments(owner: Int32Array, kind: Uint8Array, isLand: number
       if (t !== undefined) owner[i] = t;
     }
   }
-  throw new Error(ERR_CLEANUP_NO_CONVERGE);
+  throw new CodedError('province_cleanup_no_converge');
 }
 
 /** For each group g with interest(g), counts shared 4-edges with same-kind foreign provinces. */

@@ -1,5 +1,5 @@
 // Lakes: closed inland water bodies, a water type separate from the sea.
-import { CodedError } from './errors';
+import { CodedError } from '../../content/errors';
 import type { BiomeDef } from '../../content/biomes/types';
 import { hasTag } from '../../content/registry';
 import { SEA_LEVEL } from '../../content/terrainLevels';

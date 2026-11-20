@@ -8,7 +8,7 @@ import {
   type GenOptions,
   type PackManifest,
 } from './biomes/types';
-import { CodedError } from '../sim/world/errors';
+import { CodedError } from './errors';
 import { hsl } from './color';
 import { BASE_PACK } from './packs/base/manifest';
 

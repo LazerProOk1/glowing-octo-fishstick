@@ -1,5 +1,5 @@
-import { translate, t } from '../i18n/ru';
-import { ERR_CLEANUP_NO_CONVERGE, parseCodedMessage } from '../sim/world/errors';
+import { t, translate } from '../i18n/ru';
+import { parseCodedMessage } from '../content/errors';
 import { el } from './dom';
 
 /**
@@ -28,7 +28,6 @@ export function showError(parent: HTMLElement, message: string, detail?: string,
 /** Error detail: known sim codes (with their data) — in Russian, anything else — the exception text as is. */
 export function errorDetail(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
-  if (raw === ERR_CLEANUP_NO_CONVERGE) return t('error.cleanupNoConverge');
   const coded = parseCodedMessage(raw);
   if (!coded) return raw;
   const text = translate(`error.${coded.code}`);

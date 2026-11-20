@@ -1,5 +1,5 @@
 import type { BiomeDef, Range } from '../../content/biomes/types';
-import { CodedError } from './errors';
+import { CodedError } from '../../content/errors';
 import { hasTag, isFallback } from '../../content/registry';
 import { SEA_LEVEL } from '../../content/terrainLevels';
 import { createNoise2D, fbm } from '../noise';

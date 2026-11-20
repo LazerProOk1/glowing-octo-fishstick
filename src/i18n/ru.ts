@@ -59,8 +59,8 @@ export const ru = {
   'error.init': 'Не удалось запустить графику.',
   'error.webgl2': 'Браузер не поддерживает WebGL 2. Обновите браузер или включите аппаратное ускорение.',
   'error.generation': 'Не удалось сгенерировать мир.',
-  'error.cleanupNoConverge': 'Не удалось собрать провинции из-за сложного рельефа. Попробуйте другой сид.',
-  // Коды ошибок генерации (CodedError, src/sim/world/errors.ts): error.<код>, {имя} — данные из ошибки.
+  'error.province_cleanup_no_converge': 'Не удалось собрать провинции из-за сложного рельефа. Попробуйте другой сид.',
+  // Коды ошибок генерации (CodedError, src/content/errors.ts): error.<код>, {имя} — данные из ошибки.
   'error.too_many_provinces': 'Слишком много провинций: {n} (максимум {max}).',
   'error.gen_version_mismatch': 'Мир создан другой версией генератора ({world}), а текущая — {current}.',
   'error.unknown_world_size': 'Неизвестный размер мира: {size}.',
