@@ -97,3 +97,15 @@ An extract from the working journal (subagent-driven development, 2026-11-16…1
 - Final review of the branch: clean after one fix wave. npm test green (exit 0), 480 tests.
 - Medium generation 4.7–4.9 s in the browser; a frame 4.3–5.2 ms.
 - The controller accepted the look of the sea and the rivers against a checklist (the author delegated it for the night); show the screenshots in docs/screenshots/stage-1-5/ to the author.
+
+## Reports fixes (2026-11-20)
+
+Fixes for every confirmed finding in `docs/reports/` (details: `docs/reports/arena-translate-review.md` §4). No GEN_VERSION bump; fingerprints and shader bytes unchanged.
+
+- Ruling: M4 (biome rule inlined in computeBiomes) — no change — inlined copy is the 2M-cell hot path; `tests/sim/world/biomes.test.ts` pins both copies equal — cost if wrong: a rule change edited in one place, caught by that test.
+- Ruling: docs-audit A3/A4 (historical plans cite moved files) — no change — plans are history — cost if wrong: a reader looks for a moved file once.
+- Ruling: M5 — trim only in buildWorldUrl, no normalisation in defaultParams — debug panel and URL parse already trim — cost if wrong: one padded seed reloads a different world.
+- Ruling: M9 — unreached strip cells keep their own province, pinned by a test — no nearby source province; 0 cases on 5 seeds — cost if wrong: a rare cell drawn as land but owned by a sea province.
+- Ruling: I4 — no GLSL↔TS formula guard — constants are injected from TS; only one formula line and the wave loop body are untied — cost if wrong: test-only TS twins drift from the shader unnoticed.
+- Ruling: CodedError lives in `src/content/errors.ts`, encoded as `code: {json}` message text — keeps the sim→content import direction; worker ErrorResponse carries only a message — cost if wrong: a later protocol change to a code field.
+- Ruling: skip rect-path `no_biome_code` test — `bakeBiomeColorsRect` is dead code queued for the ponytail-audit step — cost if wrong: one untested throw.

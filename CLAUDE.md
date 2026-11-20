@@ -13,7 +13,7 @@ Browser strategy game: TypeScript strict, PixiJS 8 (WebGL2), Vite, Vitest, ESLin
 Stages 1 (map) and 1.5 (feedback fixes) are closed; branch `stage-1-map` pushed, not merged into `main`.
 Still to show the author: sea and river screenshots (`docs/screenshots/stage-1-5/`; look accepted by Claude via checklist).
 Next session, in order (once the author's weekly limits reset):
-1. Read every report in `docs/reports/` (`arena-translate-review.md`, `docs-audit.md`, `project-status.md`, `deepseek-review.md`) and fix all confirmed findings; re-check every report after the fixes.
+1. ~~Fix all confirmed findings in `docs/reports/`~~ — done 2026-11-20 (see `docs/reports/arena-translate-review.md` §4, rulings in `stage-1-decisions.md`).
 2. Run `ponytail-audit` (installed as a skill; Task B of `docs/reports/deepseek-review.md`) and triage the findings together.
 3. Merge `stage-1-map` into `main` (author-approved).
 4. Stage 2 (one settlement): start with brainstorming with the author, based on «Готовность к этапу 2» in `docs/architecture.md`; build the code graph with graphify (`/graphify`, later `--update`) as part of Stage 2.
