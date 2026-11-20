@@ -44,8 +44,6 @@ export interface BiomeDef {
   /** Empty means everything matches (the fallback biome of its kind). */
   when: BiomeConditions;
   tags?: readonly BiomeTag[];
-  /** Groundwork for the future, unused for now. */
-  modifiers?: { defense?: number; moveCost?: number };
 }
 
 export interface PackManifest {

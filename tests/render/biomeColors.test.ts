@@ -52,3 +52,9 @@ describe('bakeBiomeColors', () => {
     expect(mid).toBeLessThan(PALETTE.desert[0]);
   });
 });
+
+describe('bakeBiomeColors unknown code', () => {
+  it('throws like the other bakes', () => {
+    expect(() => bakeBiomeColors(new Uint8Array([200]), defs, 1, 1)).toThrow();
+  });
+});

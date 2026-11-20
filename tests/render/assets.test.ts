@@ -13,6 +13,8 @@ const credits = readFileSync(join(ASSETS, 'CREDITS.md'), 'utf8');
 describe('DETAIL_SLOT_OF', () => {
   it('a slot name from the biome data is its index in the atlas', () => {
     DETAIL_SLOT_NAMES.forEach((name, i) => expect(DETAIL_SLOT_OF[name], name).toBe(i));
+    // The DetailSlot constants (shader gains) follow the same order.
+    DETAIL_SLOT_NAMES.forEach((name) => expect(DetailSlot[name.toUpperCase() as Uppercase<typeof name>], name).toBe(DETAIL_SLOT_OF[name]));
   });
   it('every biome of the base pack maps to a slot the atlas uses', () => {
     for (const b of BASE_PACK.biomes) {

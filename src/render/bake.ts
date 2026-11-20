@@ -1,15 +1,7 @@
 import type { BiomeDef } from '../content/biomes/types';
 import { CodedError } from '../content/errors';
-import { hasTag } from '../content/registry';
+import { waterKind } from '../content/registry';
 import type { World } from '../sim/world/types';
-
-export function encodeProvinceId(id: number): [r: number, g: number] {
-  return [id & 255, id >> 8];
-}
-
-export function decodeProvinceId(r: number, g: number): number {
-  return r | (g << 8);
-}
 
 export interface BakedTextures {
   /** RGBA: R,G = province id, B = 255 on land, A = 255. */
@@ -63,11 +55,9 @@ export function provinceIdPixels(owner: Uint16Array, provinces: readonly Pick<Wo
  */
 export const SEA_MAP_ALPHA = { land: 255, sea: 128, lake: 0 } as const;
 
-/** SEA_MAP_ALPHA by biome code (the same mapping as the palette slots in paletteData, textures.ts). */
+/** SEA_MAP_ALPHA by biome code (same waterKind as the palette slots in paletteData, textures.ts; different encoding). */
 export function waterClassTable(defs: readonly BiomeDef[]): number[] {
-  return defs.map((d) =>
-    hasTag(d, 'lake') ? SEA_MAP_ALPHA.lake : d.kind === 'water' ? SEA_MAP_ALPHA.sea : SEA_MAP_ALPHA.land,
-  );
+  return defs.map((d) => SEA_MAP_ALPHA[waterKind(d)]);
 }
 
 /** Alpha of cell i by its biome; table is waterClassTable. An unknown biome code is an error. */

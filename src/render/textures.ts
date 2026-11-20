@@ -1,6 +1,6 @@
 import { BufferImageSource, ImageSource, type TextureSource } from 'pixi.js';
 import { MAX_BIOMES, type BiomeDef } from '../content/biomes/types';
-import { hasTag } from '../content/registry';
+import { waterKind } from '../content/registry';
 import type { World } from '../sim/world/types';
 import { ATLAS_URL, DETAIL_SLOT_OF } from './assets';
 import { bakeWorld, type WorldBake } from './bakeWorld';
@@ -114,7 +114,8 @@ export function paletteData(biomes: readonly BiomeDef[]): Uint8Array {
     data[o] = def.color[0];
     data[o + 1] = def.color[1];
     data[o + 2] = def.color[2];
-    data[o + 3] = hasTag(def, 'lake') ? LAKE_SLOT : def.kind === 'water' ? WATER_SLOT : DETAIL_SLOT_OF[def.detail];
+    const k = waterKind(def);
+    data[o + 3] = k === 'lake' ? LAKE_SLOT : k === 'sea' ? WATER_SLOT : DETAIL_SLOT_OF[def.detail];
   });
   return data;
 }

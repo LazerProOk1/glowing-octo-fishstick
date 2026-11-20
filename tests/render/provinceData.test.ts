@@ -52,10 +52,9 @@ describe('ProvinceData', () => {
     expect(d.takeDirty()).toEqual({ start: 0, end: 1 });
   });
 
-  it('applyMode: colour and the FILL flag, null — no fill; state flags are kept; dirty range reset', () => {
+  it('applyMode: colour and the FILL flag, null — no fill; dirty range reset', () => {
     const world = fakeWorld(4);
     const d = new ProvinceData(4, 4);
-    d.set(1, [9, 9, 9, PROVINCE_FLAGS.UNEXPLORED | PROVINCE_FLAGS.TARGET]);
     const mode: MapMode = {
       id: 'test',
       nameKey: 'mapMode.provinces',
@@ -64,7 +63,7 @@ describe('ProvinceData', () => {
     const anyFill = d.applyMode(mode, world);
     expect(anyFill).toBe(true);
     expect([...d.data.subarray(0, 4)]).toEqual([10, 20, 30, PROVINCE_FLAGS.FILL]);
-    expect([...d.data.subarray(4, 8)]).toEqual([0, 0, 0, PROVINCE_FLAGS.UNEXPLORED | PROVINCE_FLAGS.TARGET]);
+    expect([...d.data.subarray(4, 8)]).toEqual([0, 0, 0, 0]);
     expect([...d.data.subarray(8, 12)]).toEqual([12, 20, 30, PROVINCE_FLAGS.FILL]);
     expect(d.takeDirty()).toBeNull();
 

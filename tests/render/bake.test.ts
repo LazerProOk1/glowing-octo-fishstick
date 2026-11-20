@@ -3,23 +3,12 @@ import { resolveBiomes } from '../../src/content/registry';
 import {
   SEA_MAP_ALPHA,
   bakeTextures,
-  decodeProvinceId,
-  encodeProvinceId,
   provinceIdPixels,
   writeWaterClass,
 } from '../../src/render/bake';
 import { LAKE_SLOT, WATER_SLOT, paletteData } from '../../src/render/textures';
 import { defaultParams } from '../../src/sim/world/params';
 import type { Province, World } from '../../src/sim/world/types';
-
-describe('encodeProvinceId', () => {
-  it('round-trip conversion', () => {
-    for (const id of [0, 255, 256, 65535]) {
-      expect(decodeProvinceId(...encodeProvinceId(id))).toBe(id);
-    }
-    expect(encodeProvinceId(258)).toEqual([2, 1]);
-  });
-});
 
 function mkProvinces(): Province[] {
   const ps: Province[] = [];

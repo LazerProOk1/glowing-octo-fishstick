@@ -24,6 +24,11 @@ export function hasTag(def: BiomeDef, tag: BiomeTag): boolean {
   return def.tags?.includes(tag) ?? false;
 }
 
+/** Water classification shared by the render encoders (bake alpha, palette slot). */
+export function waterKind(def: BiomeDef): 'land' | 'sea' | 'lake' {
+  return hasTag(def, 'lake') ? 'lake' : def.kind === 'water' ? 'sea' : 'land';
+}
+
 /** Fallback biome of its kind: no conditions, matches any cell (the lake biome is not a fallback). */
 export function isFallback(def: BiomeDef): boolean {
   const w: BiomeConditions = def.when;

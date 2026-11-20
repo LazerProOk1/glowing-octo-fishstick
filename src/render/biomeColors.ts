@@ -1,4 +1,5 @@
 import type { BiomeDef } from '../content/biomes/types';
+import { CodedError } from '../content/errors';
 import { blurInterleaved } from '../sim/geom/blur';
 import { MAP_COLORS, type RGB } from './palette';
 
@@ -28,6 +29,7 @@ export function bakeBiomeColors(
   for (let i = 0; i < n; i++) {
     const o = (biome[i] as number) * 4;
     if (lut[o + 3] === 0) continue;
+    if ((lut[o + 3] as number) < 0) throw new CodedError('no_biome_code', { code: biome[i] as number, cell: i });
     rgbc[i * 4] = lut[o] as number;
     rgbc[i * 4 + 1] = lut[o + 1] as number;
     rgbc[i * 4 + 2] = lut[o + 2] as number;
@@ -48,7 +50,7 @@ function colorLut(defs: readonly BiomeDef[]): Float32Array {
     lut[code * 4] = col[0];
     lut[code * 4 + 1] = col[1];
     lut[code * 4 + 2] = col[2];
-    lut[code * 4 + 3] = def?.kind === 'water' ? 0 : 1;
+    lut[code * 4 + 3] = !def ? -1 : def.kind === 'water' ? 0 : 1; // -1: unknown code, an error when a cell uses it
   }
   return lut;
 }
@@ -114,6 +116,7 @@ export function bakeBiomeColorsRect(
     for (let x = x0; x <= x1; x++) {
       const o = (biome[y * w + x] as number) * 4;
       if (lut[o + 3] === 0) continue;
+      if ((lut[o + 3] as number) < 0) throw new CodedError('no_biome_code', { code: biome[y * w + x] as number, cell: y * w + x });
       const t = ((y - y0) * ww + (x - x0)) * 4;
       rgbc[t] = lut[o] as number;
       rgbc[t + 1] = lut[o + 1] as number;
