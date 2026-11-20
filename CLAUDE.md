@@ -14,6 +14,7 @@ Stages 1 (map) and 1.5 (feedback fixes) are closed; branch `stage-1-map` pushed,
 Still to show the author: sea and river screenshots (`docs/screenshots/stage-1-5/`; look accepted by Claude via checklist).
 Next session, in order (once the author's weekly limits reset):
 1. ~~Fix all confirmed findings in `docs/reports/`~~ — done 2026-11-20 (see `docs/reports/arena-translate-review.md` §4, rulings in `stage-1-decisions.md`).
+   CI added 2026-11-20: `.github/workflows/ci.yml` (lint, types, tests, build on push to `main`/`stage-*` and PRs, ~2 min).
 2. Run `ponytail-audit` (installed as a skill; Task B of `docs/reports/deepseek-review.md`) and triage the findings together.
 3. Merge `stage-1-map` into `main` (author-approved).
 4. Stage 2 (one settlement): start with brainstorming with the author, based on «Готовность к этапу 2» in `docs/architecture.md`; build the code graph with graphify (`/graphify`, later `--update`) as part of Stage 2.
@@ -37,6 +38,7 @@ Next session, in order (once the author's weekly limits reset):
 - Agent reports: terse English — changed files, test result, blockers. No retelling of the work; details go to the report file.
 - Hand agents files (brief, diff), not summaries.
 - External free models: Claude may call OpenCode itself (`oc run -m opencode/<id> "…"`, read-only second opinion; use `oc`, not `opencode`). LM Arena, Qwen, Codex — only manually by the author from a self-contained task.
+  - Be proactive: at every task/stage boundary decide whether part of the work fits an external model and say so. Self-contained coding/translation/doc tasks with a clear acceptance check → offer the author a ready-to-paste brief for LM Arena or Codex (file under `docs/tasks/`), then review the result like any agent's work. Reviews, second opinions, audits → try OpenCode yourself now and then and compare with the Claude reviewer.
 
 ## Commands
 `npm run dev` (port 5173) · `npm test` · `npm run lint` · `npx tsc --noEmit` · `npm run build`
