@@ -240,6 +240,22 @@ We are not making the editor itself, but the data is separated so that it is pos
 
 The old stage numbers map as follows: "stage 2" (one settlement) = 1.1–1.3; "stage 3" (expansion) = 1.4–1.5; "stage 4" (neighbours) = 2.1–2.2; "stage 6" (war) = 2.3–2.5; "stage 5" (technologies) = 3.1–3.2; "stage 7" = 3.3–3.6; "stage 8" = milestone 4; "stage 9" = milestone 5.
 
+### 8.1 Sub-stage 1.1 "Time and start": what is agreed
+
+**[author's decisions 2026-11-20]** unless marked **[my decision]**.
+
+- **Start.** When the world is ready the game is **paused**. The camera flies smoothly to the start province and the fog around it melts away (about 1.5 s). Time runs only after Space or a speed button.
+- **Start province.** Random but fixed by the seed (the same seed gives the same start). **[my decision]** Land with a biome marked "can start here" in the biome data (plains, forest, steppe, hills, taiga, jungle; with fantasy also mushroom and magic forest), at least 3 land neighbours, so not a lone islet. "There is food" will be checked by numbers in 1.2.
+- **Fog.** Unexplored land is a **darkened, desaturated map** (as in Europa Universalis): relief and coastlines can be guessed, colours cannot. The edge between seen and unseen is soft, "paper"-like, a few cells wide, not a sharp line along the province border. At the start the own province and **all its neighbours** (land, sea, lakes) are visible. 1.1 has two states only: visible and unknown; "explored but not watched now" arrives with the scout in 1.4.
+- **Fog and map modes.** The fog lies over every map mode. The debug panel (F3) has a "no fog" switch with its own key to look at the whole world (groundwork for god mode).
+- **Tooltip over fog.** What can be guessed: the title "Unexplored land" / "Unexplored sea" and the terrain type (forest, mountains…), without the other details.
+- **Own province.** A thin crisp border in the player's colour along its edge (the seed of the country border of 1.5).
+- **Time.** One step is a day. **5 speeds**, about 1, 2, 5, 10 and 30 days per second (at the top speed a month per second, a year in about 12 s). The speed changes how many days pass per second, not the length of a day. Keys: Space — pause, 1–5 — speed, + and − — faster/slower.
+- **Date.** Real years: the game starts on **1 March 3000 BC** (spring, so there is time before the first winter of 1.3). **[my decision]** Ordinary months, 365 days a year without leap years; there is no year 0, after 1 BC comes 1 AD. How fast the centuries go later is decided in milestone 3.
+- **Top bar.** A small plate **centred at the top**: the date, under it five speed bars and −/+ buttons; on pause the word "Pause". Dark neutral panel, 1px border, PT Sans. Resources will get their own bar in 1.2.
+- **Not in 1.1:** resources, the province panel, saving, the world creation screen, the scout.
+- **Showing it.** Before/after screenshots (the map without and with fog, the bar, pause) and a "what to look at" note. The "15–20 minute match" item of the checklist does not apply yet (there is nothing to do); instead: 10 minutes at the top speed without errors, 60 FPS, five seeds.
+
 ## 9. For the future (not doing it now, but not getting in the way)
 
 - God mode: the same simulation, a full overview, drawing the map, powers.
