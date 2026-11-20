@@ -77,6 +77,15 @@ describe('displayProvinceOf', () => {
     // Cell 1 is "land" on screen itself, cell 2 is its neighbour; beyond that it is water.
     expect(Array.from(shown)).toEqual([1, 1, 1, 0, 0, 0, 0, 0]);
   });
+
+  it('a strip cut off from all land keeps its own province', () => {
+    // Cells 4..6 form a strip around the visible-land cell 5, but no land cell touches the strip.
+    const provinces = [{ isLand: false }, { isLand: true }] as Province[];
+    const provinceOf = new Uint16Array([1, 0, 0, 0, 0, 0, 0]);
+    const coast = new Float32Array([-0.1, -0.1, -0.1, -0.1, -0.1, 0.1, -0.1]);
+    const shown = displayProvinceOf({ w: 7, h: 1, provinces, provinceOf } as unknown as World, coast);
+    expect(Array.from(shown)).toEqual([1, 0, 0, 0, 0, 0, 0]);
+  });
 });
 
 /** Whether a cell (itself or one of the 8 neighbours) has coast < 0 — the cell may be visible as water. */

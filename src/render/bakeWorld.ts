@@ -133,6 +133,9 @@ function spreadAcrossCoast(
       }
     }
   }
+  // A strip cell whose 8-connected strip component touches no source cell is never reached and keeps
+  // its own province: there is no source province near it to give. Generated worlds have shown none
+  // (checked on several seeds); the behaviour is pinned in tests/render/coast.test.ts.
   let frontier: number[] = [];
   for (let i = 0; i < n; i++) if (seeded[i]) frontier.push(i);
   // Layer-by-layer walk: on layer d a cell's owner is the lowest id among the neighbours on layer d − 1.
