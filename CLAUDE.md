@@ -7,7 +7,7 @@ Browser strategy game: TypeScript strict, PixiJS 8 (WebGL2), Vite, Vitest, ESLin
 - Spec: `docs/superpowers/specs/2026-11-16-settlement-strategy-design.md`; architecture + stage-2 risks: `docs/architecture.md`
 - Plans: `docs/superpowers/plans/`; decisions and deferred minors: `docs/superpowers/stage-*-decisions.md`
 - Author feedback: `docs/feedback/`; screenshots: `docs/screenshots/`
-- Code graph (local, git-ignored, `src/` only): before searching code or briefing an agent on where things are, read `graphify-out/GRAPH_REPORT.md` or run `graphify query "<question>"`; still read the real files before editing. Rebuilt after each commit by a local git hook (log `~/.cache/graphify-rebuild.log`); missing graph → `/graphify src`.
+- Code graph (local, git-ignored, whole repo, AST only): before searching code or briefing an agent on where things are, read `graphify-out/GRAPH_REPORT.md` or run `graphify query "<question>"`; still read the real files before editing. Rebuilt after each commit by a local git hook (log `~/.cache/graphify-rebuild.log`); missing or stale graph → `graphify update . --force` (free, no LLM).
 - SDD ledger (local, not in git): `.superpowers/sdd/<plan>/progress.md` with briefs and reports
 
 ## Current state (update at the end of each stage)
