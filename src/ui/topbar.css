@@ -80,26 +80,37 @@
   padding: 0 10.5px;
 }
 
+/* transparent 8x32 hit area; the visible 5x12 bar is the ::before */
 .topbar__pip {
-  box-sizing: content-box;
+  position: relative;
+  width: 8px;
+  height: 100%;
+  padding: 0;
+  background: transparent;
+}
+
+.topbar__pip::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
   width: 5px;
   height: 12px;
-  /* big invisible click area around the small visible bar */
-  padding: 10px 1.5px;
+  transform: translate(-50%, -50%);
   background: var(--knob);
-  background-clip: content-box;
   border-radius: 1px;
 }
 
-.topbar__pip--on {
-  background: var(--paper-pip);
-}
-
-.topbar__pip:hover {
+.topbar__pip:hover::before {
   background: var(--text-faint);
 }
 
-.topbar__pip--on:hover {
+.topbar__pip--on::before {
+  background: var(--paper-pip);
+}
+
+.topbar__pip--on:hover::before {
+  background: var(--paper-pip);
   filter: brightness(1.1);
 }
 
