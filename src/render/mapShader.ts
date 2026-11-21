@@ -101,9 +101,7 @@ const vec3 LAKE_DEEP = ${glslVec3(MAP_COLORS.lakeDeep)};
 const vec3 LAKE_SHALLOW = ${glslVec3(MAP_COLORS.lakeShallow)};
 const vec3 COAST_LINE = ${glslVec3(MAP_COLORS.coastLine)};
 const vec3 BORDER = ${glslVec3(MAP_COLORS.border)};
-const float OWN_WASH = 0.05; // own land: flat warm mix toward the player colour over the interior
-const float OWN_GLOW = 0.35; // own land: inner border band strength at the own line
-const float OWN_GLOW_PX = 8.0; // inner band fade-out width, in device px per CSS px
+const float OWN_TINT = 0.15; // own land: share of the luminance-preserving player-colour wash
 const float OWN_LINE_W = 2.2; // own-province border width, in device px per CSS px
 const vec3 VOID_COLOR = ${glslVec3(MAP_COLORS.void)};
 const vec3 SNOW = ${glslVec3(MAP_COLORS.snow)};
@@ -351,20 +349,17 @@ void main() {
   }
   col = mix(fogged(col), col, seen);
 
-  // ---- own land: interior keeps its colours (only a faint flat warm mix); "mine" reads from a
-  // soft inner band of the player colour along the own outer border (land-land own line and own
-  // coast), strongest at the line, fading inward. After fog like the line (own land is always
-  // seen). Land side only; the own share switches on the same smooth equal-share line as the fill.
-  if (showLand && sl.best >= 0.0 && provState(sl.best).g > 0.5) {
-    float ownShare = 1.0;
-    float d = coastPx; // px inland from the coastline
+  // ---- own land: light luminance-preserving wash in the player colour (relief, forests and grain
+  // stay readable), after fog like the line (own land is always seen). Land side only; the own
+  // share switches on the same smooth equal-share line as the fill and the border.
+  if (showLand && sl.best >= 0.0) {
+    float ownShare = provState(sl.best).g > 0.5 ? 1.0 : 0.0;
     if (sl.second >= 0.0) {
-      bool os = provState(sl.second).g > 0.5;
-      ownShare = os ? 1.0 : clamp(sl.edgePx + 0.5, 0.0, 1.0);
-      if (!os) d = min(d, sl.edgePx);
+      float os = provState(sl.second).g > 0.5 ? 1.0 : 0.0;
+      ownShare = mix(os, ownShare, clamp(sl.edgePx + 0.5, 0.0, 1.0));
     }
-    float glow = OWN_GLOW * (1.0 - smoothstep(0.0, OWN_GLOW_PX * uCam.w, max(d, 0.0)));
-    col = mix(col, PLAYER, (OWN_WASH + glow) * ownShare * landMask);
+    vec3 tinted = col * PLAYER / dot(PLAYER, vec3(0.299, 0.587, 0.114));
+    col = mix(col, tinted, OWN_TINT * ownShare * landMask);
   }
 
   // ---- own province: crisp thin line in the player colour on its equal-share line, a bit
