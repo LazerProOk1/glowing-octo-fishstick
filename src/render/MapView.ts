@@ -178,8 +178,8 @@ export class MapView {
     res.uPalette = next.palette;
     const resized = world.w !== this.map.w || world.h !== this.map.h;
     this.map = { w: world.w, h: world.h };
-    if (this.textures) destroyWorldTextures(this.textures);
-    if (!this.textures || resized) {
+    const old = this.textures;
+    if (!old || resized) {
       // First world or a different size: the whole map on screen.
       const { width, height } = this.app.screen;
       this.cam = { x: world.w / 2, y: world.h / 2, zoom: minZoom(width, height, this.map) };
@@ -192,6 +192,8 @@ export class MapView {
     const owners = this.owners;
     this.rivers.setRivers(world.rivers, (x, y) => coastAt(owners, x, y));
     this.setProvinceTexture(world);
+    // Only now the river filter points at the new textures: the old ones are safe to destroy.
+    if (old) destroyWorldTextures(old);
     this.setHoveredProvince(null);
     this.mesh.visible = true;
     this.sync();
@@ -314,6 +316,7 @@ export class MapView {
     this.rivers.destroy();
     this.mesh.destroy();
     this.geometry.destroy();
+    this.fog.destroy();
     this.shader.destroy(true);
     if (this.textures) destroyWorldTextures(this.textures);
     this.textures = null;
@@ -322,7 +325,6 @@ export class MapView {
     this.provSource?.destroy();
     this.provSource = null;
     this.provData = null;
-    this.fog.destroy();
     this.blank.destroy();
     this.atlas.destroy();
     this.root.destroy();
