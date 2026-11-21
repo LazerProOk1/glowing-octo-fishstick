@@ -338,7 +338,14 @@ void main() {
   col = mix(col, BORDER, borderA);
 
   // ---- fog of war over everything drawn so far (every map mode); grain and hover stay on top.
-  if (uFogOn > 0.5) col = mix(fogged(col), col, fogSeen(p));
+  // Each side of the coastline has its own field; both only in the antialiased coast pixel.
+  float seen = 1.0;
+  if (uFogOn > 0.5) {
+    if (landMask > 0.999) seen = fogSeen(p, true);
+    else if (landMask < 0.001) seen = fogSeen(p, false);
+    else seen = mix(fogSeen(p, false), fogSeen(p, true), landMask);
+  }
+  col = mix(fogged(col), col, seen);
 
   // ---- own province: crisp thin line in the player colour on its equal-share line, a bit
   // stronger than the province border; along its coast just inside the coastline. No glow.
@@ -359,7 +366,7 @@ void main() {
     float hovL = clamp(sl.hovPx / 3.0 + 0.5, 0.0, 1.0);
     float hovS = clamp(ss.hovPx / 3.0 + 0.5, 0.0, 1.0);
     hovered = mix(hovS, hovL, landMask);
-    if (uFogOn > 0.5) hovered *= fogSeen(p); // no highlight over fog: it would leak the hidden province shape
+    hovered *= seen; // no highlight over fog: it would leak the hidden province shape
   }
   col = mix(col, vec3(1.0), 0.13 * hovered);
 

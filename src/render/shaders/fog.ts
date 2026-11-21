@@ -1,6 +1,6 @@
 // Fog of war and own-province GLSL, injected into MAP_FRAGMENT (mapShader.ts) after SOFT_GLSL and
 // into the river fog filter (fogLayer.ts). Needs bspline (BSPLINE_GLSL),
-// uProvince, uWorldSize and uProvDataW.
+// uProvince, uProvinceSea, uWorldSize and uProvDataW.
 import { MAP_COLORS, glslVec3 } from '../palette';
 
 export const FOG_GLSL = /* glsl */ `
@@ -10,6 +10,7 @@ uniform float uFogOn;         // 1 = fog shown, 0 = the whole map visible (uProv
 const vec3 FOG_TINT = ${glslVec3(MAP_COLORS.fog)};
 const float FOG_MID = 0.28;     // fog mid-tone luminance
 const float FOG_CONTRAST = 0.28; // share of the original luminance contrast kept under fog
+const float FOG_KNEE = 0.4;      // luminance above which highlights are compressed under fog
 const vec3 PLAYER = ${glslVec3(MAP_COLORS.player)};
 
 vec4 provState(float id) {
@@ -38,16 +39,19 @@ float fogNoise(vec2 p) {
 }
 
 // Lattice step of the visibility field in cells: a cubic B-spline over the province ids of every
-// FOG_STEP-th cell of the land owner map (ids of all cells, whatever their medium, so the field
-// crosses the coastline continuously). A step of 1 left the cell staircase of province outlines
-// visible on the large seen-unseen contrast; at 2 the edge is smooth and ~6 cells wide.
+// FOG_STEP-th cell of one side's display owner map. A step of 1 left the cell staircase of province
+// outlines visible on the large seen-unseen contrast; at 2 the edge is smooth and ~6 cells wide.
 const float FOG_STEP = 2.0;
 
 // Seen share 0..1 at world point p. The field v is C2-smooth (fixed world lattice, B-spline
 // weights), so nothing jumps; a low-frequency warp shifts the edge by up to ~1.5 cells, only inside
 // the transition, so fully seen and fully unknown areas stay exact. Reads like faded ink.
+// landSide picks the owner map: land pixels read the land map, water pixels the sea map, so the
+// field never crosses the coastline (the coastline itself is the edge there, antialiased by the
+// caller). One shared field leaked: shore water took land ids (a seen lake stayed fogged) or,
+// with water ids, a seen sea lit a pale beach strip of unknown land.
 // 32 texel fetches; the map shader and the river fog filter share it, so their edges match.
-float fogSeen(vec2 p) {
+float fogSeen(vec2 p, bool landSide) {
   vec2 q = (p - 0.5) / FOG_STEP;
   vec2 qc = floor(q);
   vec4 wx = bspline(q.x - qc.x);
@@ -56,7 +60,7 @@ float fogSeen(vec2 p) {
   for (int k = 0; k < 16; k++) {
     vec2 lat = (qc + vec2(float((k & 3) - 1), float((k >> 2) - 1))) * FOG_STEP;
     ivec2 cell = clamp(ivec2(lat), ivec2(0), ivec2(uWorldSize) - 1);
-    vec4 t = texelFetch(uProvince, cell, 0);
+    vec4 t = landSide ? texelFetch(uProvince, cell, 0) : texelFetch(uProvinceSea, cell, 0);
     float id = round(t.r * 255.0) + round(t.g * 255.0) * 256.0;
     v += wx[k & 3] * wy[k >> 2] * provState(id).r;
   }
@@ -71,7 +75,9 @@ vec3 fogged(vec3 c) {
   float l = dot(c, vec3(0.299, 0.587, 0.114));
   // Luminance compressed toward one dim mid-tone: shallow rims, coasts and land read as one paper
   // (kept luminance left a bright rim around every island and lake), relief stays guessable.
-  float f = mix(FOG_MID, l, FOG_CONTRAST);
+  // Highlights above FOG_KNEE are halved first: shallow lake and sea rims are the brightest thing
+  // on the map and still read as a pale ring under fog; darker relief keeps its full contrast.
+  float f = mix(FOG_MID, l - 0.5 * max(l - FOG_KNEE, 0.0), FOG_CONTRAST);
   return mix(mix(vec3(f), c * (f / max(l, 1e-3)), 0.06), FOG_TINT, 0.16);
 }
 

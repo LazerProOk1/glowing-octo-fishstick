@@ -340,7 +340,7 @@ export class MapView {
     this.uniforms.uniforms.uProvDataW = data.width;
     this.applyFill(anyFill);
     // Same layout as the data texture (uProvDataW serves both).
-    this.fog.setWorld(world.provinces.length, this.shader.resources.uProvince as TextureSource);
+    this.fog.setWorld(world.provinces.length);
   }
 
   private applyFill(anyFill: boolean): void {

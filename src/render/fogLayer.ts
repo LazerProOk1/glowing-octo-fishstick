@@ -36,6 +36,7 @@ out vec4 finalColor;
 
 uniform sampler2D uTexture;
 uniform sampler2D uProvince;
+uniform sampler2D uProvinceSea; // unused by the land-side field, but fogSeen names it
 uniform vec4 uCam;
 uniform vec2 uView;
 uniform vec2 uWorldSize;
@@ -50,7 +51,7 @@ void main() {
   }
   vec2 p = uCam.xy + (vScreen - 0.5 * uView) / uCam.z;
   vec3 rgb = c.rgb / c.a;
-  float seen = fogSeen(p);
+  float seen = fogSeen(p, true); // rivers run on land
   // Under fog the river is also half transparent: guessed, not a dark line over the grey land.
   float a = c.a * mix(0.5, 1.0, seen);
   finalColor = vec4(mix(fogged(rgb), rgb, seen) * a, a);
@@ -82,6 +83,7 @@ export class FogLayer {
       resources: {
         mapUniforms: uniforms,
         uProvince: shader.resources.uProvince as TextureSource,
+        uProvinceSea: shader.resources.uProvinceSea as TextureSource,
         uProvState: shader.resources.uProvState as TextureSource,
       },
       resolution: 'inherit',
@@ -89,13 +91,15 @@ export class FogLayer {
     });
   }
 
-  /** A new state texture for the world (no visibility yet: no fog). province — the land owner map. */
-  setWorld(count: number, province: TextureSource): void {
+  /** A new state texture for the world (no visibility yet: no fog); call after the map shader got its owner maps. */
+  setWorld(count: number): void {
     const state = new ProvinceState(count, this.maxTextureSize);
     const source = rgba8(state.data, state.width, state.height, false);
-    this.shader.resources.uProvState = source;
+    const res = this.shader.resources;
+    res.uProvState = source;
     this.riverFilter.resources.uProvState = source;
-    this.riverFilter.resources.uProvince = province;
+    this.riverFilter.resources.uProvince = res.uProvince as TextureSource;
+    this.riverFilter.resources.uProvinceSea = res.uProvinceSea as TextureSource;
     this.source?.destroy();
     this.source = source;
     this.state = state;
