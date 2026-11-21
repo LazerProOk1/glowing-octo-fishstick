@@ -1,5 +1,6 @@
 import { t, translate } from '../i18n/ru';
 import type { BiomeDef } from '../content/biomes/types';
+import { isVisible } from '../game/visibility';
 import type { Province, World } from '../sim/world/types';
 import { el } from './dom';
 
@@ -65,7 +66,7 @@ export class ProvinceTooltip {
       return;
     }
     const biomes = this.world?.biomes ?? [];
-    if (this.vis && this.vis[p.id] !== 1) {
+    if (this.vis && !isVisible(this.vis, p.id)) {
       const f = fogInfo(p, biomes);
       this.titleEl.textContent = f.title;
       this.infoEl.textContent = f.info;

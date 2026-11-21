@@ -14,3 +14,10 @@ describe('startVisibility', { timeout: 60_000 }, () => {
     for (let i = 0; i < vis.length; i++) expect(isVisible(vis, i)).toBe(want.has(i));
   });
 });
+
+describe('isVisible', () => {
+  it('treats any non-zero value as visible', () => {
+    const vis = Uint8Array.from([0, 1, 255]);
+    expect([0, 1, 2, 3].map((i) => isVisible(vis, i))).toEqual([false, true, true, false]);
+  });
+});

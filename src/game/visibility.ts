@@ -8,6 +8,7 @@ export function startVisibility(world: World, start: number): Uint8Array {
   return vis;
 }
 
+/** Any non-zero value is visible (the render fog reads it the same way). */
 export function isVisible(vis: Uint8Array, id: number): boolean {
-  return vis[id] === 1;
+  return (vis[id] ?? 0) !== 0;
 }

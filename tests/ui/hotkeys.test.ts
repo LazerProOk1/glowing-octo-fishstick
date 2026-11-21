@@ -113,6 +113,9 @@ describe('hotkeys', () => {
     expect(calls.mapMode).toBe(0);
     target.press({ code: 'KeyM', target: { tagName: 'CANVAS' } });
     expect(calls.mapMode).toBe(1);
+    // A focused checkbox (e.g. the fog toggle) types nothing: keys still work.
+    target.press({ code: 'KeyM', target: { tagName: 'INPUT', type: 'checkbox' } });
+    expect(calls.mapMode).toBe(2);
   });
 
   it('F3 works in an input and cancels the browser search, letter keys do not', () => {

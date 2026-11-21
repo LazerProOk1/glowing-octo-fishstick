@@ -60,11 +60,11 @@ export function keyLabel(code: string): string {
   return code.replace(/^(Key|Digit)/, '');
 }
 
-/** Focus is in an input: keys must type text instead of switching the map. */
+/** Focus is in an input: keys must type text instead of switching the map. Checkboxes type nothing. */
 function isEditable(target: unknown): boolean {
   if (typeof target !== 'object' || target === null) return false;
-  const t = target as { tagName?: unknown; isContentEditable?: unknown };
-  return t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable === true;
+  const t = target as { tagName?: unknown; type?: unknown; isContentEditable?: unknown };
+  return (t.tagName === 'INPUT' && t.type !== 'checkbox') || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable === true;
 }
 
 /**
