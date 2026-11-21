@@ -1,4 +1,4 @@
-/** Все строки интерфейса. В src/ui/*.ts кириллицы в литералах быть не должно — только t(ключ). */
+/** All UI strings. No Cyrillic in literals in src/ui/*.ts — only t(key). */
 export const ru = {
   'app.title': 'Стратегия поселения',
 
@@ -132,7 +132,7 @@ export function translate(key: string): string {
   return Object.hasOwn(ru, key) ? ru[key as RuKey] : key;
 }
 
-/** Месяцы в родительном падеже («1 марта»). */
+/** Month names in the genitive case ("1 марта"). */
 export const MONTHS_GENITIVE = [
   'января',
   'февраля',
@@ -148,7 +148,7 @@ export const MONTHS_GENITIVE = [
   'декабря',
 ] as const;
 
-/** «1 марта 3000 г. до н. э.»; год отрицательный — до нашей эры, нулевого года нет. */
+/** "1 марта 3000 г. до н. э."; a negative year is BC, there is no year zero. */
 export function formatDate(d: { day: number; month: number; year: number }): string {
   const era = d.year < 0 ? 'до н. э.' : 'н. э.';
   return `${d.day} ${MONTHS_GENITIVE[d.month - 1] ?? ''} ${Math.abs(d.year)} г. ${era}`;
