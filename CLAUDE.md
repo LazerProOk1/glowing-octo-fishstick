@@ -18,7 +18,8 @@ Next session, in order (once the author's weekly limits reset):
    CI added 2026-11-20: `.github/workflows/ci.yml` (lint, types, tests, build on push to `main`/`stage-*` and PRs, ~2 min).
 2. Run `ponytail-audit` (installed as a skill; Task B of `docs/reports/deepseek-review.md`) and triage the findings together.
 3. ~~Merge `stage-1-map` into `main`~~ — done 2026-11-20.
-4. Milestone 1, sub-stage 1.1 (time, start, fog): brainstorming done 2026-11-20 (spec §8.1); execute `docs/superpowers/plans/2026-11-20-stage-1-1-time-fog.md` on branch `stage-1-1-time-fog`.
+4. ~~Milestone 1, sub-stage 1.1 (time, start, fog)~~ — done 2026-11-21 on `stage-1-1-time-fog` (decisions: `docs/superpowers/stage-1-1-decisions.md`; look: `docs/screenshots/stage-1-1/`). Waiting for the author's look.
+5. Next: author notes on 1.1 → fixes → merge `stage-1-1-time-fog` into `main` → sub-stage 1.2.
    Code graph built 2026-11-20 (see «Where things are»).
 
 Roadmap (2026-11-20): development goes by milestones split into sub-stages, spec §8. Each sub-stage ends polished and viewable (mechanic → polish by checklist → before/after screenshots + "what to look at" note → author notes); raw work between sub-stages is not shown. Old "stage N" names map to sub-stages at the end of spec §8.
