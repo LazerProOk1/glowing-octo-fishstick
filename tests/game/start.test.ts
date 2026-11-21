@@ -129,6 +129,23 @@ describe('pickStartGroup', { timeout: 60_000 }, () => {
     for (const g of picks(w)) expect(g).toEqual([0, 1, 2]);
   });
 
+  it('prefers a group with room to grow over a water group with no outer land', () => {
+    // Chain 0-1-2 touches water but has no land around; chain 3-4-5 has 4 outer land provinces.
+    const spec: Spec[] = [
+      [true, [1], 300, { coastal: true }],
+      [true, [0, 2], 300],
+      [true, [1], 300],
+      [true, [4, 6, 7], 300],
+      [true, [3, 5, 8], 300],
+      [true, [4, 9], 300],
+      [true, [3], 100],
+      [true, [3], 100],
+      [true, [4], 100],
+      [true, [5], 100],
+    ];
+    for (const g of picks(tiny(spec))) expect(g.every((id) => id >= 3 && id <= 5)).toBe(true);
+  });
+
   it('keeps desert out of the group when another neighbour exists', () => {
     const w = tiny([
       [true, [1, 2]],

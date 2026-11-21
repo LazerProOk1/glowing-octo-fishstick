@@ -7,6 +7,7 @@ const prov = (id: number, x: number, y: number, neighbors: number[]) => ({
   center: { x, y },
   cellCount: 100,
   neighbors,
+  isLand: true,
 });
 const world = {
   w: 1000,
@@ -31,6 +32,15 @@ describe('startView', () => {
     } as unknown as World;
     const v = startView(w, [0, 1], 900, 600);
     expect(v.cell.x).toBeCloseTo(140); // 0..2 span: province 2 is a neighbour of member 1
+  });
+
+  it('ignores sea neighbours when framing', () => {
+    const sea = { ...prov(1, 900, 400, [0]), cellCount: 1_000_000, isLand: false };
+    const w = { w: 1000, h: 500, provinces: [prov(0, 100, 100, [1]), sea] } as unknown as World;
+    const r = Math.sqrt(100 / Math.PI);
+    const v = startView(w, [0], 900, 600); // the group alone
+    expect(v.cell.x).toBeCloseTo(100);
+    expect(v.zoom).toBeCloseTo(600 / 3 / (2 * r)); // height is the limiting axis
   });
 
   it('falls back to the map centre for an unknown province', () => {

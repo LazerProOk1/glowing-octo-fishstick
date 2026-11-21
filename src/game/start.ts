@@ -5,11 +5,13 @@ import type { Province, World } from '../sim/world/types';
 /** Start group size, and the minimum total cells of that group (default-size median land province ~230). */
 const GROUP_SIZE = 3;
 const MIN_GROUP_CELLS = 600;
+/** Room to grow: land provinces around the group (not in it), so it is not a thin isthmus. */
+const MIN_OUTER_LAND = 4;
 
 /**
  * Start group: GROUP_SIZE adjacent land provinces, deterministic by seed; the first id is the core.
  * Candidate cores by tier (first non-empty wins): startable, full group, ≥ MIN_GROUP_CELLS, touching
- * water; the same without water; any size; then the old ladder (group may be smaller on islet worlds).
+ * water, with room to grow; the same without water; ≥ MIN_GROUP_CELLS with water; without; any size; then the old ladder (group may be smaller on islet worlds).
  * Throws only when the world has no land at all.
  */
 export function pickStartGroup(world: World): number[] {
@@ -47,6 +49,11 @@ export function pickStartGroup(world: World): number[] {
         (world.edgesOf[id] ?? []).some((e) => (world.adjacency[e]?.riverLength ?? 0) > 0),
     );
 
+  const outerLand = (g: number[]): number =>
+    new Set(g.flatMap((id) => prov(id).neighbors).filter((n) => prov(n).isLand && !g.includes(n)))
+      .size;
+  const hasRoom = (g: number[]): boolean => outerLand(g) >= MIN_OUTER_LAND;
+
   const startableCores = land.filter((p) => startable.has(p.biome));
   const full = startableCores.map((p) => growGroup(p.id)).filter((g) => g.length === GROUP_SIZE);
   const big = full.filter((g) => cells(g) >= MIN_GROUP_CELLS);
@@ -62,7 +69,13 @@ export function pickStartGroup(world: World): number[] {
 
   // Within a tier, groups without glacier/desert members win when there are any.
   const clean = (g: number[]): boolean => g.every((id) => !harsh(prov(id)));
-  const tier = [big.filter(touchesWater), big, full].find((t) => t.length > 0);
+  const tier = [
+    big.filter((g) => touchesWater(g) && hasRoom(g)),
+    big.filter(hasRoom),
+    big.filter(touchesWater),
+    big,
+    full,
+  ].find((t) => t.length > 0);
   const pool = tier
     ? tier.some(clean)
       ? tier.filter(clean)

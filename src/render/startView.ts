@@ -1,7 +1,7 @@
 import type { World } from '../sim/world/types';
 
 /**
- * View for the start: centre and zoom so that the start group and its neighbours fill roughly the middle
+ * View for the start: centre and zoom so that the start group and its land neighbours fill roughly the middle
  * third of the screen. Extent per province: its centre ± the radius of a disc of the same area.
  */
 export function startView(
@@ -10,7 +10,13 @@ export function startView(
   viewW: number,
   viewH: number,
 ): { cell: { x: number; y: number }; zoom: number } {
-  const ids = new Set(group.flatMap((id) => [id, ...(world.provinces[id]?.neighbors ?? [])]));
+  // Land neighbours only: sea and lake provinces are huge and would zoom the camera far out.
+  const ids = new Set(
+    group.flatMap((id) => [
+      id,
+      ...(world.provinces[id]?.neighbors ?? []).filter((n) => world.provinces[n]?.isLand),
+    ]),
+  );
   let x0 = Infinity;
   let y0 = Infinity;
   let x1 = -Infinity;
