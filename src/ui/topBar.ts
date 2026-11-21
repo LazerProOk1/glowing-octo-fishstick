@@ -10,33 +10,32 @@ export function topBarState(c: Clock): { date: string; speed: number; paused: bo
 
 export interface TopBarActions {
   setSpeed(index: number): void;
-  faster(): void;
-  slower(): void;
+  togglePause(): void;
 }
 
-/** Small plate centred at the top: date, pause label, five speed bars with −/+ buttons. */
+/** Thin strip at the top edge: pause/play glyph | date | five speed pips. */
 export class TopBar {
   private readonly root: HTMLElement;
   private readonly dateEl: HTMLElement;
-  private readonly pauseEl: HTMLElement;
-  private readonly bars: HTMLButtonElement[] = [];
+  private readonly pauseBtn: HTMLButtonElement;
+  private readonly pips: HTMLButtonElement[] = [];
   private last = '';
 
   constructor(parent: HTMLElement, actions: TopBarActions) {
-    this.root = el('section', 'topbar ui-panel');
+    this.root = el('section', 'topbar');
     this.root.hidden = true;
+    this.pauseBtn = this.button(t('bar.pause'), actions.togglePause);
+    this.pauseBtn.classList.add('topbar__pause');
+    this.pauseBtn.append(el('span', 'topbar__glyph'));
     this.dateEl = el('div', 'topbar__date');
-    this.pauseEl = el('div', 'topbar__pause', t('bar.pause'));
-    const row = el('div', 'topbar__speed');
-    row.append(this.button('−', t('bar.slower'), actions.slower));
+    const speed = el('div', 'topbar__speed');
     SPEEDS.forEach((_, i) => {
-      const b = this.button('', `${t('bar.speed')} ${i + 1}`, () => actions.setSpeed(i));
-      b.classList.add('topbar__bar');
-      this.bars.push(b);
-      row.append(b);
+      const b = this.button(`${t('bar.speed')} ${i + 1}`, () => actions.setSpeed(i));
+      b.classList.add('topbar__pip');
+      this.pips.push(b);
+      speed.append(b);
     });
-    row.append(this.button('+', t('bar.faster'), actions.faster));
-    this.root.append(this.dateEl, row, this.pauseEl);
+    this.root.append(this.pauseBtn, this.dateEl, speed);
     parent.append(this.root);
   }
 
@@ -52,12 +51,13 @@ export class TopBar {
     if (key === this.last) return;
     this.last = key;
     this.dateEl.textContent = s.date;
-    this.pauseEl.style.visibility = s.paused ? 'visible' : 'hidden';
-    this.bars.forEach((b, i) => b.classList.toggle('topbar__bar--on', i <= s.speed));
+    this.root.classList.toggle('topbar--paused', s.paused);
+    this.pauseBtn.setAttribute('aria-pressed', String(s.paused));
+    this.pips.forEach((b, i) => b.classList.toggle('topbar__pip--on', i <= s.speed));
   }
 
-  private button(text: string, label: string, onClick: () => void): HTMLButtonElement {
-    const b = el('button', 'topbar__btn', text);
+  private button(label: string, onClick: () => void): HTMLButtonElement {
+    const b = el('button', 'topbar__btn');
     b.type = 'button';
     b.title = label;
     b.setAttribute('aria-label', label);

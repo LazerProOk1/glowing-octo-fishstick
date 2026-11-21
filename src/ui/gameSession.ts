@@ -26,8 +26,7 @@ export class GameSession {
   ) {
     this.bar = new TopBar(parent, {
       setSpeed: (i) => this.setSpeed(i),
-      faster: () => this.faster(),
-      slower: () => this.slower(),
+      togglePause: () => this.togglePause(),
     });
   }
 

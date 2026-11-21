@@ -33,6 +33,7 @@
   --text-dim: #a09e99;
   --text-faint: #6f6e6a;
   --accent: #8fb0c8;
+  --paper-pip: #c9b98a;
 }
 
 html,
@@ -318,17 +319,73 @@ body {
 
 .topbar {
   position: fixed;
-  top: 8px;
+  top: 0;
   left: 50%;
   z-index: 15;
-  padding: 5px 12px 6px;
-  text-align: center;
+  display: flex;
+  align-items: stretch;
+  height: 32px;
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
   transform: translateX(-50%);
 }
 
+.topbar[hidden] {
+  display: none;
+}
+
+.topbar > * + * {
+  border-left: 1px solid var(--line-soft);
+}
+
+.topbar__btn {
+  font: inherit;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.topbar__pause {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  border-bottom-left-radius: 7px;
+}
+
+.topbar__pause:hover {
+  color: var(--text);
+  background: var(--line-soft);
+}
+
+/* pause glyph: two bars; play glyph (when paused): triangle */
+.topbar__glyph {
+  width: 10px;
+  height: 12px;
+  border-left: 3px solid currentColor;
+  border-right: 3px solid currentColor;
+  box-sizing: border-box;
+}
+
+.topbar--paused .topbar__glyph {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-color: transparent transparent transparent currentColor;
+  border-width: 6px 0 6px 10px;
+}
+
 .topbar__date {
-  font-size: 14px;
-  font-weight: 700;
+  min-width: 190px;
+  padding: 0 14px;
+  font-size: 15px;
+  line-height: 31px;
+  color: var(--text);
+  text-align: center;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -336,44 +393,32 @@ body {
 .topbar__speed {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 3px;
+  padding: 0 12px;
 }
 
-.topbar__btn {
-  font: inherit;
-  line-height: 1;
-  color: var(--text-dim);
-  background: transparent;
-  border: 1px solid var(--line);
-  border-radius: 2px;
-  width: 20px;
-  height: 18px;
-  padding: 0;
-  cursor: pointer;
+.topbar__pip {
+  width: 5px;
+  height: 12px;
+  background: var(--line);
+  border-radius: 1px;
 }
 
-.topbar__btn:hover {
-  color: var(--text);
-  border-color: var(--text-faint);
+.topbar__pip--on {
+  background: var(--paper-pip);
 }
 
-.topbar__bar {
-  width: 14px;
-  background: var(--field);
+.topbar__pip:hover {
+  background: var(--text-faint);
 }
 
-.topbar__bar--on {
-  background: var(--accent);
-  border-color: var(--accent);
+.topbar__pip--on:hover {
+  background: var(--paper-pip);
 }
 
-.topbar__pause {
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--text-dim);
-  visibility: hidden;
+.topbar--paused .topbar__date,
+.topbar--paused .topbar__speed {
+  opacity: 0.6;
 }
 
 .debug__check {
