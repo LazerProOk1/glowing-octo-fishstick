@@ -20,6 +20,7 @@ Next session, in order (once the author's weekly limits reset):
 3. ~~Merge `stage-1-map` into `main`~~ — done 2026-11-20.
 4. ~~Milestone 1, sub-stage 1.1 (time, start, fog)~~ — done 2026-11-21 on `stage-1-1-time-fog` (decisions: `docs/superpowers/stage-1-1-decisions.md`; look: `docs/screenshots/stage-1-1/`). Waiting for the author's look.
 5. Next: author notes on 1.1 → fixes → merge `stage-1-1-time-fog` into `main` → sub-stage 1.2.
+   Author notes so far (2026-11-21): start with 2–3 adjacent provinces (spec §8.1). Session prompt: `docs/tasks/next-session-1-1-fixes.md`.
    Code graph built 2026-11-20 (see «Where things are»).
 
 Roadmap (2026-11-20): development goes by milestones split into sub-stages, spec §8. Each sub-stage ends polished and viewable (mechanic → polish by checklist → before/after screenshots + "what to look at" note → author notes); raw work between sub-stages is not shown. Old "stage N" names map to sub-stages at the end of spec §8.
