@@ -15,6 +15,7 @@ import {
   type GenResponse,
   type GenTimings,
   type LoadStep,
+  type SurfaceConnect,
   type SurfaceRequest,
   type SurfaceResponse,
 } from './protocol';
@@ -28,17 +29,30 @@ const scope = self as unknown as Scope;
 
 interface SurfaceResult {
   bake: SurfaceBake;
+  /** coastHeight from the nested worker; absent when baked on this thread. */
+  coast?: Float32Array;
   ms: number;
 }
 
 /** The nested worker is created once; null — unavailable (then we bake on this thread). */
 let surfaceWorker: Worker | null | undefined;
+/** Port of the current nested worker that requests go to (see SurfaceConnect). */
+let surfacePort: MessagePort | null = null;
 const surfacePending = new Map<number, { resolve(r: SurfaceResult): void; reject(e: Error): void }>();
 /**
  * How long to wait for the nested worker from the moment of the request. It bakes in ~0.5–1 s; if there
  * is no answer in that time, the worker is considered hung, it is stopped, and the terrain is baked here.
  */
 const SURFACE_TIMEOUT_MS = 15000;
+/**
+ * A nested worker only starts while this worker's event loop is free: created right before the
+ * synchronous generateWorld, it would load only after generation and bake the terrain serially.
+ * So generation waits for its 'ready' message, at most this long (then it goes on without waiting).
+ */
+const SURFACE_READY_MS = 3000;
+/** Resolves when the current nested worker has started (or has been dropped). */
+let surfaceReady: Promise<void> = Promise.resolve();
+let markSurfaceReady = (): void => undefined;
 
 /**
  * Stops the nested worker and rejects the pending requests.
@@ -47,6 +61,7 @@ const SURFACE_TIMEOUT_MS = 15000;
 function dropSurfaceWorker(worker: Worker, err: Error, retry: boolean): void {
   if (surfaceWorker === worker) surfaceWorker = retry ? undefined : null;
   worker.terminate();
+  markSurfaceReady();
   for (const p of surfacePending.values()) p.reject(err);
   surfacePending.clear();
 }
@@ -55,7 +70,12 @@ function getSurfaceWorker(): Worker | null {
   if (surfaceWorker !== undefined) return surfaceWorker;
   try {
     if (typeof Worker === 'undefined') throw new Error('no nested workers');
+    surfaceReady = new Promise((resolve) => (markSurfaceReady = resolve));
     const worker = new Worker(new URL('./surfaceWorker.ts', import.meta.url), { type: 'module' });
+    const channel = new MessageChannel();
+    const connect: SurfaceConnect = { v: PROTOCOL_VERSION, type: 'port', port: channel.port2 };
+    worker.postMessage(connect, [channel.port2]);
+    surfacePort = channel.port1;
     worker.onmessage = (e: MessageEvent<SurfaceResponse>) => {
       const msg = e.data;
       const mismatch = protocolMismatch(msg);
@@ -64,10 +84,14 @@ function getSurfaceWorker(): Worker | null {
         dropSurfaceWorker(worker, new Error(mismatch), false);
         return;
       }
+      if (msg.type === 'ready') {
+        markSurfaceReady();
+        return;
+      }
       const p = surfacePending.get(msg.id);
       if (!p) return;
       surfacePending.delete(msg.id);
-      if (msg.type === 'done') p.resolve({ bake: msg.bake, ms: msg.ms });
+      if (msg.type === 'done') p.resolve({ bake: msg.bake, coast: msg.coast, ms: msg.ms });
       else p.reject(new Error(msg.message));
     };
     worker.onerror = (e: ErrorEvent) => {
@@ -103,7 +127,8 @@ function startSurfaceBake(
   h: number,
 ): SurfaceJob | null {
   const worker = getSurfaceWorker();
-  if (!worker) return null;
+  const port = surfacePort;
+  if (!worker || !port) return null;
   const req: SurfaceRequest = {
     v: PROTOCOL_VERSION,
     id,
@@ -128,7 +153,7 @@ function startSurfaceBake(
         reject(e);
       },
     });
-    worker.postMessage(req, [req.height.buffer, req.biome.buffer]);
+    port.postMessage(req, [req.height.buffer, req.biome.buffer]);
   });
   // The timeout counts from the end of generateWorld, not from sending the request: the nested worker
   // competes with generation for the CPU, and long generation of a large world must not bring it down.
@@ -147,6 +172,7 @@ function startSurfaceBake(
     surfacePending.delete(id);
     if (surfaceWorker === worker) surfaceWorker = undefined;
     worker.terminate();
+    markSurfaceReady();
   };
   return { result, startTimeout, cancel };
 }
@@ -173,6 +199,12 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     if (next) scope.postMessage({ v: PROTOCOL_VERSION, type: 'stage', id, stage: next });
   };
   let parallel = null as SurfaceJob | null;
+  // Let the nested worker start before the synchronous generation blocks this thread (see SURFACE_READY_MS).
+  if (getSurfaceWorker()) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([surfaceReady, new Promise<void>((r) => (timer = setTimeout(r, SURFACE_READY_MS)))]);
+    clearTimeout(timer);
+  }
   try {
     const world = generateWorld(params, enter, (height, biome, defs, w, h) => {
       parallel = startSurfaceBake(id, height, biome, defs, w, h);
@@ -180,16 +212,16 @@ async function handle({ id, params }: GenRequest): Promise<void> {
     const job: SurfaceJob | null = parallel;
     job?.startTimeout();
     enter('bake');
-    // Province textures depend on the whole generation — they are baked here while the nested worker
-    // finishes the terrain; then we wait for its result.
-    const own = bakeProvinces(world);
-    const pending: Promise<SurfaceResult> | null = job ? job.result : null;
-    let surface: SurfaceResult;
+    // The nested worker has usually finished the terrain during rivers and provinces; its shoreline
+    // field (coast) is reused for the province textures, which depend on the whole generation.
+    let surface: SurfaceResult | null = null;
     try {
-      surface = pending ? await pending : bakeHere(world);
+      if (job) surface = await job.result;
     } catch {
-      surface = bakeHere(world);
+      surface = null;
     }
+    const own = bakeProvinces(world, surface?.coast);
+    surface ??= bakeHere(world);
     const bake: WorldBake = { ...own, ...surface.bake };
     enter(null);
     const timings: GenTimings = { stages, total: performance.now() - start, surface: surface.ms };

@@ -31,7 +31,7 @@ export interface GenResult {
  * Bump on any change of the message shape. A message of another version (e.g. a worker from an
  * old tab or cache) is rejected with a clear error instead of being parsed blindly.
  */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 6;
 
 /** Common part of all messages. */
 interface Versioned {
@@ -66,7 +66,22 @@ export interface SurfaceRequest extends Versioned {
   h: number;
 }
 
-export type SurfaceResponse = (Versioned & { type: 'done'; id: number; bake: SurfaceBake; ms: number }) | ErrorResponse;
+/**
+ * First message to the nested worker: the port that terrain requests arrive on. A message on the
+ * worker itself reaches it only while the generation worker's event loop is free (Chromium), a port
+ * message also while that worker is busy generating, which is what makes the bake parallel.
+ */
+export interface SurfaceConnect extends Versioned {
+  type: 'port';
+  port: MessagePort;
+}
+
+/** 'ready' — the nested worker has its request port (sent once, unasked). */
+export type SurfaceResponse =
+  | (Versioned & { type: 'ready' })
+  /** coast — coastHeight of the same height, reused for the province textures (bakeProvinces). */
+  | (Versioned & { type: 'done'; id: number; bake: SurfaceBake; coast: Float32Array; ms: number })
+  | ErrorResponse;
 
 function versionOf(msg: unknown): unknown {
   return typeof msg === 'object' && msg !== null ? (msg as { v?: unknown }).v : undefined;

@@ -41,9 +41,8 @@ export function coastHeight(height: Float32Array, w: number, h: number): Float32
 }
 
 /** RGBA16F straight in half precision, without an intermediate float32 array of 8M values. */
-function packSurface(height: Float32Array, w: number, h: number): Uint16Array {
+function packSurface(height: Float32Array, coast: Float32Array, w: number, h: number): Uint16Array {
   const grad = bakeGradient(height, w, h);
-  const coast = coastHeight(height, w, h);
   const near = coastNearness(height, w, h, SEA_LEVEL);
   const out = new Uint16Array(w * h * 4);
   for (let i = 0; i < w * h; i++) {
@@ -178,8 +177,8 @@ export interface ProvinceBake extends BakedTextures {
   provinceSeaRG: Uint8Array;
 }
 
-export function bakeProvinces(world: World): ProvinceBake {
-  const coast = coastHeight(world.height, world.w, world.h);
+/** coast — coastHeight of the world (passed when the nested worker has already computed it). */
+export function bakeProvinces(world: World, coast = coastHeight(world.height, world.w, world.h)): ProvinceBake {
   const baked = bakeTextures(world, displayProvinceOf(world, coast));
   const provinceSeaRG = provinceIdPixels(displaySeaProvinceOf(world, coast), world.provinces);
   writeWaterClass(provinceSeaRG, world.biome, world.biomes);
@@ -192,10 +191,11 @@ export function bakeSurface(
   defs: readonly BiomeDef[],
   w: number,
   h: number,
+  coast = coastHeight(height, w, h),
 ): SurfaceBake {
   return {
     height: toHalfArray(height, SEA_LEVEL),
-    surface: packSurface(height, w, h),
+    surface: packSurface(height, coast, w, h),
     biomeColor: bakeBiomeColors(biome, defs, w, h),
     seaDepth: toHalfArray(smoothSeaDepth(height, w, h), 0),
   };
