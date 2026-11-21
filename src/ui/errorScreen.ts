@@ -13,7 +13,7 @@ export function showError(parent: HTMLElement, message: string, detail?: string,
   root.setAttribute('role', 'alert');
   root.append(el('h1', 'error-screen__title', t('error.title')), el('p', 'error-screen__message', message));
   if (detail) root.append(el('pre', 'error-screen__detail', detail));
-  const retry = el('button', 'ui-button', t('error.retry'));
+  const retry = el('button', 'ui-button ui-button--primary', t('error.retry'));
   retry.type = 'button';
   retry.addEventListener('click', () => {
     // Without changing the address, a reload would hit the same wrong options again.
