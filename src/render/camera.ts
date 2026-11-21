@@ -43,13 +43,13 @@ export function screenToWorld(
 }
 
 /**
- * Clamps the centre so that on each axis no more than a quarter of the screen is empty:
- * the centre stays in [span/4, size − span/4]. The interval collapses to the map centre only when
- * span ≥ 2·size, so the transition is continuous.
+ * Clamps the centre so the map always fills the screen on this axis: the centre stays in
+ * [span/2, size − span/2]. When span ≥ size the map is centred (empty space only at minimum zoom).
+ * The interval collapses to the map centre exactly at span = size, so the transition is continuous.
  */
 function clampAxis(center: number, span: number, mapSize: number): number {
-  if (span >= 2 * mapSize) return mapSize / 2;
-  const margin = span / 4;
+  if (span >= mapSize) return mapSize / 2;
+  const margin = span / 2;
   return Math.min(Math.max(center, margin), mapSize - margin);
 }
 

@@ -48,7 +48,7 @@ describe('map size', () => {
   it('minZoom and the clamp take the map size from the argument', () => {
     const small = SIZE_PRESETS.small;
     expect(minZoom(VW, VH, small)).toBeCloseTo(Math.min(VW / small.w, VH / small.h), 12);
-    // A screen 4·small.w wide: at minimum zoom the X span is ≥ 2·small.w — the centre is pinned.
+    // A screen 4·small.w wide: at minimum zoom the X span is ≥ small.w — the centre is pinned.
     const cam = clampCamera({ x: 0, y: 0, zoom: 1 }, 4 * small.w, VH, small);
     expect(cam.x).toBe(small.w / 2);
   });
@@ -71,8 +71,8 @@ describe('zoomAt', () => {
     expect(Number.isFinite(next.x)).toBe(true);
     expect(Number.isFinite(next.y)).toBe(true);
     expect(next.zoom).toBe(2);
-    expect(next.x).toBe(160); // X span = 640, margin = 160
-    expect(next.y).toBe(90); // Y span = 360, margin = 90
+    expect(next.x).toBe(320); // X span = 640, margin = 320
+    expect(next.y).toBe(180); // Y span = 360, margin = 180
   });
 
   it('zooming out does not go below minZoom', () => {
@@ -96,45 +96,37 @@ describe('clampCamera', () => {
     expect(high.zoom).toBe(MAX_ZOOM);
   });
 
-  it('moving the centre to (−5000, −5000) leaves half the screen on the map', () => {
+  it('moving the centre to (−5000, −5000) keeps the whole screen on the map', () => {
     const cam = clampCamera({ x: -5000, y: -5000, zoom: 2 }, VW, VH, MAP);
     const spanX = VW / cam.zoom;
     const spanY = VH / cam.zoom;
     // Share of the visible screen area that lies over the map, per axis.
     const visX = Math.max(0, Math.min(cam.x + spanX / 2, WORLD_W) - Math.max(cam.x - spanX / 2, 0));
     const visY = Math.max(0, Math.min(cam.y + spanY / 2, WORLD_H) - Math.max(cam.y - spanY / 2, 0));
-    expect(visX / spanX).toBeGreaterThanOrEqual(0.5);
-    expect(visY / spanY).toBeGreaterThanOrEqual(0.5);
+    expect(visX / spanX).toBeCloseTo(1, 9);
+    expect(visY / spanY).toBeCloseTo(1, 9);
   });
 
-  it('with span ≥ 2·map size the centre on that axis is pinned to the map centre', () => {
-    // A 4096-cell viewport along X at zoom 1: the X span is 2·WORLD_W.
-    const cam = clampCamera({ x: 0, y: 0, zoom: 1 }, 2 * WORLD_W, VH, MAP);
+  it('with span ≥ map size the centre on that axis is pinned to the map centre', () => {
+    // A viewport WORLD_W cells wide along X at zoom 1: the X span is WORLD_W.
+    const cam = clampCamera({ x: 0, y: 0, zoom: 1 }, WORLD_W, VH, MAP);
     expect(cam.x).toBe(WORLD_W / 2);
-    // Along Y the span is VH/1 = 720 < 2·WORLD_H, so Y is not pinned.
-    expect(cam.y).toBe(VH / 4);
+    // Along Y the span is VH/1 = 720 < WORLD_H, so Y is not pinned.
+    expect(cam.y).toBe(VH / 2);
   });
 
   it('continuity with span near the map size: the centres differ by less than 1 cell', () => {
-    const off = 100;
-    const lo = clampCamera({ x: off, y: 0, zoom: 1 }, WORLD_W - 0.001, VH, MAP);
-    const hi = clampCamera({ x: off, y: 0, zoom: 1 }, WORLD_W + 0.001, VH, MAP);
-    expect(Math.abs(lo.x - hi.x)).toBeLessThan(1);
-  });
-
-  it('continuity with span near 2·map size: the centres differ by less than 1 cell', () => {
-    const off = 0;
-    const lo = clampCamera({ x: off, y: 0, zoom: 1 }, 2 * WORLD_W - 0.001, VH, MAP);
-    const hi = clampCamera({ x: off, y: 0, zoom: 1 }, 2 * WORLD_W + 0.001, VH, MAP);
+    const lo = clampCamera({ x: 0, y: 0, zoom: 1 }, WORLD_W - 0.001, VH, MAP);
+    const hi = clampCamera({ x: 0, y: 0, zoom: 1 }, WORLD_W + 0.001, VH, MAP);
     expect(Math.abs(lo.x - hi.x)).toBeLessThan(1);
     expect(hi.x).toBe(WORLD_W / 2);
   });
 
-  it('at zoom near minZoom the map can be panned along Y (not pinned to the centre)', () => {
+  it('at minZoom the map is centred, at 2·minZoom it can be panned along Y', () => {
     const z = minZoom(VW, VH, MAP);
-    const cam = clampCamera({ x: WORLD_W / 2, y: 0, zoom: z }, VW, VH, MAP);
-    expect(cam.y).toBeLessThan(WORLD_H / 2);
-    expect(cam.y).toBeGreaterThan(0);
+    expect(clampCamera({ x: 0, y: 0, zoom: z }, VW, VH, MAP).y).toBe(WORLD_H / 2);
+    const panned = clampCamera({ x: 0, y: 0, zoom: 2 * z }, VW, VH, MAP);
+    expect(panned.y).toBe(VH / (2 * z) / 2);
   });
 
   it('0×0 viewport (collapsed window): all fields are finite', () => {
