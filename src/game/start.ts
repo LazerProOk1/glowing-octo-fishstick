@@ -48,14 +48,7 @@ export function pickStartGroup(world: World): number[] {
     );
 
   const startableCores = land.filter((p) => startable.has(p.biome));
-  const groups = new Map<number, number[]>();
-  const full = startableCores
-    .map((p) => {
-      const g = growGroup(p.id);
-      groups.set(p.id, g);
-      return g;
-    })
-    .filter((g) => g.length === GROUP_SIZE);
+  const full = startableCores.map((p) => growGroup(p.id)).filter((g) => g.length === GROUP_SIZE);
   const big = full.filter((g) => cells(g) >= MIN_GROUP_CELLS);
 
   const landNeighbours = (p: Province): number => p.neighbors.filter((n) => prov(n).isLand).length;
@@ -67,8 +60,14 @@ export function pickStartGroup(world: World): number[] {
   ].find((t) => t.length > 0);
   if (!ladder) throw new CodedError('no_start_province');
 
-  const pool =
-    [big.filter(touchesWater), big, full].find((t) => t.length > 0) ?? ladder.map((p) => groups.get(p.id) ?? growGroup(p.id));
+  // Within a tier, groups without glacier/desert members win when there are any.
+  const clean = (g: number[]): boolean => g.every((id) => !harsh(prov(id)));
+  const tier = [big.filter(touchesWater), big, full].find((t) => t.length > 0);
+  const pool = tier
+    ? tier.some(clean)
+      ? tier.filter(clean)
+      : tier
+    : ladder.map((p) => growGroup(p.id));
   return pool[createRng(`${world.params.seed}:start`).int(0, pool.length)]!;
 }
 

@@ -23,7 +23,20 @@ describe('startView', () => {
     expect(v.zoom).toBeCloseTo(900 / 3 / (40 + 2 * r)); // width is the limiting axis
   });
 
+  it('frames every member of a multi-province group and their neighbours', () => {
+    const w = {
+      w: 1000,
+      h: 500,
+      provinces: [prov(0, 100, 100, [1]), prov(1, 140, 100, [0, 2]), prov(2, 180, 100, [1])],
+    } as unknown as World;
+    const v = startView(w, [0, 1], 900, 600);
+    expect(v.cell.x).toBeCloseTo(140); // 0..2 span: province 2 is a neighbour of member 1
+  });
+
   it('falls back to the map centre for an unknown province', () => {
-    expect(startView(world, [99], 900, 600)).toEqual({ cell: { x: 500, y: 250 }, zoom: 1 });
+    expect(startView(world, [99], 900, 600)).toEqual({
+      cell: { x: 500, y: 250 },
+      zoom: 1,
+    });
   });
 });

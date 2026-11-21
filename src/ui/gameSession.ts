@@ -30,7 +30,7 @@ export class GameSession {
     });
   }
 
-  /** Call right after view.setWorld(world): start province, fog from zero, camera flight, paused clock. */
+  /** Call right after view.setWorld(world): 3-province start group, fog from zero, camera flight, paused clock. */
   start(world: World): void {
     const group = pickStartGroup(world);
     this.vis = startVisibility(world, group);
