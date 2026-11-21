@@ -1,4 +1,8 @@
-/** Binary min-heap on (key, index) over typed arrays; ties broken by index for determinism. Grows on demand. */
+/**
+ * 4-ary min-heap on (key, index) over typed arrays; ties broken by index, so the pop order is a
+ * total order and does not depend on the heap shape. Grows on demand. Four children per node halve
+ * the depth of a binary heap: fewer cache misses per pop on large heaps.
+ */
 export class MinHeap {
   private keys: Float64Array;
   private ids: Int32Array;
@@ -9,9 +13,6 @@ export class MinHeap {
     const c = Math.max(16, cap);
     this.keys = new Float64Array(c);
     this.ids = new Int32Array(c);
-  }
-  private less(ka: number, ia: number, kb: number, ib: number): boolean {
-    return ka < kb || (ka === kb && ia < ib);
   }
   push(key: number, id: number): void {
     if (this.size === this.ids.length) {
@@ -25,9 +26,10 @@ export class MinHeap {
     const { keys, ids } = this;
     let i = this.size++;
     while (i > 0) {
-      const p = (i - 1) >> 1;
-      if (!this.less(key, id, keys[p]!, ids[p]!)) break;
-      keys[i] = keys[p]!;
+      const p = (i - 1) >> 2;
+      const kp = keys[p]!;
+      if (key > kp || (key === kp && id > ids[p]!)) break;
+      keys[i] = kp;
       ids[i] = ids[p]!;
       i = p;
     }
@@ -39,17 +41,28 @@ export class MinHeap {
     const { keys, ids } = this;
     const topId = ids[0]!;
     this.lastKey = keys[0]!;
-    const key = keys[--this.size]!;
-    const id = ids[this.size]!;
+    const n = --this.size;
+    const key = keys[n]!;
+    const id = ids[n]!;
     let i = 0;
-    const n = this.size;
     for (;;) {
-      let c = 2 * i + 1;
-      if (c >= n) break;
-      if (c + 1 < n && this.less(keys[c + 1]!, ids[c + 1]!, keys[c]!, ids[c]!)) c++;
-      if (!this.less(keys[c]!, ids[c]!, key, id)) break;
-      keys[i] = keys[c]!;
-      ids[i] = ids[c]!;
+      const first = 4 * i + 1;
+      if (first >= n) break;
+      const last = first + 4 < n ? first + 4 : n;
+      let c = first;
+      let kc = keys[c]!;
+      let ic = ids[c]!;
+      for (let j = first + 1; j < last; j++) {
+        const kj = keys[j]!;
+        if (kj < kc || (kj === kc && ids[j]! < ic)) {
+          c = j;
+          kc = kj;
+          ic = ids[j]!;
+        }
+      }
+      if (kc > key || (kc === key && ic > id)) break;
+      keys[i] = kc;
+      ids[i] = ic;
       i = c;
     }
     keys[i] = key;

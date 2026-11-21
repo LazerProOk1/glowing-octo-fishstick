@@ -46,6 +46,7 @@ function computeFlow(height: Float32Array, moisture: Float32Array, w: number, h:
     }
   }
   let count = 0;
+  const off = DX.map((dx, d) => DY[d]! * w + dx);
   while (heap.size > 0) {
     const c = heap.pop();
     const level = heap.lastKey;
@@ -53,11 +54,14 @@ function computeFlow(height: Float32Array, moisture: Float32Array, w: number, h:
     filled[c] = level;
     const cx = c % w;
     const cy = (c - cx) / w;
+    const interior = cx > 0 && cy > 0 && cx < w - 1 && cy < h - 1;
     for (let d = 0; d < 8; d++) {
-      const nx = cx + DX[d]!;
-      const ny = cy + DY[d]!;
-      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-      const ni = ny * w + nx;
+      if (!interior) {
+        const nx = cx + DX[d]!;
+        const ny = cy + DY[d]!;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      }
+      const ni = c + off[d]!;
       if (seen[ni]) continue;
       seen[ni] = 1;
       recv[ni] = c;
@@ -84,20 +88,21 @@ export function fillDepressions(height: Float32Array, w: number, h: number): Flo
   return computeFlow(height, new Float32Array(w * h), w, h).filled;
 }
 
-/** Land cells at/above threshold with no upstream neighbour at/above it. */
-function findSources(flow: Flow, height: Float32Array, w: number, h: number, t: number): number[] {
+/**
+ * Land cells at/above threshold with no upstream neighbour at/above it, ascending. `cands` — the land
+ * cells with acc >= some lower threshold, ascending (every cell this can return or look at).
+ */
+function findSources(flow: Flow, cands: Int32Array, n: number, t: number): number[] {
   const { recv, acc } = flow;
-  const n = w * h;
   const hasUp = new Uint8Array(n);
-  for (let i = 0; i < n; i++) {
+  for (const i of cands) {
     const r = recv[i]!;
-    if (r >= 0 && acc[i]! >= t && height[i]! >= SEA_LEVEL) hasUp[r] = 1;
+    if (r >= 0 && acc[i]! >= t) hasUp[r] = 1;
   }
   const out: number[] = [];
-  for (let i = 0; i < n; i++) {
-    if (acc[i]! >= t && height[i]! >= SEA_LEVEL && !hasUp[i]) out.push(i);
+  for (const i of cands) {
+    if (acc[i]! >= t && !hasUp[i]) out.push(i);
   }
-  void h;
   return out;
 }
 
@@ -118,10 +123,14 @@ export function computeRivers(
   // Choose the smallest threshold that keeps the number of headwaters bounded.
   const maxSources = Math.round((MAX_SOURCES * (w * h)) / MEDIUM_AREA);
   let t = 40;
-  let sources = findSources(flow, height, w, h, t);
+  // The threshold only rises: cells under the first one never matter, so scan the rest only.
+  const cands: number[] = [];
+  for (let i = 0; i < n; i++) if (acc[i]! >= t && height[i]! >= SEA_LEVEL) cands.push(i);
+  const candCells = Int32Array.from(cands);
+  let sources = findSources(flow, candCells, n, t);
   while (sources.length > maxSources && t < 1e7) {
     t *= 1.5;
-    sources = findSources(flow, height, w, h, t);
+    sources = findSources(flow, candCells, n, t);
   }
 
   // Extend every headwater uphill along its largest tributary, up to the watershed crest.
