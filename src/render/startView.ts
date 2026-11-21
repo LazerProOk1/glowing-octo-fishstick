@@ -1,16 +1,16 @@
 import type { World } from '../sim/world/types';
 
 /**
- * View for the start: centre and zoom so that the province and its neighbours fill roughly the middle
+ * View for the start: centre and zoom so that the start group and its neighbours fill roughly the middle
  * third of the screen. Extent per province: its centre ± the radius of a disc of the same area.
  */
 export function startView(
   world: World,
-  start: number,
+  group: readonly number[],
   viewW: number,
   viewH: number,
 ): { cell: { x: number; y: number }; zoom: number } {
-  const ids = [start, ...(world.provinces[start]?.neighbors ?? [])];
+  const ids = new Set(group.flatMap((id) => [id, ...(world.provinces[id]?.neighbors ?? [])]));
   let x0 = Infinity;
   let y0 = Infinity;
   let x1 = -Infinity;
@@ -24,7 +24,7 @@ export function startView(
     y0 = Math.min(y0, p.center.y - r);
     y1 = Math.max(y1, p.center.y + r);
   }
-  if (!world.provinces[start] || x1 <= x0) return { cell: { x: world.w / 2, y: world.h / 2 }, zoom: 1 };
+  if (x1 <= x0) return { cell: { x: world.w / 2, y: world.h / 2 }, zoom: 1 };
   const zoom = Math.min(viewW / 3 / (x1 - x0), viewH / 3 / (y1 - y0));
   return { cell: { x: (x0 + x1) / 2, y: (y0 + y1) / 2 }, zoom };
 }

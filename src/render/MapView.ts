@@ -241,10 +241,10 @@ export class MapView {
     this.flight.start(clampCamera(this.cam, width, height, this.map), to, ms);
   }
 
-  /** Cell and zoom putting the province and its neighbours in the middle third of the screen. */
-  startView(start: number): { cell: { x: number; y: number }; zoom: number } | null {
+  /** Cell and zoom putting the start group and its neighbours in the middle third of the screen. */
+  startView(group: readonly number[]): { cell: { x: number; y: number }; zoom: number } | null {
     const { width, height } = this.app.screen;
-    return this.world ? startView(this.world, start, width, height) : null;
+    return this.world ? startView(this.world, group, width, height) : null;
   }
 
   /** The player's own provinces: a crisp border in the player colour; the rest lose the flag. */

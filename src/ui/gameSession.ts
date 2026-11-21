@@ -1,5 +1,5 @@
 import { advanceClock, faster, newClock, setSpeed, slower, togglePause, type Clock } from '../game/clock';
-import { pickStartProvince } from '../game/start';
+import { pickStartGroup } from '../game/start';
 import { startVisibility } from '../game/visibility';
 import type { MapView } from '../render/MapView';
 import type { World } from '../sim/world/types';
@@ -9,7 +9,7 @@ import type { ProvinceTooltip } from './tooltip';
 const FLIGHT_MS = 1500;
 
 /**
- * Per-world game state on the main thread: clock, start province, fog and the top bar.
+ * Per-world game state on the main thread: clock, start group, fog and the top bar.
  * start() builds all of it from scratch, reset() drops it — nothing survives a new world.
  */
 export class GameSession {
@@ -32,12 +32,12 @@ export class GameSession {
 
   /** Call right after view.setWorld(world): start province, fog from zero, camera flight, paused clock. */
   start(world: World): void {
-    const start = pickStartProvince(world);
-    this.vis = startVisibility(world, start);
-    this.view.setOwnProvinces([start]);
+    const group = pickStartGroup(world);
+    this.vis = startVisibility(world, group);
+    this.view.setOwnProvinces(group);
     this.view.setVisibility(this.vis);
     this.setFogOff(false);
-    const to = this.view.startView(start);
+    const to = this.view.startView(group);
     if (to) this.view.flyTo(to.cell, to.zoom, FLIGHT_MS);
     this.clock = newClock();
     this.bar.update(this.clock);

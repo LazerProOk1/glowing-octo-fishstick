@@ -1,10 +1,12 @@
 import type { World } from '../sim/world/types';
 
-/** Visibility by province id: 0 unknown, 1 visible. At the start: the province and all its neighbours. */
-export function startVisibility(world: World, start: number): Uint8Array {
+/** Visibility by province id: 0 unknown, 1 visible. At the start: the start group and all its neighbours. */
+export function startVisibility(world: World, group: readonly number[]): Uint8Array {
   const vis = new Uint8Array(world.provinces.length);
-  vis[start] = 1;
-  for (const n of world.provinces[start]?.neighbors ?? []) vis[n] = 1;
+  for (const id of group) {
+    vis[id] = 1;
+    for (const n of world.provinces[id]?.neighbors ?? []) vis[n] = 1;
+  }
   return vis;
 }
 
