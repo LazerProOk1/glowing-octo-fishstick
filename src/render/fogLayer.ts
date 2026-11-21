@@ -1,4 +1,5 @@
 import { BufferImageSource, Filter, GlProgram, type Container, type Shader, type TextureSource, type UniformGroup } from 'pixi.js';
+import { FogFade } from './fogFade';
 import { ProvinceState } from './provinceState';
 import { FOG_GLSL } from './shaders/fog';
 import { BSPLINE_GLSL } from './shaders/softProvince';
@@ -62,6 +63,7 @@ void main() {
  */
 export class FogLayer {
   private state: ProvinceState | null = null;
+  private fade: FogFade | null = null;
   private source: BufferImageSource | null = null;
   private enabled = true;
   /** Whether the game has given visibility for this world; until then no fog. */
@@ -97,6 +99,7 @@ export class FogLayer {
     this.source?.destroy();
     this.source = source;
     this.state = state;
+    this.fade = new FogFade(count);
     this.hasVisibility = false;
     this.apply();
   }
@@ -105,7 +108,7 @@ export class FogLayer {
     const st = this.state;
     if (!st) return;
     if (vis.length !== st.count) throw new Error(`visibility length ${vis.length} != ${st.count} provinces`);
-    for (let id = 0; id < st.count; id++) st.setFog(id, vis[id] ? 255 : 0);
+    this.fade?.setTarget(vis);
     this.hasVisibility = true;
     this.apply();
   }
@@ -123,8 +126,10 @@ export class FogLayer {
     this.apply();
   }
 
-  /** Once per frame: uploads the changed texel range. */
-  flush(): void {
+  /** Once per frame: advances the fog fade, uploads the changed texel range. */
+  flush(dtMs = 0): void {
+    const st = this.state;
+    if (st) this.fade?.step(dtMs, (id, level) => st.setFog(id, level));
     const range = this.state?.takeDirty();
     if (range && this.source) this.source.update(range.start, range.end);
   }
@@ -135,6 +140,7 @@ export class FogLayer {
     this.source?.destroy();
     this.source = null;
     this.state = null;
+    this.fade = null;
   }
 
   private apply(): void {

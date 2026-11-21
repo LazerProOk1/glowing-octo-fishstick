@@ -15,6 +15,8 @@ import { DEFAULT_SIZE, SIZE_PRESETS } from '../sim/world/params';
 import type { World } from '../sim/world/types';
 import type { FrameStats } from './frameBench';
 import { benchmarkFrames } from './gpuBench';
+import { CameraFlight } from './cameraFlight';
+import { startView } from './startView';
 import { clampCamera, minZoom, screenToWorld, zoomAt, type Camera, type MapSize } from './camera';
 import { bakeWorld, type WorldBake } from './bakeWorld';
 import type { Rect } from './derived';
@@ -71,6 +73,7 @@ export class MapView {
   private hovered: number | null = null;
   private readonly hoverListeners = new Set<(id: number | null) => void>();
   private drag: { id: number; x: number; y: number } | null = null;
+  private readonly flight = new CameraFlight();
   private destroyed = false;
 
   constructor(app: Application) {
@@ -230,6 +233,20 @@ export class MapView {
     this.fog.setVisibility(vis);
   }
 
+  /** Smooth camera flight to a world cell and zoom (ease-in-out, clamped); user drag/zoom cancels it. */
+  flyTo(cell: { x: number; y: number }, zoom: number, ms: number): void {
+    const { width, height } = this.app.screen;
+    const to = clampCamera({ x: cell.x, y: cell.y, zoom }, width, height, this.map);
+    this.flight.start(clampCamera(this.cam, width, height, this.map), to, ms);
+  }
+
+  /** Cell and zoom putting the province and its neighbours in the middle third of the screen. */
+  startView(start: number): { cell: { x: number; y: number }; zoom: number } | null {
+    if (!this.world) return null;
+    const { width, height } = this.app.screen;
+    return startView(this.world, start, width, height);
+  }
+
   /** The player's own provinces: a crisp border in the player colour; the rest lose the flag. */
   setOwnProvinces(ids: Iterable<number>): void {
     this.fog.setOwnProvinces(ids);
@@ -336,7 +353,12 @@ export class MapView {
   private readonly flushProvinceData = (): void => {
     const range = this.provData?.takeDirty();
     if (range && this.provSource) this.provSource.update(range.start, range.end);
-    this.fog.flush();
+    this.fog.flush(this.app.ticker.deltaMS);
+    const cam = this.flight.step(this.app.ticker.deltaMS);
+    if (cam) {
+      this.cam = cam;
+      this.sync();
+    }
   };
 
   /** Applies the camera constraints and updates the uniforms, the quad and the river layer. */
@@ -384,6 +406,7 @@ export class MapView {
 
   private readonly onPointerDown = (e: PointerEvent): void => {
     if (e.button !== 0) return;
+    this.flight.cancel();
     this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
     this.app.canvas.setPointerCapture(e.pointerId);
     this.app.canvas.style.cursor = 'grabbing';
@@ -417,6 +440,7 @@ export class MapView {
 
   private readonly onWheel = (e: WheelEvent): void => {
     e.preventDefault();
+    this.flight.cancel();
     // deltaMode: 0 — pixels, 1 — lines, 2 — pages. One mouse notch ≈ 100 px.
     const px = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 300 : e.deltaY;
     const notches = Math.max(-3, Math.min(3, -px / 100));
