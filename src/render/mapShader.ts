@@ -359,6 +359,7 @@ void main() {
     float hovL = clamp(sl.hovPx / 3.0 + 0.5, 0.0, 1.0);
     float hovS = clamp(ss.hovPx / 3.0 + 0.5, 0.0, 1.0);
     hovered = mix(hovS, hovL, landMask);
+    if (uFogOn > 0.5) hovered *= fogSeen(p); // no highlight over fog: it would leak the hidden province shape
   }
   col = mix(col, vec3(1.0), 0.13 * hovered);
 
