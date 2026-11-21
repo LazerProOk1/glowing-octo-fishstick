@@ -313,3 +313,69 @@ body {
   margin: 4px 0;
   width: 100%;
 }
+
+/* ---------- Top bar: date and speed ---------- */
+
+.topbar {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  z-index: 15;
+  padding: 5px 12px 6px;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.topbar__date {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.topbar__speed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.topbar__btn {
+  font: inherit;
+  line-height: 1;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.topbar__btn:hover {
+  color: var(--text);
+  border-color: var(--text-faint);
+}
+
+.topbar__bar {
+  width: 14px;
+  background: var(--field);
+}
+
+.topbar__bar--on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.topbar__pause {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-dim);
+  visibility: hidden;
+}
+
+.debug__check {
+  cursor: pointer;
+}

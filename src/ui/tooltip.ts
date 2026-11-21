@@ -15,6 +15,13 @@ export function provinceInfo(p: Province, biomes: readonly BiomeDef[]): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** Over fog only the guessable part: «Unexplored land/sea» and the terrain type. Lakes count as sea. */
+export function fogInfo(p: Province, biomes: readonly BiomeDef[]): { title: string; info: string } {
+  const def = biomes.find((b) => b.id === p.biome);
+  const name = def ? translate(def.nameKey) : p.biome;
+  return { title: t(p.isLand ? 'tip.unknownLand' : 'tip.unknownSea'), info: name.charAt(0).toUpperCase() + name.slice(1) };
+}
+
 /** Small tooltip at the cursor: province id; biome, land/sea, coastal. */
 export class ProvinceTooltip {
   private readonly root: HTMLElement;
@@ -22,6 +29,8 @@ export class ProvinceTooltip {
   private readonly infoEl: HTMLElement;
   private world: World | null = null;
   private id: number | null = null;
+  /** Game visibility by province id; null — no fog, everything is shown. */
+  private vis: Uint8Array | null = null;
   private x = 0;
   private y = 0;
   private pressed = false;
@@ -42,6 +51,12 @@ export class ProvinceTooltip {
     this.setProvince(null);
   }
 
+  /** Visibility for the fog variant; null shows full info everywhere. */
+  setVisibility(vis: Uint8Array | null): void {
+    this.vis = vis;
+    this.setProvince(this.id);
+  }
+
   setProvince(id: number | null): void {
     this.id = id;
     const p = id !== null ? this.world?.provinces[id] : undefined;
@@ -49,8 +64,15 @@ export class ProvinceTooltip {
       this.root.hidden = true;
       return;
     }
-    this.titleEl.textContent = `${t('tip.province')} ${p.id}`;
-    this.infoEl.textContent = provinceInfo(p, this.world?.biomes ?? []);
+    const biomes = this.world?.biomes ?? [];
+    if (this.vis && this.vis[p.id] !== 1) {
+      const f = fogInfo(p, biomes);
+      this.titleEl.textContent = f.title;
+      this.infoEl.textContent = f.info;
+    } else {
+      this.titleEl.textContent = `${t('tip.province')} ${p.id}`;
+      this.infoEl.textContent = provinceInfo(p, biomes);
+    }
     this.update();
   }
 

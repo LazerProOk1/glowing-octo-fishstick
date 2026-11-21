@@ -39,6 +39,7 @@ export class DebugPanel {
   private readonly keys: HTMLElement;
   private readonly stageValues = new Map<LoadStep, HTMLElement>();
   private readonly input: HTMLInputElement;
+  private readonly fogBox: HTMLInputElement;
   private readonly benchBtn: HTMLButtonElement;
   private timer = 0;
 
@@ -47,6 +48,7 @@ export class DebugPanel {
     private readonly getFps: () => number,
     private readonly onSeed: (seed: string) => void,
     private readonly onBench: () => BenchResult | null,
+    private readonly onFog: (off: boolean) => void,
   ) {
     this.root = el('section', 'debug ui-panel');
     this.root.hidden = true;
@@ -73,6 +75,11 @@ export class DebugPanel {
     this.seaValue = sea.value;
     const mode = row(t('debug.mapMode'));
     this.modeValue = mode.value;
+    const fog = el('label', 'debug__row debug__check');
+    this.fogBox = el('input');
+    this.fogBox.type = 'checkbox';
+    this.fogBox.addEventListener('change', () => this.onFog(this.fogBox.checked));
+    fog.append(el('span', 'debug__label', t('debug.noFog')), this.fogBox);
     land.row.classList.add('debug__row--sub');
     sea.row.classList.add('debug__row--sub');
 
@@ -101,7 +108,7 @@ export class DebugPanel {
 
     this.keys = el('div', 'debug__group');
 
-    this.root.append(head, seed.row, fps.row, benchBtn, bench.row, prov.row, land.row, sea.row, mode.row, timings, this.keys, field);
+    this.root.append(head, seed.row, fps.row, benchBtn, bench.row, prov.row, land.row, sea.row, mode.row, fog, timings, this.keys, field);
     parent.append(this.root);
 
     // Enter in the seed field is the field's own behaviour, not a hotkey.
@@ -135,6 +142,11 @@ export class DebugPanel {
       r.append(el('span', 'debug__label', t(h.nameKey)), el('span', 'debug__value', keyLabel(h.code)));
       this.keys.append(r);
     }
+  }
+
+  /** "No fog" checkbox state (the F4 key and the checkbox stay in sync). */
+  setFogOff(off: boolean): void {
+    this.fogBox.checked = off;
   }
 
   setSeed(seed: string): void {

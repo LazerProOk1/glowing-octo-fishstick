@@ -1,5 +1,5 @@
 // Hotkey registry: all app keys in one list, one keydown handler per window.
-import type { RuKey } from '../i18n/ru';
+import { t, type RuKey } from '../i18n/ru';
 
 export interface Hotkey {
   id: string;
@@ -22,6 +22,12 @@ export interface KeyTarget {
 export interface HotkeyActions {
   toggleDebug(): void;
   nextMapMode(): void;
+  togglePause(): void;
+  /** Speed index 0..4. */
+  setSpeed(index: number): void;
+  faster(): void;
+  slower(): void;
+  toggleFog(): void;
 }
 
 /** All app keys. A new key means a new entry here (and a nameKey translation in ru.ts). */
@@ -29,11 +35,28 @@ export function appHotkeys(a: HotkeyActions): Hotkey[] {
   return [
     { id: 'debug', code: 'F3', nameKey: 'key.debug', action: a.toggleDebug, allowInInput: true },
     { id: 'mapMode', code: 'KeyM', nameKey: 'key.mapMode', action: a.nextMapMode },
+    { id: 'fog', code: 'F4', nameKey: 'key.fog', action: a.toggleFog, allowInInput: true },
+    { id: 'pause', code: 'Space', nameKey: 'key.pause', action: a.togglePause },
+    ...([1, 2, 3, 4, 5] as const).map((n) => ({
+      id: `speed${n}`,
+      code: `Digit${n}`,
+      nameKey: `key.speed${n}` as const,
+      action: () => a.setSpeed(n - 1),
+    })),
+    { id: 'faster', code: 'Equal', nameKey: 'key.faster', action: a.faster },
+    { id: 'fasterNum', code: 'NumpadAdd', nameKey: 'key.faster', action: a.faster },
+    { id: 'slower', code: 'Minus', nameKey: 'key.slower', action: a.slower },
+    { id: 'slowerNum', code: 'NumpadSubtract', nameKey: 'key.slower', action: a.slower },
   ];
 }
 
-/** Key label for the list: KeyM → M, Digit1 → 1, F3 → F3. */
+/** Key label for the list: KeyM → M, Digit1 → 1, F3 → F3, Equal → +. */
 export function keyLabel(code: string): string {
+  if (code === 'Space') return t('key.space');
+  if (code === 'Equal') return '+';
+  if (code === 'Minus') return '−';
+  const num = /^Numpad(Add|Subtract)$/.exec(code);
+  if (num) return `${t('key.num')} ${num[1] === 'Add' ? '+' : '−'}`;
   return code.replace(/^(Key|Digit)/, '');
 }
 

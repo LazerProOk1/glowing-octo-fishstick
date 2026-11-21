@@ -42,16 +42,39 @@ interface KeyEventLike {
   preventDefault(): void;
 }
 
-function counter(): { list: Hotkey[]; calls: Record<string, number> } {
-  const calls: Record<string, number> = { debug: 0, mapMode: 0 };
+function counter(): { list: Hotkey[]; calls: Record<string, number>; speeds: number[] } {
+  const calls: Record<string, number> = { debug: 0, mapMode: 0, pause: 0, faster: 0, slower: 0, fog: 0 };
+  const speeds: number[] = [];
   const list = appHotkeys({
     toggleDebug: () => calls.debug!++,
     nextMapMode: () => calls.mapMode!++,
+    togglePause: () => calls.pause!++,
+    setSpeed: (i) => speeds.push(i),
+    faster: () => calls.faster!++,
+    slower: () => calls.slower!++,
+    toggleFog: () => calls.fog!++,
   });
-  return { list, calls };
+  return { list, calls, speeds };
 }
 
 describe('hotkeys', () => {
+  it('time keys: Space, 1-5, +/- (main row and numpad), F4 fog even in an input', () => {
+    const { list, calls, speeds } = counter();
+    const target = fakeTarget();
+    registerHotkeys(list, target);
+    target.press({ code: 'Space' });
+    for (const n of [1, 2, 3, 4, 5]) target.press({ code: `Digit${n}` });
+    for (const code of ['Equal', 'NumpadAdd']) target.press({ code });
+    for (const code of ['Minus', 'NumpadSubtract']) target.press({ code });
+    target.press({ code: 'F4', target: { tagName: 'INPUT' } });
+    target.press({ code: 'Space', target: { tagName: 'INPUT' } });
+    expect(calls.pause).toBe(1);
+    expect(speeds).toEqual([0, 1, 2, 3, 4]);
+    expect(calls.faster).toBe(2);
+    expect(calls.slower).toBe(2);
+    expect(calls.fog).toBe(1);
+  });
+
   it('the app list has no duplicate codes or ids, every key has a translation', () => {
     const { list } = counter();
     const codes = list.map((h) => h.code);
@@ -127,5 +150,8 @@ describe('hotkeys', () => {
     expect(keyLabel('F3')).toBe('F3');
     expect(keyLabel('KeyM')).toBe('M');
     expect(keyLabel('Digit1')).toBe('1');
+    expect(keyLabel('Equal')).toBe('+');
+    expect(keyLabel('Space')).toBe('Пробел');
+    expect(keyLabel('NumpadAdd')).toBe('Цифр. +');
   });
 });

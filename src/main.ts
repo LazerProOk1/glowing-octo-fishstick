@@ -1,5 +1,5 @@
 // Entry point (stage 1): the world is generated in the worker, the interface is the loading screen,
-// the tooltip at the cursor, the debug panel (F3) and the map modes (M). Keys live in ui/hotkeys.ts.
+// the tooltip at the cursor, the debug panel (F3), the map modes (M), the game clock, top bar and fog (ui/gameSession.ts). Keys live in ui/hotkeys.ts.
 import { Application, RendererType, type WebGLRenderer } from 'pixi.js';
 import { t, translate } from './i18n/ru';
 import { nextMapMode } from './render/mapModes';
@@ -7,6 +7,7 @@ import { MapView } from './render/MapView';
 import { DebugPanel } from './ui/debugPanel';
 import { errorDetail, showError } from './ui/errorScreen';
 import { appHotkeys, registerHotkeys } from './ui/hotkeys';
+import { GameSession } from './ui/gameSession';
 import { LoadingScreen } from './ui/loading';
 import { Notice } from './ui/notice';
 import { ProvinceTooltip } from './ui/tooltip';
@@ -138,13 +139,21 @@ async function start(root: HTMLElement): Promise<void> {
       else location.hash = requestKey(next);
     },
     () => view.benchmark(),
+    (off) => game.setFogOff(off),
   );
+  const game = new GameSession(root, view, tooltip, (off) => debug.setFogOff(off));
+  app.ticker.add((tk) => game.tick(tk.deltaMS));
   debug.setSeed(first.req.seed);
   debug.setMapMode(view.mapMode.nameKey);
 
   const notice = new Notice(root);
   const hotkeys = appHotkeys({
     toggleDebug: () => debug.toggle(),
+    togglePause: game.togglePause,
+    setSpeed: game.setSpeed,
+    faster: game.faster,
+    slower: game.slower,
+    toggleFog: () => game.toggleFog(),
     nextMapMode: () => {
       const mode = nextMapMode(view.mapMode.id);
       view.setMapMode(mode.id);
@@ -162,6 +171,7 @@ async function start(root: HTMLElement): Promise<void> {
       loading.hide(); // the map is already there — the loading block is removed immediately
       tooltip.setWorld(world);
       debug.setWorld(world, timings);
+      game.start(world);
     } catch (err) {
       if (isSuperseded(err)) return;
       console.error(err);
@@ -178,6 +188,7 @@ async function start(root: HTMLElement): Promise<void> {
     clearError = null;
     current = next;
     tooltip.setWorld(null);
+    game.reset();
     debug.setSeed(next.seed);
     loading.show(next.seed);
     void show(load(next));
