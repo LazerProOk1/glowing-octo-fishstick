@@ -23,6 +23,12 @@ export function minZoom(viewW: number, viewH: number, map: MapSize): number {
   return Math.min(safeView(viewW) / map.w, safeView(viewH) / map.h);
 }
 
+/** Wheel notches (positive = zoom in, ±3 max). deltaMode: 0 pixels, 1 lines, 2 pages; one notch ≈ 100 px. */
+export function wheelNotches(deltaY: number, deltaMode: number): number {
+  const px = deltaMode === 1 ? deltaY * 33 : deltaMode === 2 ? deltaY * 300 : deltaY;
+  return Math.max(-3, Math.min(3, -px / 100));
+}
+
 export function screenToWorld(
   cam: Camera,
   sx: number,

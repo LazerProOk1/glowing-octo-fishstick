@@ -17,7 +17,7 @@ import type { FrameStats } from './frameBench';
 import { benchmarkFrames } from './gpuBench';
 import { CameraFlight } from './cameraFlight';
 import { startView } from './startView';
-import { clampCamera, minZoom, screenToWorld, zoomAt, type Camera, type MapSize } from './camera';
+import { clampCamera, minZoom, screenToWorld, wheelNotches, zoomAt, type Camera, type MapSize } from './camera';
 import { bakeWorld, type WorldBake } from './bakeWorld';
 import type { Rect } from './derived';
 import { DEFAULT_FILL, MAP_MODES, mapModeById, type MapMode, type ProvinceRGBA } from './mapModes';
@@ -165,6 +165,7 @@ export class MapView {
    * bake — textures baked in the worker; without it we bake on the main thread (several seconds).
    */
   setWorld(world: World, bake: WorldBake = bakeWorld(world)): void {
+    this.flight.cancel();
     const next = createWorldTextures(world, bake);
     const res = this.shader.resources;
     res.uTerrain = next.terrain;
@@ -242,9 +243,8 @@ export class MapView {
 
   /** Cell and zoom putting the province and its neighbours in the middle third of the screen. */
   startView(start: number): { cell: { x: number; y: number }; zoom: number } | null {
-    if (!this.world) return null;
     const { width, height } = this.app.screen;
-    return startView(this.world, start, width, height);
+    return this.world ? startView(this.world, start, width, height) : null;
   }
 
   /** The player's own provinces: a crisp border in the player colour; the rest lose the flag. */
@@ -441,9 +441,7 @@ export class MapView {
   private readonly onWheel = (e: WheelEvent): void => {
     e.preventDefault();
     this.flight.cancel();
-    // deltaMode: 0 — pixels, 1 — lines, 2 — pages. One mouse notch ≈ 100 px.
-    const px = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 300 : e.deltaY;
-    const notches = Math.max(-3, Math.min(3, -px / 100));
+    const notches = wheelNotches(e.deltaY, e.deltaMode);
     const { x, y } = this.local(e);
     const { width, height } = this.app.screen;
     this.cam = zoomAt(this.cam, x, y, ZOOM_STEP ** notches, width, height, this.map);
