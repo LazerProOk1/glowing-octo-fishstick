@@ -6,7 +6,8 @@ import type { World } from '../sim/world/types';
 import { TopBar } from './topBar';
 import type { ProvinceTooltip } from './tooltip';
 
-const FLIGHT_MS = 1500;
+// Author 2026-11-21: no flight to the start, the camera is there at once (0 = jump on the first frame).
+const FLIGHT_MS = 0;
 
 /**
  * Per-world game state on the main thread: clock, start group, fog and the top bar.
