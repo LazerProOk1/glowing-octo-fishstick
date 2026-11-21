@@ -1,0 +1,109 @@
+/* ---------- Top bar: date and speed ---------- */
+
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  z-index: 15;
+  display: flex;
+  align-items: stretch;
+  height: 32px;
+  background: var(--panel-strip);
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  transform: translateX(-50%);
+}
+
+.topbar[hidden] {
+  display: none;
+}
+
+.topbar > * + * {
+  border-left: 1px solid var(--line-soft);
+}
+
+.topbar__btn {
+  font: inherit;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.topbar__pause {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  border-bottom-left-radius: var(--radius-toggle);
+}
+
+.topbar__pause:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+/* pause glyph: two bars; play glyph (when paused): triangle */
+.topbar__glyph {
+  width: 10px;
+  height: 12px;
+  border-left: 3px solid currentColor;
+  border-right: 3px solid currentColor;
+  box-sizing: border-box;
+}
+
+.topbar--paused .topbar__glyph {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-color: transparent transparent transparent currentColor;
+  border-width: 6px 0 6px 10px;
+}
+
+.topbar__date {
+  min-width: 190px;
+  padding: 0 14px;
+  font-size: 15px;
+  line-height: 31px;
+  color: var(--text);
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.topbar__speed {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 10.5px;
+}
+
+.topbar__pip {
+  box-sizing: content-box;
+  width: 5px;
+  height: 12px;
+  /* big invisible click area around the small visible bar */
+  padding: 10px 1.5px;
+  background: var(--knob);
+  background-clip: content-box;
+  border-radius: 1px;
+}
+
+.topbar__pip--on {
+  background: var(--paper-pip);
+}
+
+.topbar__pip:hover {
+  background: var(--text-faint);
+}
+
+.topbar__pip--on:hover {
+  filter: brightness(1.1);
+}
+
+.topbar--paused .topbar__date,
+.topbar--paused .topbar__speed {
+  opacity: 0.6;
+}

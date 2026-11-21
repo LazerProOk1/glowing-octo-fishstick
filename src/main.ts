@@ -15,6 +15,8 @@ import { defaultParams, type WorldParams } from './sim/world/params';
 import { isSuperseded, requestWorld, type GenResult } from './worker/genClient';
 import { buildWorldUrl, parseWorldUrl } from './worldUrl';
 import './ui/styles.css';
+import './ui/topbar.css';
+import './ui/topbar.css';
 
 /** Request key: two requests with the same key produce the same world. */
 const requestKey = (r: WorldParams): string => buildWorldUrl(r);
