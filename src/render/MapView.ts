@@ -109,6 +109,7 @@ export class MapView {
         uAtlas: this.atlas,
         uProvData: this.blank,
         uProvState: this.blank,
+        uFogField: this.blank,
       },
     });
     const quad = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
@@ -118,7 +119,7 @@ export class MapView {
       indices: new Uint32Array([0, 1, 2, 0, 2, 3]),
     });
     this.mesh = new Mesh<MeshGeometry, Shader>({ geometry: this.geometry, shader: this.shader });
-    this.fog = new FogLayer(this.shader, this.uniforms, this.rivers.container, this.maxTextureSize);
+    this.fog = new FogLayer(this.shader, this.uniforms, this.rivers.container, this.maxTextureSize, app.renderer);
     this.mesh.visible = false;
     this.root.addChild(this.mesh, this.rivers.container);
     app.stage.addChild(this.root);
@@ -342,7 +343,7 @@ export class MapView {
     this.uniforms.uniforms.uProvDataW = data.width;
     this.applyFill(anyFill);
     // Same layout as the data texture (uProvDataW serves both).
-    this.fog.setWorld(world.provinces.length);
+    this.fog.setWorld(world.provinces.length, world.w, world.h);
   }
 
   private applyFill(anyFill: boolean): void {

@@ -5,7 +5,7 @@ import { PROVINCE_FLAGS } from './provinceData';
 import { LAKE_SLOT, PALETTE_SIZE } from './textures';
 import { DEPTH_TONE_K, SEA_DEPTH_MAX, SEA_DEPTH_STEP, WATER_GRAIN } from './seaDepth';
 import { WAVE_GLSL } from './seaWaves';
-import { FOG_GLSL } from './shaders/fog';
+import { FOG_GLSL, FOG_STATE_GLSL } from './shaders/fog';
 import { SOFT_GLSL } from './shaders/softProvince';
 
 /** A number as a GLSL float literal. */
@@ -199,6 +199,7 @@ float lakeShare(float cls[16], vec2 pc, vec2 pw, vec2 p) {
   return waterW > 0.0 ? lakeW / waterW : 0.0;
 }
 ${SOFT_GLSL}
+${FOG_STATE_GLSL}
 ${FOG_GLSL}
 // Map mode fill on one side: best province, blended into the runner-up across 1 px at their edge.
 vec4 sideFill(Side sd) {
@@ -338,12 +339,11 @@ void main() {
   col = mix(col, BORDER, borderA);
 
   // ---- fog of war over everything drawn so far (every map mode); grain and hover stay on top.
-  // Each side of the coastline has its own field; both only in the antialiased coast pixel.
+  // Each side of the coastline has its own field (one fetch gives both), mixed by the coast mask.
   float seen = 1.0;
   if (uFogOn > 0.5) {
-    if (landMask > 0.999) seen = fogSeen(p, true);
-    else if (landMask < 0.001) seen = fogSeen(p, false);
-    else seen = mix(fogSeen(p, false), fogSeen(p, true), landMask);
+    vec2 sides = fogSeen(p);
+    seen = mix(sides.y, sides.x, landMask);
   }
   col = mix(fogged(col), col, seen);
 

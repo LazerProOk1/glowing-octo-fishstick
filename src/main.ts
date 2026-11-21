@@ -48,6 +48,12 @@ function rendererIsWebGL2(app: Application): boolean {
   return (app.renderer as WebGLRenderer).context.webGLVersion === 2;
 }
 
+/**
+ * Render resolution: devicePixelRatio capped at 1.5. The map shader cost is per physical pixel;
+ * at DPR 2 the cap draws 44% fewer pixels, lines stay crisp (all widths scale with it).
+ */
+const renderResolution = (): number => Math.min(window.devicePixelRatio || 1, 1.5);
+
 /** Watches devicePixelRatio (window moved to another monitor, zoom changed). */
 function followDevicePixelRatio(app: Application): void {
   const listen = (): void => {
@@ -55,7 +61,7 @@ function followDevicePixelRatio(app: Application): void {
     mq.addEventListener('change', onChange, { once: true });
   };
   const onChange = (): void => {
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = renderResolution();
     if (app.renderer.resolution !== dpr) {
       // A resize with a new resolution fires 'resize' — MapView recomputes the uniforms.
       app.renderer.resize(app.screen.width, app.screen.height, dpr);
@@ -71,7 +77,7 @@ async function createApp(): Promise<Application> {
     resizeTo: window,
     antialias: true,
     autoDensity: true,
-    resolution: window.devicePixelRatio || 1,
+    resolution: renderResolution(),
     preference: 'webgl',
     background: '#383e40',
   });

@@ -1,7 +1,20 @@
-import { BufferImageSource, Filter, GlProgram, type Container, type Shader, type TextureSource, type UniformGroup } from 'pixi.js';
+import {
+  BufferImageSource,
+  Container,
+  Filter,
+  GlProgram,
+  Mesh,
+  MeshGeometry,
+  RenderTexture,
+  Shader,
+  type Renderer,
+  type TextureSource,
+  type UniformGroup,
+} from 'pixi.js';
 import { FogFade } from './fogFade';
+import { MAP_VERTEX } from './mapShader';
 import { ProvinceState } from './provinceState';
-import { FOG_GLSL } from './shaders/fog';
+import { FOG_FIELD_FRAGMENT, FOG_GLSL, fogFieldSize } from './shaders/fog';
 import { BSPLINE_GLSL } from './shaders/softProvince';
 import { rgba8 } from './textures';
 
@@ -35,12 +48,9 @@ in vec2 vScreen;
 out vec4 finalColor;
 
 uniform sampler2D uTexture;
-uniform sampler2D uProvince;
-uniform sampler2D uProvinceSea; // unused by the land-side field, but fogSeen names it
 uniform vec4 uCam;
 uniform vec2 uView;
 uniform vec2 uWorldSize;
-uniform float uProvDataW;
 ${BSPLINE_GLSL}
 ${FOG_GLSL}
 void main() {
@@ -51,7 +61,7 @@ void main() {
   }
   vec2 p = uCam.xy + (vScreen - 0.5 * uView) / uCam.z;
   vec3 rgb = c.rgb / c.a;
-  float seen = fogSeen(p, true); // rivers run on land
+  float seen = fogSeen(p).x; // rivers run on land
   // Under fog the river is also half transparent: guessed, not a dark line over the grey land.
   float a = c.a * mix(0.5, 1.0, seen);
   finalColor = vec4(mix(fogged(rgb), rgb, seen) * a, a);
@@ -60,7 +70,9 @@ void main() {
 
 /**
  * Fog of war and own provinces: the province state texture for the map shader (fog in the map
- * itself) and a filter giving the river layer the same fog. MapView delegates to it.
+ * itself), the fog field (visibility per lattice point, re-rendered only when visibility changes,
+ * so the per-pixel fog is 4 bilinear fetches) and a filter giving the river layer the same fog.
+ * MapView delegates to it.
  */
 export class FogLayer {
   private state: ProvinceState | null = null;
@@ -70,36 +82,70 @@ export class FogLayer {
   /** Whether the game has given visibility for this world; until then no fog. */
   private hasVisibility = false;
   private readonly riverFilter: Filter;
+  /** Fog field pass: a quad over the field texture, inside a parent so its scale applies. */
+  private readonly fieldGeometry = new MeshGeometry({
+    positions: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]),
+    uvs: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]),
+    indices: new Uint32Array([0, 1, 2, 0, 2, 3]),
+  });
+  private readonly fieldShader: Shader;
+  private readonly fieldMesh: Mesh<MeshGeometry, Shader>;
+  private readonly fieldRoot = new Container();
+  private field: RenderTexture | null = null;
+  /** The field no longer matches the province state or the owner maps. */
+  private fieldDirty = false;
 
   constructor(
     private readonly shader: Shader,
     private readonly uniforms: UniformGroup,
     private readonly rivers: Container,
     private readonly maxTextureSize: number,
+    private readonly renderer: Renderer,
   ) {
-    this.riverFilter = new Filter({
-      glProgram: GlProgram.from({ vertex: RIVER_FOG_VERTEX, fragment: RIVER_FOG_FRAGMENT, name: 'river-fog' }),
-      // Every resource must be present here: later assignments only replace existing ones.
+    this.fieldShader = new Shader({
+      glProgram: GlProgram.from({ vertex: MAP_VERTEX, fragment: FOG_FIELD_FRAGMENT, name: 'fog-field' }),
       resources: {
         mapUniforms: uniforms,
         uProvince: shader.resources.uProvince as TextureSource,
         uProvinceSea: shader.resources.uProvinceSea as TextureSource,
         uProvState: shader.resources.uProvState as TextureSource,
       },
+    });
+    this.fieldMesh = new Mesh<MeshGeometry, Shader>({ geometry: this.fieldGeometry, shader: this.fieldShader });
+    this.fieldRoot.addChild(this.fieldMesh);
+    this.riverFilter = new Filter({
+      glProgram: GlProgram.from({ vertex: RIVER_FOG_VERTEX, fragment: RIVER_FOG_FRAGMENT, name: 'river-fog' }),
+      // Every resource must be present here: later assignments only replace existing ones.
+      resources: {
+        mapUniforms: uniforms,
+        uFogField: shader.resources.uFogField as TextureSource,
+      },
       resolution: 'inherit',
       antialias: 'inherit',
     });
   }
 
-  /** A new state texture for the world (no visibility yet: no fog); call after the map shader got its owner maps. */
-  setWorld(count: number): void {
+  /**
+   * A new state texture and fog field for a world of w×h cells and count provinces (no visibility
+   * yet: no fog); call after the map shader got its owner maps.
+   */
+  setWorld(count: number, w: number, h: number): void {
     const state = new ProvinceState(count, this.maxTextureSize);
     const source = rgba8(state.data, state.width, state.height, false);
     const res = this.shader.resources;
     res.uProvState = source;
-    this.riverFilter.resources.uProvState = source;
-    this.riverFilter.resources.uProvince = res.uProvince as TextureSource;
-    this.riverFilter.resources.uProvinceSea = res.uProvinceSea as TextureSource;
+    const fr = this.fieldShader.resources;
+    fr.uProvState = source;
+    fr.uProvince = res.uProvince as TextureSource;
+    fr.uProvinceSea = res.uProvinceSea as TextureSource;
+    const size = fogFieldSize(w, h);
+    const field = RenderTexture.create({ width: size.w, height: size.h, scaleMode: 'linear', addressMode: 'clamp-to-edge' });
+    res.uFogField = field.source;
+    this.riverFilter.resources.uFogField = field.source;
+    this.fieldMesh.scale.set(size.w, size.h);
+    this.field?.destroy(true);
+    this.field = field;
+    this.fieldDirty = true;
     this.source?.destroy();
     this.source = source;
     this.state = state;
@@ -135,12 +181,25 @@ export class FogLayer {
     const st = this.state;
     if (st) this.fade?.step(dtMs, (id, level) => st.setFog(id, level));
     const range = this.state?.takeDirty();
-    if (range && this.source) this.source.update(range.start, range.end);
+    if (range && this.source) {
+      this.source.update(range.start, range.end);
+      this.fieldDirty = true;
+    }
+    // Only while the fog shows: turning it on again finds the field still dirty.
+    if (this.fieldDirty && this.field && this.uniforms.uniforms.uFogOn) {
+      this.renderer.render({ container: this.fieldRoot, target: this.field, clear: true });
+      this.fieldDirty = false;
+    }
   }
 
   destroy(): void {
     this.rivers.filters = [];
     this.riverFilter.destroy();
+    this.fieldRoot.destroy({ children: true });
+    this.fieldShader.destroy();
+    this.fieldGeometry.destroy();
+    this.field?.destroy(true);
+    this.field = null;
     this.source?.destroy();
     this.source = null;
     this.state = null;
